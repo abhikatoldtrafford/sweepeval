@@ -11,6 +11,7 @@ import typer
 
 from sweepeval import __version__
 from sweepeval.cli import mock as mock_cli
+from sweepeval.cli.discover import discover_command
 
 app = typer.Typer(
     name="sweepeval",
@@ -36,6 +37,7 @@ def version() -> None:
     typer.echo(__version__)
 
 
+app.command(name="discover")(discover_command)
 app.add_typer(mock_cli.app, name="mock")
 
 

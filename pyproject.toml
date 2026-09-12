@@ -81,6 +81,10 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
+[tool.ruff.lint.per-file-ignores]
+# typer's whole API is function calls in argument defaults.
+"src/sweepeval/cli/*.py" = ["B008"]
+
 [tool.mypy]
 # python_version is deliberately unpinned: mypy follows the running
 # interpreter, so CI's 3.10 and 3.12 jobs each check their own semantics.

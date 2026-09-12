@@ -68,7 +68,7 @@ async def test_openai_shape_answers_at_the_documented_path() -> None:
 async def test_anthropic_shape_returns_content_blocks() -> None:
     response = await _post(
         "anthropic_streaming",
-        {"messages": [{"role": "user", "content": "hi"}]},
+        {"messages": [{"role": "user", "content": "hi"}], "max_tokens": 16},
         headers={"x-api-key": "test-key-abcdefgh"},
     )
     body = response.json()  # type: ignore[attr-defined]
@@ -79,7 +79,7 @@ async def test_reasoning_blocks_are_separate_from_text() -> None:
     """§7: reasoning content must never enter extracted text."""
     response = await _post(
         "anthropic_streaming",
-        {"messages": [{"role": "user", "content": "hi"}]},
+        {"messages": [{"role": "user", "content": "hi"}], "max_tokens": 16},
         headers={"x-api-key": "test-key-abcdefgh"},
     )
     blocks = response.json()["content"]  # type: ignore[attr-defined]

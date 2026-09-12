@@ -169,5 +169,18 @@ def test_async_twins_exist_for_the_io_bound_verbs() -> None:
 
 
 def test_unimplemented_verbs_say_which_milestone_they_land_in() -> None:
-    with pytest.raises(NotImplementedError, match="M2"):
-        api.discover("https://x.test")
+    """Verbs whose milestone has not landed name it, rather than failing
+    with an opaque AttributeError or a silent no-op."""
+    with pytest.raises(NotImplementedError, match="M6"):
+        api.evaluate("https://x.test")
+    with pytest.raises(NotImplementedError, match="M8"):
+        api.sweep()
+    with pytest.raises(NotImplementedError, match="M9"):
+        api.report("run-1")
+
+
+def test_discover_is_implemented() -> None:
+    """M2 landed, so discover must no longer raise NotImplementedError."""
+    import inspect
+
+    assert "raise _pending" not in inspect.getsource(api.discover)

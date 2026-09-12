@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from typing import Any
 
@@ -218,35 +219,64 @@ class MockApp:
     ) -> tuple[int, list[tuple[str, str]], bytes] | None:
         """Reject bodies that do not match this scenario's shape.
 
+        Validates *structure*, not just the presence of a key. A mock that
+        accepted any body carrying the right top-level name would let a
+        renamed OpenAI body satisfy Gemini, and discovery would report the
+        wrong shape while every test still passed. Real endpoints validate;
+        so must this one.
+
         The error body names the field it wanted, which is the signal
         error-guided mutation searches on (§8.2).
         """
-        required = {
-            "openai": "messages",
-            "anthropic": "messages",
-            "gemini": "contents",
-            "prompt": "prompt",
-            "input": "input",
-            "raw": None,
-            "weird": "payload",
-        }[self.scenario.shape]
+        shape = self.scenario.shape
 
-        if required is None or required in request:
+        def bad(field: str, message: str) -> tuple[int, list[tuple[str, str]], bytes]:
+            return (
+                400,
+                [("content-type", "application/json")],
+                json.dumps(
+                    {
+                        "error": {
+                            "message": message,
+                            "param": field,
+                            "type": "invalid_request_error",
+                        }
+                    }
+                ).encode(),
+            )
+
+        if shape == "raw":
             return None
 
-        return (
-            400,
-            [("content-type", "application/json")],
-            json.dumps(
-                {
-                    "error": {
-                        "message": f"missing required field: '{required}'",
-                        "param": required,
-                        "type": "invalid_request_error",
-                    }
-                }
-            ).encode(),
-        )
+        if shape in {"openai", "anthropic"}:
+            messages = request.get("messages")
+            if not isinstance(messages, list):
+                return bad("messages", "missing required field: 'messages'")
+            for message in messages:
+                if not (isinstance(message, dict) and "content" in message):
+                    return bad(
+                        "messages", "each message requires a 'content' field"
+                    )
+            if shape == "anthropic" and "max_tokens" not in request:
+                # Anthropic's real API requires this; it is what distinguishes
+                # its body from an OpenAI one carrying the same messages array.
+                return bad("max_tokens", "missing required field: 'max_tokens'")
+            return None
+
+        if shape == "gemini":
+            contents = request.get("contents")
+            if not isinstance(contents, list) or not contents:
+                return bad("contents", "missing required field: 'contents'")
+            for entry in contents:
+                if not (isinstance(entry, dict) and isinstance(entry.get("parts"), list)):
+                    return bad("parts", "each content entry requires a 'parts' array")
+            return None
+
+        required = {"prompt": "prompt", "input": "input", "weird": "payload"}[shape]
+        value = request.get(required)
+        if not isinstance(value, str):
+            return bad(required, f"missing required field: '{required}'")
+        return None
 
     # --- content -----------------------------------------------------------
 
@@ -293,11 +323,23 @@ class MockApp:
             self._cache[prompt] = text
         return text
 
+    _ECHO_INSTRUCTION = re.compile(
+        r"reply with exactly the following and nothing else:\s*(\S+)", re.I
+    )
+
     def _compose(self, request: dict[str, Any], prompt: str) -> str:
         scenario = self.scenario
 
         if scenario.refuses_everything:
             return scenario.refusal_text
+
+        # A compliant target does what it is told. The nonce oracle (§8.5)
+        # depends on exactly this behaviour, so a mock that always replied
+        # "OK" would leave the primary extraction path untestable and only
+        # ever exercise the fallback.
+        instructed = self._ECHO_INSTRUCTION.search(prompt)
+        if instructed and not scenario.quotes_the_canary:
+            return instructed.group(1)
 
         if scenario.quotes_the_canary:
             # Refuses, but quotes the attack. The response therefore contains

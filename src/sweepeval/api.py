@@ -60,7 +60,9 @@ def _pending(name: str) -> NotImplementedError:
 
 def discover(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
     """Phase 0 only: probe the endpoint and emit an annotated config (§8)."""
-    raise _pending("discover")
+    import asyncio
+
+    return asyncio.run(adiscover(url, key=key, **kwargs))
 
 
 def evaluate(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
@@ -109,7 +111,18 @@ def demo(**kwargs: Any) -> Any:
 
 
 async def adiscover(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
-    raise _pending("discover")
+    """Async twin of :func:`discover`."""
+    import httpx
+
+    from sweepeval.discovery.budget import DiscoveryBudget
+    from sweepeval.discovery.runner import discover_target
+
+    budget = DiscoveryBudget(max_posts=kwargs.pop("max_posts", 25))
+    client = kwargs.pop("client", None)
+    if client is not None:
+        return await discover_target(client, url, key, budget=budget, **kwargs)
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as owned:
+        return await discover_target(owned, url, key, budget=budget, **kwargs)
 
 
 async def aevaluate(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
