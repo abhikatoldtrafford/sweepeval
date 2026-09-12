@@ -5,7 +5,7 @@ Turns discovered capabilities into a set of configurations, deterministically.
 Three properties the spec is explicit about, each of which an earlier revision
 got wrong:
 
-* **The cap is an integer, not a range.** "8–12" cannot be a deterministic
+* **The cap is an integer, not a range.** "8-12" cannot be a deterministic
   shrink target.
 * **The shrink ladder is fixed and disclosed.** Every step taken is printed and
   written to ``plan.json``, so a user can see why their model axis vanished.
