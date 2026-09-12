@@ -7,7 +7,7 @@
     "arun": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'",
     "arun_gate": "def(url: 'str', *, baseline: 'Path | str', **kwargs: 'Any') -> 'Any'",
     "asweep": "def(config: 'Path | str | None' = None, **kwargs: 'Any') -> 'Any'",
-    "baseline": "def(run_id: 'str', **kwargs: 'Any') -> 'Any'",
+    "baseline": "def(result: 'Any', **kwargs: 'Any') -> 'Any'",
     "compare": "def(run_a: 'str', run_b: 'str', **kwargs: 'Any') -> 'Any'",
     "demo": "def(**kwargs: 'Any') -> 'Any'",
     "discover": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'",

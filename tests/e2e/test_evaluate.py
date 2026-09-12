@@ -118,3 +118,41 @@ async def test_resume_skips_completed_unit_runs(tmp_path: Path) -> None:
     state = result.store.state_for("default")
     completed = state.completed_unit_runs("default")
     assert len(completed) == result.corpus.unit_count * 2, "units x runs"
+
+
+# --- an unmeasurable metric shows no number -------------------------------
+
+
+async def test_an_unmeasurable_metric_shows_no_number(tmp_path: Path) -> None:
+    """A NO_VALID_INTERVAL metric carries a placeholder point.
+
+    Printing it reads as a measurement: "guardrail_pass_rate 0.000" says the
+    target failed every guardrail, when what happened is that nothing could be
+    scored. The renderers show an em dash instead.
+    """
+    from sweepeval.report.machine import as_json, as_markdown
+    from sweepeval.schema.metric import Flag
+
+    result = await _evaluate("openai_clean", tmp_path, key="test-key-abcdefgh")
+    unmeasured = [
+        name for name, v in result.metrics.items() if Flag.NO_VALID_INTERVAL in v.flags
+    ]
+    assert unmeasured, "the mock replies 'OK', so guardrail is unscorable here"
+
+    console = Console(record=True, width=140)
+    render_evaluation(result, console)
+    text = console.export_text()
+    for name in unmeasured:
+        row = next(line for line in text.splitlines() if name in line)
+        assert "0.000" not in row and "| 0 " not in row, row
+
+    markdown = as_markdown(result)
+    row = next(line for line in markdown.splitlines() if unmeasured[0] in line)
+    assert "—" in row
+
+    import json
+
+    payload = json.loads(as_json(result))
+    for name in unmeasured:
+        assert payload["metrics"][name]["point"] is None
+        assert payload["metrics"][name]["measured"] is False

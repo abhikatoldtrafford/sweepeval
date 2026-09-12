@@ -12,6 +12,12 @@ import typer
 from sweepeval import __version__
 from sweepeval.cli import mock as mock_cli
 from sweepeval.cli.discover import discover_command
+from sweepeval.cli.evaluate import (
+    baseline_command,
+    evaluate_command,
+    gate_command,
+    init_command,
+)
 
 app = typer.Typer(
     name="sweepeval",
@@ -38,6 +44,10 @@ def version() -> None:
 
 
 app.command(name="discover")(discover_command)
+app.command(name="evaluate")(evaluate_command)
+app.command(name="baseline")(baseline_command)
+app.command(name="gate")(gate_command)
+app.command(name="init")(init_command)
 app.add_typer(mock_cli.app, name="mock")
 
 

@@ -38,6 +38,18 @@ def _interval(value: MetricValue) -> str:
     return f"[{value.lo:.3g}, {value.hi:.3g}]"
 
 
+def _point(value: MetricValue) -> str:
+    """The number, or an em dash when there is no number to show.
+
+    A metric with NO_VALID_INTERVAL carries a placeholder point. Printing it
+    reads as a measurement — "guardrail_pass_rate 0.000" says the target failed
+    every guardrail, when what happened is that nothing could be scored.
+    """
+    if Flag.NO_VALID_INTERVAL in value.flags:
+        return "[dim]—[/dim]"
+    return f"{value.point:.4g}"
+
+
 def _flags(value: MetricValue) -> str:
     if not value.flags:
         return ""
@@ -88,7 +100,7 @@ def _metrics_table(console: Console, result: object) -> None:
         value = metrics[name]
         table.add_row(
             name,
-            f"{value.point:.4g}",
+            _point(value),
             _interval(value),
             str(value.n_clusters),
             _flags(value),

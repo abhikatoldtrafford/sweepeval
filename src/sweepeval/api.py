@@ -82,19 +82,25 @@ def run(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
     raise _pending("run")
 
 
-def baseline(run_id: str, **kwargs: Any) -> Any:
-    """Snapshot a run as a committable baseline (§16)."""
-    raise _pending("baseline")
+def baseline(result: Any, **kwargs: Any) -> Any:
+    """Snapshot a result as a committable baseline (§16)."""
+    from sweepeval.execute.gate import snapshot
+
+    return snapshot(result, **kwargs)
 
 
 def gate(result: Any, *, baseline: Path | str, **kwargs: Any) -> Any:
     """Compare an existing result against a baseline. Pure; sends nothing (§16)."""
-    raise _pending("gate")
+    from sweepeval.execute.gate import gate as _gate
+
+    return _gate(result, baseline, **kwargs)
 
 
 def run_gate(url: str, *, baseline: Path | str, **kwargs: Any) -> Any:
     """Re-run the target, then gate. Distinct from :func:`gate` (§16)."""
-    raise _pending("run_gate")
+    import asyncio
+
+    return asyncio.run(arun_gate(url, baseline=baseline, **kwargs))
 
 
 def compare(run_a: str, run_b: str, **kwargs: Any) -> Any:
@@ -143,11 +149,21 @@ async def arun(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
 
 
 async def agate(result: Any, *, baseline: Path | str, **kwargs: Any) -> Any:
-    raise _pending("gate")
+    """Async twin of :func:`gate`. Pure, so it merely defers."""
+    return gate(result, baseline=baseline, **kwargs)
 
 
 async def arun_gate(url: str, *, baseline: Path | str, **kwargs: Any) -> Any:
-    raise _pending("run_gate")
+    """Async twin of :func:`run_gate`."""
+    from sweepeval.execute.gate import gate as _gate
+
+    gate_kwargs = {
+        k: kwargs.pop(k)
+        for k in ("alpha", "gate_on", "min_effect_overrides", "objectives")
+        if k in kwargs
+    }
+    result = await aevaluate(url, **kwargs)
+    return _gate(result, baseline, **gate_kwargs)
 
 
 async def areport(run_id: str, *, fmt: str = "terminal", **kwargs: Any) -> Any:
