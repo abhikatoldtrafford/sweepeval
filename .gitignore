@@ -6,6 +6,7 @@
 .pytest_cache/
 .ruff_cache/
 .venv/
+.venv310/
 __pycache__/
 build/
 dist/

@@ -12,9 +12,13 @@ from __future__ import annotations
 
 import inspect
 import json
+import types
+from enum import Enum
 from pathlib import Path
+from typing import get_origin
 
 import pytest
+from pydantic import BaseModel
 
 import sweepeval.api as api
 from sweepeval.report import Reporter  # noqa: F401  (Tier 2, added by M9)
@@ -50,6 +54,45 @@ def _signature(obj: object) -> str:
         return "<no signature>"
 
 
+def _describe_class(cls: type) -> str:
+    """Describe a class by what *we* declared, not by what it inherits.
+
+    ``dir()`` is not portable across Python versions — enums and pydantic
+    models gain and lose inherited members between 3.10 and 3.12 — so a
+    snapshot built from it fails CI on the version it was not generated under,
+    which says nothing about our API.
+    """
+    if issubclass(cls, Enum):
+        return "enum(" + ",".join(m.name for m in cls) + ")"
+
+    if issubclass(cls, BaseModel):
+        fields = ",".join(sorted(cls.model_fields))
+        own = ",".join(
+            sorted(
+                name
+                for name, value in vars(cls).items()
+                if not name.startswith("_") and callable(value)
+            )
+        )
+        return f"model(fields={fields};methods={own})"
+
+    own_methods = ",".join(
+        sorted(
+            name
+            for name, value in vars(cls).items()
+            if not name.startswith("_") and callable(value)
+        )
+    )
+    own_props = ",".join(
+        sorted(
+            name
+            for name, value in vars(cls).items()
+            if not name.startswith("_") and isinstance(value, property)
+        )
+    )
+    return f"class(methods={own_methods};props={own_props})"
+
+
 def _surface() -> dict[str, dict[str, str]]:
     surface: dict[str, dict[str, str]] = {}
     for module in TIER1 + TIER2:
@@ -59,13 +102,13 @@ def _surface() -> dict[str, dict[str, str]]:
         entries: dict[str, str] = {}
         for name in sorted(names):
             member = getattr(module, name)
-            if inspect.isclass(member):
-                methods = sorted(
-                    m
-                    for m in dir(member)
-                    if not m.startswith("_") and callable(getattr(member, m, None))
-                )
-                entries[name] = "class(" + ",".join(methods) + ")"
+            if isinstance(member, types.GenericAlias) or get_origin(member) is not None:
+                # A type alias such as ObservationKey = tuple[...]. 3.10 sees a
+                # GenericAlias as a class and 3.12 sees it as callable, so
+                # render it by its string form, which is stable on both.
+                entries[name] = f"alias({member})"
+            elif inspect.isclass(member):
+                entries[name] = _describe_class(member)
             elif callable(member):
                 entries[name] = "def" + _signature(member)
             else:
