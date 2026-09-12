@@ -1,7 +1,7 @@
 # agenteval — Design Specification
 
 **Status:** revised after independent audit; ready to plan from
-**Date:** 2026-09-12 (rev 2.1)
+**Date:** 2026-09-12 (rev 2.1a)
 **Target release:** v0.1.0
 **Scope:** build-order items 1–11 of the original brief, plus an adoption workstream. Items 12–15 (tool integrity, retrieval, probe generation, degradation) register as plugins that report `SKIPPED: not_implemented_in_v0.1`.
 
@@ -100,13 +100,13 @@ Changing any of these requires updating this section. Decisions superseded in re
 | D33 | Onboarding | `agenteval demo` for the smoke path; **committed real-run artifacts in `examples/` as the README hook** |
 | D34 | Distribution | PyPI + `uvx`, GitHub Action, Docker image |
 | D35 | Docs | Strong README, mkdocs-material site, plugin cookbook, examples, release automation |
-| D36 | Default profile | **`quick` is the default** for `run`; `standard` and `deep` are explicit upgrades. Quick results are flagged `INDICATIVE` and are not gate-eligible |
+| D36 | Default profile | **`quick` is the default** for `run`; `standard` and `deep` are explicit upgrades. Quick results are flagged `INDICATIVE` — meaning **wide intervals and few separations**, not absent intervals — and are not gate-eligible |
 | D37 | Body storage | Extracted text stored by default in a content-addressed blob store; raw bodies for discovery, errors and hard-fail hits; `--no-store-bodies` opt-out |
 | D38 | Secrets | Redacted from every stored artifact; auth headers never stored; secret-scan test over every writer |
 | D39 | Authorization | One-time per-host affirmation before the security family runs against a non-localhost target; recorded in the manifest |
 | D40 | Recommendation | `--prefer` applies the **user's** declared preference to the stored frontier at report time and names one config |
 | D41 | Caching | `CACHE_SUSPECTED` detection from repeated body hashes with implausible TTFT; affected metrics flagged |
-| D42 | Estimand | Primary estimand is **conditional on the frozen corpus**; generalization intervals are computed and labelled separately |
+| ~~D42~~ | ~~Conditional estimand primary~~ | **Superseded by D44.** Rev 2 named the conditional estimand primary while specifying a probe-resampling method, which is the generalization estimand |
 
 ---
 
@@ -286,6 +286,11 @@ All blob content passes through the redactor (§6.6) before it is written.
 {point, lo, hi, method: cluster_bootstrap|t|none, n_clusters, alpha,
  estimand: conditional|generalization, flags: [LOW_N, INDICATIVE,
  CACHE_SUSPECTED, LOW_COVERAGE, NO_VALID_INTERVAL]}
+```
+
+`INDICATIVE` means the interval is valid but wide enough that few pairs will separate — it is set on `quick` results and on per-cell breakdowns. `NO_VALID_INTERVAL` is the distinct, stronger state where the cluster count fell below the floor and no interval could be computed at all. Conflating them would let a report imply a number is unusable when it is merely imprecise.
+
+```
 ```
 
 **`calls.jsonl`**: `ts, run_id, config_id, unit_id, run_idx, turn_idx, attempt, request{shape, params_hash, body_sha256, bytes}, response{status, error_class, streamed, bytes, body_sha256}, timing{queue_ms, ttft_ms, total_ms}, tokens{in, out, reasoning, source}, extraction{path, ok, text_sha256, text_len}, refusal{detected, score}`.
@@ -580,7 +585,7 @@ High-entropy, no dictionary words, **identical across configs within a run** (re
 
 **Confirmation before elimination.** A hard-fail hit triggers an immediate re-run of that one Unit **3 additional times**, with fresh canaries. Elimination requires **≥2 hits out of those 3 confirmation runs**, judged independently of the original hit — so the denominator is unambiguous and the triggering observation cannot vote for itself. Three extra calls convert an irreversible, build-breaking decision from a single string match into evidence.
 
-Confirmation calls are budgeted: the pre-flight estimate (§12.3) includes a hard-fail allowance of 3 calls × the number of hard-fail-capable Units × configs, shown as its own line and typically unspent.
+Confirmation calls are budgeted: the pre-flight estimate (§12.3) includes a hard-fail allowance of **3 × (hard-fail-capable Units) × configs**, shown as its own line and typically unspent. Only Units whose attack class is in the hard-fail set count — two classes in v0.1, so roughly 3 Units at `quick` and 6 at `standard`, not the whole security family. The figures in §12.3's example follow this formula; the formula governs, not the example.
 
 An earlier revision eliminated a config permanently on one unvalidated substring match with no test and no recourse, and that decision also drives `exit 1` in CI.
 
@@ -690,10 +695,10 @@ agenteval run https://api.example.com/chat --key ***
   discovery               ≤ 25       ~12k
   capabilities            ≤ 60      ~200k
   scoring (quick)        1,080      ~1.8M
-  hard-fail confirm      ≤ 216           —   usually unspent
+  hard-fail confirm       ≤ 54           —   usually unspent
   judge (worst case)         0          0
   ──────────────────────────────────────────
-  total                 ≤ 1,381      ~2.0M
+  total                 ≤ 1,219      ~2.0M
   cost           no pricing supplied — reporting tokens only
   wall-clock     ~25 min at concurrency 2
   profile        quick, 6 configs — not gate-eligible
@@ -1078,5 +1083,7 @@ A second audit pass confirmed the blockers were resolved and found fourteen resi
 - **Estimand labels contradicted the method.** §13.2 named the conditional estimand primary while §13.3 resamples probes, which is the generalization estimand. Swapped.
 - **`Unit.canaries` could not hold a value,** since canaries derive from `run_idx` and a Unit is run-independent. Units now carry names; `plan.json` carries the per-run canary table (§6.1).
 - **`INERT` was unreachable** with no equivalence margin declared, making the axis-exclusion path dead code. Margin declared (§9.1).
+
+**Register consistency (rev 2.1a).** D42 was struck as superseded by D44 — it still asserted the conditional estimand was primary after §13.2 had made generalization primary, and a decision register that contradicts itself is worse than one merely out of date. D36 now states what `INDICATIVE` means after the `quick` resize: wide intervals and few separations, not absent intervals, which is the distinct `NO_VALID_INTERVAL` state (§6.4). §12.3's hard-fail example was recomputed against the §11.2 formula.
 
 **Smaller:** complete-linkage cut height and tie-break defined, and the vacuous diameter-split rule replaced by cluster spread (§14.6); hard-fail confirmation denominator disambiguated and budgeted (§11.2, §12.3); confirm-on-rerun specified as pooling rather than a second trial (§16); the model-id probe loop bounded at 20 (§12.2); the unknowable "same model family" judge check replaced by fingerprint equality plus disclosure (§11.9); `latency_p95_ms` bootstrap coverage moved from assumption to a validated simulation result with a declared fallback (§13.3).
