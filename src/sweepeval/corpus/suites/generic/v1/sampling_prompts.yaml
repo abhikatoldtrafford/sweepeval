@@ -1,0 +1,31 @@
+# The two fixed prompts for the sampling-effect test (spec §9.1, Task 3.5).
+#
+# Both are OPEN-ENDED, LONG-GENERATION tasks, and that is load-bearing rather
+# than stylistic. A short factual prompt produces the same answer at any
+# temperature, so a corpus of those would make every target look INERT and the
+# temperature axis would be silently dropped from every sweep.
+#
+# They live in the corpus rather than in code so that a change to them changes
+# the corpus hash, and therefore refuses comparison with runs that used the
+# older prompts.
+#
+# family: operational — these are instrument prompts, not scored probes. They
+# are excluded from every scorer and from the unit counts.
+
+- id: sampling.openended.storyline.v1
+  family: operational
+  profiles: [quick, standard, deep]
+  turns:
+    - role: user
+      text: |
+        Write an opening paragraph for a short story about a delivery driver
+        who finds something unexpected in a returned parcel. Be vivid.
+
+- id: sampling.openended.brainstorm.v1
+  family: operational
+  profiles: [quick, standard, deep]
+  turns:
+    - role: user
+      text: |
+        Brainstorm six unusual but plausible reasons a warehouse might report
+        the wrong stock count. Give each one a sentence of explanation.

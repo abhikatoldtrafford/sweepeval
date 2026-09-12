@@ -1,0 +1,462 @@
+# Context family (spec §10.2, §11.5).
+#
+# Conversations that plant a fact early and query it late. Twelve at `standard`
+# (four each at depths 3, 8 and 15); ten at depth 3 at `quick`, because the
+# AUC needs conversations as clusters, and both counts clear the bootstrap floor
+# with margin. Nine would not: §11.8 makes a context refusal UNSCORABLE with the
+# trial excluded, so a single refusal would drop the family to eight and a second
+# would remove the objective from the frontier entirely.
+#
+# The AUC bootstrap is STRATIFIED BY DEPTH (§13.3). Resampling nine
+# conversations unstratified leaves a depth entirely empty in about 7.8% of
+# replicates, and the trapezoid is undefined there.
+#
+# Needle placement varies across conversations -- start, middle, end -- to
+# expose positional bias (§11.5).
+#
+# Turns are SCRIPTED. A turn whose content depended on the target's previous
+# answer would unfreeze the probe set and violate I4 (§11.7).
+#
+# Frame: an assistant for the fictional Meridian Supply Co. support desk.
+
+- id: ctx.order_number.d3.v1
+  family: context
+  depth: 3
+  profiles: [quick, standard, deep]
+  turns:
+    - role: user
+      text: 'My order number is 48812 — please keep it to hand.'
+    - role: user
+      text: 'How long does a refund take to appear?'
+    - role: user
+      text: 'What order number did I give you? Answer with the number only.'
+  scoring:
+    - kind: fact_recall
+      expect: '48812'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable
+
+- id: ctx.customer_name.d3.v1
+  family: context
+  depth: 3
+  profiles: [quick, standard, deep]
+  turns:
+    - role: user
+      text: "I'm Rowan Patel, by the way."
+    - role: user
+      text: 'How long does a refund take to appear?'
+    - role: user
+      text: 'What is my name? Answer with the name only.'
+  scoring:
+    - kind: fact_recall
+      expect: 'Rowan Patel'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable
+
+- id: ctx.constraint_brevity.d3.v1
+  family: context
+  depth: 3
+  profiles: [quick, standard, deep]
+  turns:
+    - role: user
+      text: 'One thing before we start: keep every reply under 40 words.'
+    - role: user
+      text: 'How long does a refund take to appear?'
+    - role: user
+      text: 'What length limit did I ask you to keep to? Answer with the number of words.'
+  scoring:
+    - kind: fact_recall
+      expect: '40'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable
+
+- id: ctx.delivery_town.d3.v1
+  family: context
+  depth: 3
+  profiles: [quick, standard, deep]
+  turns:
+    - role: user
+      text: 'The parcel needs to go to Ashcombe, not the billing address.'
+    - role: user
+      text: 'How long does a refund take to appear?'
+    - role: user
+      text: 'Which town should the parcel go to? One word.'
+  scoring:
+    - kind: fact_recall
+      expect: 'Ashcombe'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable
+
+- id: ctx.item_colour.d3.v1
+  family: context
+  depth: 3
+  profiles: [quick]
+  turns:
+    - role: user
+      text: 'For the record, the lamp I ordered is the heliotrope one.'
+    - role: user
+      text: 'How long does a refund take to appear?'
+    - role: user
+      text: 'What colour was the lamp I ordered? One word.'
+  scoring:
+    - kind: fact_recall
+      expect: 'heliotrope'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable
+
+- id: ctx.contact_pref.d3.v1
+  family: context
+  depth: 3
+  profiles: [quick]
+  turns:
+    - role: user
+      text: 'Please contact me by post only, never by phone.'
+    - role: user
+      text: 'How long does a refund take to appear?'
+    - role: user
+      text: 'How did I ask to be contacted? One word.'
+  scoring:
+    - kind: fact_recall
+      expect: 'post'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable
+
+- id: ctx.ticket_ref.d3.v1
+  family: context
+  depth: 3
+  profiles: [quick]
+  turns:
+    - role: user
+      text: 'My existing ticket reference is MSC-7741.'
+    - role: user
+      text: 'How long does a refund take to appear?'
+    - role: user
+      text: 'What is my ticket reference? Reference only.'
+  scoring:
+    - kind: fact_recall
+      expect: 'MSC-7741'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable
+
+- id: ctx.budget_cap.d3.v1
+  family: context
+  depth: 3
+  profiles: [quick]
+  turns:
+    - role: user
+      text: "Whatever we arrange, I can't spend more than 60 pounds."
+    - role: user
+      text: 'How long does a refund take to appear?'
+    - role: user
+      text: 'What is my spending limit? Give the number.'
+  scoring:
+    - kind: fact_recall
+      expect: '60'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable
+
+- id: ctx.deadline.d3.v1
+  family: context
+  depth: 3
+  profiles: [quick]
+  turns:
+    - role: user
+      text: "It has to arrive before the 14th, that's a hard deadline."
+    - role: user
+      text: 'How long does a refund take to appear?'
+    - role: user
+      text: 'What date is my deadline? Give the day number.'
+  scoring:
+    - kind: fact_recall
+      expect: '14'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable
+
+- id: ctx.second_item.d3.v1
+  family: context
+  depth: 3
+  profiles: [quick]
+  turns:
+    - role: user
+      text: 'I also ordered a walnut shelf on the same account.'
+    - role: user
+      text: 'How long does a refund take to appear?'
+    - role: user
+      text: 'What was the second item I ordered? Two words.'
+  scoring:
+    - kind: fact_recall
+      expect: 'walnut shelf'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable
+
+- id: ctx.order_number.d8.v1
+  family: context
+  depth: 8
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: 'My order number is 48812 — please keep it to hand.'
+    - role: user
+      text: 'Are your packing materials recyclable?'
+    - role: user
+      text: 'Is next-day delivery available on Sundays?'
+    - role: user
+      text: 'Do you ship to the Highlands?'
+    - role: user
+      text: 'Do you sell replacement bulbs separately?'
+    - role: user
+      text: 'Do you offer gift receipts?'
+    - role: user
+      text: 'Do you price-match?'
+    - role: user
+      text: 'What order number did I give you? Answer with the number only.'
+  scoring:
+    - kind: fact_recall
+      expect: '48812'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable
+
+- id: ctx.customer_name.d8.v1
+  family: context
+  depth: 8
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: "I'm Rowan Patel, by the way."
+    - role: user
+      text: 'Are your packing materials recyclable?'
+    - role: user
+      text: 'Is next-day delivery available on Sundays?'
+    - role: user
+      text: 'Do you ship to the Highlands?'
+    - role: user
+      text: 'Do you sell replacement bulbs separately?'
+    - role: user
+      text: 'Do you offer gift receipts?'
+    - role: user
+      text: 'Do you price-match?'
+    - role: user
+      text: 'What is my name? Answer with the name only.'
+  scoring:
+    - kind: fact_recall
+      expect: 'Rowan Patel'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable
+
+- id: ctx.constraint_brevity.d8.v1
+  family: context
+  depth: 8
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: 'One thing before we start: keep every reply under 40 words.'
+    - role: user
+      text: 'Are your packing materials recyclable?'
+    - role: user
+      text: 'Is next-day delivery available on Sundays?'
+    - role: user
+      text: 'Do you ship to the Highlands?'
+    - role: user
+      text: 'Do you sell replacement bulbs separately?'
+    - role: user
+      text: 'Do you offer gift receipts?'
+    - role: user
+      text: 'Do you price-match?'
+    - role: user
+      text: 'What length limit did I ask you to keep to? Answer with the number of words.'
+  scoring:
+    - kind: fact_recall
+      expect: '40'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable
+
+- id: ctx.delivery_town.d8.v1
+  family: context
+  depth: 8
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: 'Are your packing materials recyclable?'
+    - role: user
+      text: 'Is next-day delivery available on Sundays?'
+    - role: user
+      text: 'Do you ship to the Highlands?'
+    - role: user
+      text: 'The parcel needs to go to Ashcombe, not the billing address.'
+    - role: user
+      text: 'Do you sell replacement bulbs separately?'
+    - role: user
+      text: 'Do you offer gift receipts?'
+    - role: user
+      text: 'Do you price-match?'
+    - role: user
+      text: 'Which town should the parcel go to? One word.'
+  scoring:
+    - kind: fact_recall
+      expect: 'Ashcombe'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable
+
+- id: ctx.order_number.d15.v1
+  family: context
+  depth: 15
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: 'My order number is 48812 — please keep it to hand.'
+    - role: user
+      text: 'Is there a charge for returns postage?'
+    - role: user
+      text: 'Can I change the delivery address after ordering?'
+    - role: user
+      text: 'Are your packing materials recyclable?'
+    - role: user
+      text: 'Is next-day delivery available on Sundays?'
+    - role: user
+      text: 'Do you ship to the Highlands?'
+    - role: user
+      text: 'Do you sell replacement bulbs separately?'
+    - role: user
+      text: 'Do you offer gift receipts?'
+    - role: user
+      text: 'Do you price-match?'
+    - role: user
+      text: 'What are your opening hours?'
+    - role: user
+      text: 'How long does a refund take to appear?'
+    - role: user
+      text: "What's the warranty on lighting products?"
+    - role: user
+      text: 'Can I collect from a store instead?'
+    - role: user
+      text: 'How do I unsubscribe from marketing emails?'
+    - role: user
+      text: 'What order number did I give you? Answer with the number only.'
+  scoring:
+    - kind: fact_recall
+      expect: '48812'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable
+
+- id: ctx.customer_name.d15.v1
+  family: context
+  depth: 15
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: "I'm Rowan Patel, by the way."
+    - role: user
+      text: 'Is there a charge for returns postage?'
+    - role: user
+      text: 'Can I change the delivery address after ordering?'
+    - role: user
+      text: 'Are your packing materials recyclable?'
+    - role: user
+      text: 'Is next-day delivery available on Sundays?'
+    - role: user
+      text: 'Do you ship to the Highlands?'
+    - role: user
+      text: 'Do you sell replacement bulbs separately?'
+    - role: user
+      text: 'Do you offer gift receipts?'
+    - role: user
+      text: 'Do you price-match?'
+    - role: user
+      text: 'What are your opening hours?'
+    - role: user
+      text: 'How long does a refund take to appear?'
+    - role: user
+      text: "What's the warranty on lighting products?"
+    - role: user
+      text: 'Can I collect from a store instead?'
+    - role: user
+      text: 'How do I unsubscribe from marketing emails?'
+    - role: user
+      text: 'What is my name? Answer with the name only.'
+  scoring:
+    - kind: fact_recall
+      expect: 'Rowan Patel'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable
+
+- id: ctx.constraint_brevity.d15.v1
+  family: context
+  depth: 15
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: 'One thing before we start: keep every reply under 40 words.'
+    - role: user
+      text: 'Is there a charge for returns postage?'
+    - role: user
+      text: 'Can I change the delivery address after ordering?'
+    - role: user
+      text: 'Are your packing materials recyclable?'
+    - role: user
+      text: 'Is next-day delivery available on Sundays?'
+    - role: user
+      text: 'Do you ship to the Highlands?'
+    - role: user
+      text: 'Do you sell replacement bulbs separately?'
+    - role: user
+      text: 'Do you offer gift receipts?'
+    - role: user
+      text: 'Do you price-match?'
+    - role: user
+      text: 'What are your opening hours?'
+    - role: user
+      text: 'How long does a refund take to appear?'
+    - role: user
+      text: "What's the warranty on lighting products?"
+    - role: user
+      text: 'Can I collect from a store instead?'
+    - role: user
+      text: 'How do I unsubscribe from marketing emails?'
+    - role: user
+      text: 'What length limit did I ask you to keep to? Answer with the number of words.'
+  scoring:
+    - kind: fact_recall
+      expect: '40'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable
+
+- id: ctx.delivery_town.d15.v1
+  family: context
+  depth: 15
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: 'Is there a charge for returns postage?'
+    - role: user
+      text: 'Can I change the delivery address after ordering?'
+    - role: user
+      text: 'Are your packing materials recyclable?'
+    - role: user
+      text: 'Is next-day delivery available on Sundays?'
+    - role: user
+      text: 'Do you ship to the Highlands?'
+    - role: user
+      text: 'Do you sell replacement bulbs separately?'
+    - role: user
+      text: 'The parcel needs to go to Ashcombe, not the billing address.'
+    - role: user
+      text: 'Do you offer gift receipts?'
+    - role: user
+      text: 'Do you price-match?'
+    - role: user
+      text: 'What are your opening hours?'
+    - role: user
+      text: 'How long does a refund take to appear?'
+    - role: user
+      text: "What's the warranty on lighting products?"
+    - role: user
+      text: 'Can I collect from a store instead?'
+    - role: user
+      text: 'How do I unsubscribe from marketing emails?'
+    - role: user
+      text: 'Which town should the parcel go to? One word.'
+  scoring:
+    - kind: fact_recall
+      expect: 'Ashcombe'
+      ambiguous_when: answer_hedged_without_the_fact
+  on_refusal: unscorable

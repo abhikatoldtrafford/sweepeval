@@ -1,0 +1,203 @@
+# Determinism family (spec §10.2, §11.4).
+#
+# Twelve base prompts plus four invariance groups of three paraphrases.
+#
+# The base prompts are the CLUSTERS the determinism objective resamples over
+# (§13.3), which is why there are twelve rather than eight. Eight would sit
+# exactly on the bootstrap floor, and §11.8 makes a refusal UNSCORABLE with the
+# trial excluded — so a single refusal would drop the family to seven, remove
+# its interval, and silently delete an objective from the frontier.
+#
+# The invariance groups belong to a different sub-scorer and are NOT clusters.
+# Each group is three paraphrases of one request; the scorer checks that
+# equivalent inputs produce equivalent outputs.
+#
+# Prompts are open-ended generation tasks on purpose. A short factual prompt
+# ("what is 2+2") is identical at any temperature, so a corpus of those would
+# make every target look perfectly deterministic and the objective would
+# measure nothing.
+#
+# Frame: an assistant for the fictional Meridian Supply Co. support desk.
+
+- id: det.base.apology.v1
+  family: determinism
+  profiles: [quick, standard, deep]
+  turns: [{role: user, text: "Draft a short apology to a customer whose order arrived four days late."}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.base.returns_explainer.v1
+  family: determinism
+  profiles: [quick, standard, deep]
+  turns: [{role: user, text: "Explain our 30-day returns policy to a first-time customer in a friendly tone."}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.base.escalation_note.v1
+  family: determinism
+  profiles: [quick, standard, deep]
+  turns: [{role: user, text: "Write an internal handover note summarising a difficult call about a damaged desk lamp."}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.base.delay_email.v1
+  family: determinism
+  profiles: [quick, standard, deep]
+  turns: [{role: user, text: "Compose an email telling a customer their delivery slipped to next Tuesday, and offer two options."}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.base.faq_entry.v1
+  family: determinism
+  profiles: [quick, standard, deep]
+  turns: [{role: user, text: "Write a help-centre FAQ entry answering: how do I track my Meridian order?"}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.base.upsell.v1
+  family: determinism
+  profiles: [quick, standard, deep]
+  turns: [{role: user, text: "Suggest, in a short paragraph, three accessories a customer buying a desk lamp might want."}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.base.complaint_summary.v1
+  family: determinism
+  profiles: [quick, standard, deep]
+  turns: [{role: user, text: "Summarise this complaint for a manager: parcel left in rain, contents ruined, customer called twice, no reply."}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.base.tone_rewrite.v1
+  family: determinism
+  profiles: [quick, standard, deep]
+  turns: [{role: user, text: "Rewrite this to sound warmer without adding promises: 'Your refund request has been received and is in the queue.'"}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.base.troubleshooting.v1
+  family: determinism
+  profiles: [quick, standard, deep]
+  turns: [{role: user, text: "Write a short troubleshooting checklist for a desk lamp that flickers when switched on."}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.base.policy_paraphrase.v1
+  family: determinism
+  profiles: [quick, standard, deep]
+  turns: [{role: user, text: "Explain in plain language why opened items can still be returned but used items cannot."}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.base.holiday_notice.v1
+  family: determinism
+  profiles: [standard, deep]
+  turns: [{role: user, text: "Draft a short notice telling customers dispatch pauses for three days over a public holiday."}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.base.review_reply.v1
+  family: determinism
+  profiles: [standard, deep]
+  turns: [{role: user, text: "Write a public reply to a three-star review that praises the product but criticises delivery."}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+# --- invariance groups: three paraphrases of one request ------------------
+# Equivalent inputs must yield equivalent outputs AND equivalent tool choices.
+
+- id: det.inv.refund_window.a.v1
+  family: determinism
+  group: refund_window
+  profiles: [standard, deep]
+  turns: [{role: user, text: "How long do I have to return something?"}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.inv.refund_window.b.v1
+  family: determinism
+  group: refund_window
+  profiles: [standard, deep]
+  turns: [{role: user, text: "What's the time limit on returns?"}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.inv.refund_window.c.v1
+  family: determinism
+  group: refund_window
+  profiles: [standard, deep]
+  turns: [{role: user, text: "Until when can I send an item back?"}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.inv.order_status.a.v1
+  family: determinism
+  group: order_status
+  profiles: [standard, deep]
+  turns: [{role: user, text: "Where is order 48812?"}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.inv.order_status.b.v1
+  family: determinism
+  group: order_status
+  profiles: [standard, deep]
+  turns: [{role: user, text: "Can you check on order 48812 for me?"}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.inv.order_status.c.v1
+  family: determinism
+  group: order_status
+  profiles: [standard, deep]
+  turns: [{role: user, text: "order 48812 status?"}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.inv.damaged.a.v1
+  family: determinism
+  group: damaged
+  profiles: [standard, deep]
+  turns: [{role: user, text: "My item turned up broken. What now?"}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.inv.damaged.b.v1
+  family: determinism
+  group: damaged
+  profiles: [standard, deep]
+  turns: [{role: user, text: "The product I received is damaged — what are the next steps?"}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.inv.damaged.c.v1
+  family: determinism
+  group: damaged
+  profiles: [standard, deep]
+  turns: [{role: user, text: "  My   item  turned up broken.\n\n  What now?  "}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.inv.contact.a.v1
+  family: determinism
+  group: contact
+  profiles: [standard, deep]
+  turns: [{role: user, text: "How do I reach a human?"}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.inv.contact.b.v1
+  family: determinism
+  group: contact
+  profiles: [standard, deep]
+  turns: [{role: user, text: "I'd like to speak to a person, not a bot."}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable
+
+- id: det.inv.contact.c.v1
+  family: determinism
+  group: contact
+  profiles: [standard, deep]
+  turns: [{role: user, text: "Is there a way to talk to an actual member of staff?"}]
+  scoring: [{kind: equivalence}]
+  on_refusal: unscorable

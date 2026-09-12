@@ -88,7 +88,7 @@ Changing any of these requires updating this section. Decisions superseded in re
 | ~~D17~~ | ~~Reference targets~~ | **Cut from v0.1.** Unbudgeted, and probe-set parity is unresolvable when capabilities differ |
 | ~~D18~~ | ~~Cross-type reference band~~ | **Cut with D17** |
 | D19 | Frontier presentation | Tied clusters by **complete-linkage with published diameter**, wins/gives-up, pairwise 2D views, `--objectives` narrowing |
-| D20 | Generic suite v1 | 69 units at `standard`, 40 at `quick`; every family clears the cluster floor with margin; call counts derived from templates (§10.2) |
+| D20 | Generic suite v1 | 80 units at `standard`, 40 at `quick`; every family clears the cluster floor **with margin**; the shape table is generated from templates and asserted in CI (§10.2) |
 | ~~D21~~ | ~~Screen subset + two-stage pruning~~ | **Cut from v0.1** (§12.6). Domination remains the frontier relation |
 | D22 | Zero-config axes | model × system_prompt(4) × temperature(0/0.7/1.0); cap fixed at **12** (`standard`/`deep`) and **6** (`quick`); deterministic shrink ladder; model ids filtered, ordered, and probe-bounded at 20 |
 | D23 | Security hard-fail | Critical classes, **confirmed by k=3 re-run requiring ≥2 hits**; canary derivation and matching specified (§11.2) |
@@ -521,24 +521,30 @@ Every family's cluster count must clear the bootstrap floor of 8 (§13.4) **with
 
 | Family | Units | Clusters | Multi-turn units | Calls per run |
 |---|---|---|---|---|
-| Security | 24 (8 attack classes × 3 variants) | 24 | 6 cross-turn, 3 turns each | 36 |
+| Security | 24 (8 attack classes × 3 variants) | 24 | 3 cross-turn @3 turns, 3 exfiltration @2 | 33 |
 | Guardrail | 20 (5 policies × 4 pressure levels) | 20 | 5 multi-turn buildup, 3 turns | 30 |
-| Determinism | 16 (12 base prompts + 4 invariance groups of 3) | 12 base | 0 | 24 |
-| Context | 9 conversations (3 each at depths 3/8/15) | 9, stratified | 9 | 78 |
-| Operational | — | 69 | — | 0 (rides along) |
-| **standard** | **69** | — | **20** | **168** |
+| Determinism | 24 (12 base prompts + 4 invariance groups of 3) | 12 base | 0 | 24 |
+| Context | 12 conversations (4 each at depths 3/8/15) | 12, stratified | 12 | 104 |
+| Operational | — | 80 | — | 0 (rides along) |
+| **standard** | **80** | — | **20** | **191** |
+
+This table is **generated from the templates** and asserted in CI, never hand-written. The figures above are the derived truth; an earlier revision hand-wrote them and was wrong in four places, and they feed the budget estimate the user consents to under I9.
+
+Context carries **12** conversations rather than the 9 an earlier revision specified. Nine sits one above the bootstrap floor, and §11.8 makes a context refusal `UNSCORABLE` with the trial excluded — so one refusal would drop the family to the floor and a second would remove `context_retention_auc` from the frontier. Every family clears floor + 2.
 
 Determinism carries 12 base prompts rather than 8: the objective's clusters are the base prompts alone, since the 4 invariance groups belong to a different sub-scorer, and 8 would sit exactly on the floor.
+
+The five guardrail policy areas are `gr.pii`, `gr.scope`, `gr.regulated`, `gr.disclosure` and `gr.harm` — weighted toward scope rather than classic safety, because refusal behaviour on safety topics is trained into the model and reads near-identically across system-prompt variants, whereas scope and disclosure behaviour is governed by the system prompt, which is what the sweep varies. Attack classes carry a descriptive OWASP LLM Top 10 mapping. All probes share one frame: an assistant for a fictional supply company's support desk.
 
 Profiles:
 
 | Profile | Units | Calls/run | Configs | Total at N=3 | Notes |
 |---|---|---|---|---|---|
-| `quick` (default) | 40 | 60 | 6 | ~1,080 | 20–30 min at concurrency 2. Real frontier, wide intervals. Not gate-eligible |
-| `standard` | 69 | 168 | 12 | ~6,050 | 1.5–3 h. Required for gating and for decisions |
-| `deep` | 69 + depth-30, long-input, context-ceiling | ~295 | 12 | ~10,600 | Adds the expensive detectors |
+| `quick` (default) | 40 | 62 | 6 | ~1,120 | 20–30 min at concurrency 2. Real frontier, wide intervals. Not gate-eligible |
+| `standard` | 80 | 191 | 12 | ~6,880 | 1.5–3 h. Required for gating and for decisions |
+| `deep` | 80 + depth-30, long-input, context-ceiling | ~320 | 12 | ~11,500 | Adds the expensive detectors |
 
-`quick` is the default for `run` (D36), sized so that **every objective clears the cluster floor**: 10 security probes, 10 guardrail probes, 10 determinism base prompts, and 10 conversations at depth 3. An earlier revision sized `quick` at 16 units, which put every single objective below the floor — meaning no valid interval, no domination, and a "frontier" of one cluster containing every config. The default invocation of the flagship command must produce the artifact the product is named for.
+`quick` is the default for `run` (D36), sized so that **every objective clears the cluster floor with margin**: 10 security probes, 10 guardrail probes, 10 determinism base prompts, and 10 conversations at depth 3. An earlier revision sized `quick` at 16 units, which put every single objective below the floor — meaning no valid interval, no domination, and a "frontier" of one cluster containing every config. The default invocation of the flagship command must produce the artifact the product is named for.
 
 Cluster count depends on the number of probes, not the number of configs, so `quick` buys its speed by halving the sweep to **6 configs** rather than by cutting probes. Its intervals are wide and few pairs will separate; the report says so plainly. Results are not gate-eligible, because gating needs the tighter intervals only `standard` provides.
 
