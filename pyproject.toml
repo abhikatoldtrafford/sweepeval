@@ -63,6 +63,11 @@ packages = ["src/sweepeval"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The repo root, so `from tests.conftest import ...` resolves. Locally this
+# happened to work via pytest's rootdir insertion; on Linux CI it did not, and
+# relying on incidental path behaviour is how a suite passes on one machine
+# and not another.
+pythonpath = ["."]
 addopts = "-q --strict-markers"
 asyncio_mode = "auto"
 markers = [
