@@ -1,4 +1,4 @@
-# agenteval — Design Specification
+# sweepeval — Design Specification
 
 **Status:** revised after independent audit; ready to plan from
 **Date:** 2026-09-12 (rev 2.1a)
@@ -11,10 +11,10 @@
 
 ## 1. What this is
 
-`agenteval` is a zero-config, black-box sweep and benchmark engine for LLM and agent systems.
+`sweepeval` is a zero-config, black-box sweep and benchmark engine for LLM and agent systems.
 
 ```
-agenteval run https://endpoint --key KEY
+sweepeval run https://endpoint --key KEY
 ```
 
 That one command, with no other input, must produce a real, scored, ranked report: it discovers the endpoint's request shape, infers how to extract its output, detects what it can actually do, plans a probe set, sweeps the configurations discovery proved are variable, and returns a Pareto frontier with confidence intervals on every number.
@@ -29,11 +29,15 @@ The moat is **blind discovery**. Every comparable tool requires you to describe 
 
 The second claim is **confidence intervals on everything**, including the regression gate. Eval tools that report point estimates produce gates that flap, and flapping gates get disabled.
 
-The third is **no composite score**. A single number hides exactly the trade-off that makes a configuration decision hard: the config with the best security posture is usually the slowest, and the cheapest one usually leaks. `agenteval` reports the frontier and states what each position wins and gives up. It will name a config when you tell it your preference (§14.4) — that preference is yours, applied at report time, never baked into the data.
+The third is **no composite score**. A single number hides exactly the trade-off that makes a configuration decision hard: the config with the best security posture is usually the slowest, and the cheapest one usually leaks. `sweepeval` reports the frontier and states what each position wins and gives up. It will name a config when you tell it your preference (§14.4) — that preference is yours, applied at report time, never baked into the data.
 
 ### 1.2 Competitive context
 
-`agent-eval` on PyPI (v0.1.54, actively maintained) is the nearest neighbour by name and the clearest contrast by design: it runs Inspect-formatted suites you supply and submits scores to a leaderboard. This project supplies the probes, discovers the endpoint, and refuses to produce a score. The README comparison table compares against that and against assertion frameworks (promptfoo, deepeval, ragas) and tracing platforms (LangSmith, Braintrust) **accurately** — those are not single-score tools and describing them as such would be a strawman. The honest differentiators are blind discovery, statistical rigour, and Pareto output.
+Two neighbours on PyPI define the space this tool has to distinguish itself from.
+
+`agent-eval` (v0.1.54, actively maintained) runs Inspect-formatted suites you supply and submits scores to a leaderboard. This project supplies the probes, discovers the endpoint, and refuses to produce a score. The project was originally to be called `agenteval`; PyPI's typosquat guard blocked that name as too similar, which was the right call — the confusion would have been permanent, in search results as much as in package indexes.
+
+`paretoeval` (v0.0.1) is closer conceptually than by name: cost-aware LLM evaluation, quality-per-dollar, regression gates, a pytest plugin. It is early, but the Pareto-and-cost framing is not uncontested, which is a reason to lead with blind discovery rather than with the frontier. The README comparison table compares against that and against assertion frameworks (promptfoo, deepeval, ragas) and tracing platforms (LangSmith, Braintrust) **accurately** — those are not single-score tools and describing them as such would be a strawman. The honest differentiators are blind discovery, statistical rigour, and Pareto output.
 
 ---
 
@@ -97,7 +101,7 @@ Changing any of these requires updating this section. Decisions superseded in re
 | D30 | Report outputs | Terminal always; machine formats on request; GHA annotations auto-enable in Actions |
 | D31 | Mock | Scenario-driven ASGI app, in-process transport for tests, `mock serve` for manual use |
 | D32 | Public surface | Full library public with explicit stability tiers and an API-surface golden test |
-| D33 | Onboarding | `agenteval demo` for the smoke path; **committed real-run artifacts in `examples/` as the README hook** |
+| D33 | Onboarding | `sweepeval demo` for the smoke path; **committed real-run artifacts in `examples/` as the README hook** |
 | D34 | Distribution | PyPI + `uvx`, GitHub Action, Docker image |
 | D35 | Docs | Strong README, mkdocs-material site, plugin cookbook, examples, release automation |
 | D36 | Default profile | **`quick` is the default** for `run`; `standard` and `deep` are explicit upgrades. Quick results are flagged `INDICATIVE` — meaning **wide intervals and few separations**, not absent intervals — and are not gate-eligible |
@@ -115,17 +119,17 @@ Changing any of these requires updating this section. Decisions superseded in re
 ### 4.1 CLI
 
 ```
-agenteval demo                        zero-credential run against the bundled mock
-agenteval run URL --key KEY           zero-config: discover, plan, sweep, rank, report
-agenteval discover URL --key KEY      Phase 0 only; emit annotated config
-agenteval evaluate URL --key KEY      single configuration, no sweep
-agenteval sweep [-c CONFIG]           declared axes
-agenteval baseline <run_id>           snapshot a run as a committable baseline
-agenteval gate URL --baseline PATH    re-run and compare (exit 0/1/2/3)
-agenteval report <run_id>             rebuild any format offline
-agenteval compare <run_a> <run_b>     diff two results, refusing invalid comparisons
-agenteval init                        write .gitignore entries and a starter config
-agenteval mock serve --scenario X     run the scenario mock on a real port
+sweepeval demo                        zero-credential run against the bundled mock
+sweepeval run URL --key KEY           zero-config: discover, plan, sweep, rank, report
+sweepeval discover URL --key KEY      Phase 0 only; emit annotated config
+sweepeval evaluate URL --key KEY      single configuration, no sweep
+sweepeval sweep [-c CONFIG]           declared axes
+sweepeval baseline <run_id>           snapshot a run as a committable baseline
+sweepeval gate URL --baseline PATH    re-run and compare (exit 0/1/2/3)
+sweepeval report <run_id>             rebuild any format offline
+sweepeval compare <run_a> <run_b>     diff two results, refusing invalid comparisons
+sweepeval init                        write .gitignore entries and a starter config
+sweepeval mock serve --scenario X     run the scenario mock on a real port
 ```
 
 Global flags: `--profile quick|standard|deep`, `-n/--runs`, `--concurrency`, `--budget`, `--dry-run`, `--yes`, `--format`, `--objectives`, `--objective`, `--prefer`, `--judge`, `--embeddings`, `--seed`, `--resume`, `--i-am-authorized`, `--no-store-bodies`.
@@ -134,8 +138,8 @@ Global flags: `--profile quick|standard|deep`, `-n/--runs`, `--concurrency`, `--
 
 Three stability tiers, declared in code and enforced in CI.
 
-- **Tier 1 — `agenteval.api`.** Additive change only during 0.x. Every CLI verb has a corresponding function, and the CLI calls it: `discover`, `evaluate`, `sweep`, `run`, `baseline`, `gate`, `run_gate`, `compare`, `report`, `demo`. Each has an async twin.
-- **Tier 2 — subsystem interfaces.** `agenteval.scorers.Scorer`, `agenteval.discovery.Shape`, `agenteval.report.Reporter`, `agenteval.rank.Objective`, `agenteval.schema.*`, `agenteval.store.Store`. Breaking changes require a CHANGELOG entry and a one-minor deprecation shim.
+- **Tier 1 — `sweepeval.api`.** Additive change only during 0.x. Every CLI verb has a corresponding function, and the CLI calls it: `discover`, `evaluate`, `sweep`, `run`, `baseline`, `gate`, `run_gate`, `compare`, `report`, `demo`. Each has an async twin.
+- **Tier 2 — subsystem interfaces.** `sweepeval.scorers.Scorer`, `sweepeval.discovery.Shape`, `sweepeval.report.Reporter`, `sweepeval.rank.Objective`, `sweepeval.schema.*`, `sweepeval.store.Store`. Breaking changes require a CHANGELOG entry and a one-minor deprecation shim.
 - **Tier 3 — everything else.** Importable, not guaranteed.
 
 `gate()` is a pure function over an existing result plus a baseline. `run_gate()` re-runs the target first. They are separate names because they are separate operations.
@@ -143,7 +147,7 @@ Three stability tiers, declared in code and enforced in CI.
 `tests/test_api_surface.py` holds a golden snapshot of every Tier 1 and Tier 2 symbol and signature. Changing the surface without updating the snapshot fails CI.
 
 ```python
-from agenteval import evaluate, gate
+from sweepeval import evaluate, gate
 
 res = evaluate("https://api.example.com/chat", key=KEY, runs=3, profile="standard")
 
@@ -159,9 +163,9 @@ assert verdict.ok, verdict.regressions
 
 ### 4.3 Onboarding
 
-`agenteval demo` runs the pipeline against the bundled scenario mock with no URL, no key and no spend. It is the smoke test and the reproducible example in every bug report.
+`sweepeval demo` runs the pipeline against the bundled scenario mock with no URL, no key and no spend. It is the smoke test and the reproducible example in every bug report.
 
-It is **not** the README hook. Everything it shows is synthetic by construction — `leaky_guardrails.yaml` leaks because a YAML file says so — and a skeptical reader correctly discounts a frontier computed over fabricated failures. The README hook is `examples/runs/<id>/`: artifacts from a real run against a real public endpoint, committed to the repo, replayable at zero cost and zero credentials with `agenteval report examples/runs/<id> --format md`. Real numbers, offline, no spend. §5.1's offline-rebuild property makes this nearly free.
+It is **not** the README hook. Everything it shows is synthetic by construction — `leaky_guardrails.yaml` leaks because a YAML file says so — and a skeptical reader correctly discounts a frontier computed over fabricated failures. The README hook is `examples/runs/<id>/`: artifacts from a real run against a real public endpoint, committed to the repo, replayable at zero cost and zero credentials with `sweepeval report examples/runs/<id> --format md`. Real numbers, offline, no spend. §5.1's offline-rebuild property makes this nearly free.
 
 ---
 
@@ -188,7 +192,7 @@ discovery/  plan.json  calls.jsonl  aggregates  frontier  report.*
 ### 5.2 Module layout
 
 ```
-src/agenteval/
+src/sweepeval/
   api.py            Tier 1 public functions
   schema/           manifest, unit, call, observation, aggregate, frontier,
                     target config, baseline, metric registry, objective
@@ -253,7 +257,7 @@ One Unit produces `calls_per_run` calls per run and **one or more** Observations
 ### 6.2 Layout
 
 ```
-.agenteval/
+.sweepeval/
   runs/<run_id>/
     manifest.json           comparability keys, versions, hashes, seeds,
                             capabilities, budget, authorization record
@@ -326,7 +330,7 @@ Refusal is specific: never "results incomparable", always "corpus hash differs: 
 - `endpoint_fingerprint` is SHA-256 over the scheme, host, port and path **after** credential stripping.
 - Blob content is scanned for the supplied key and any `sk-`/`Bearer`-shaped token before writing.
 - `tests/test_no_secrets.py` runs every artifact writer against a scenario using query-param auth and asserts the key appears in no file.
-- `agenteval init` adds `.agenteval/` to `.gitignore` and prints what is and is not safe to commit.
+- `sweepeval init` adds `.sweepeval/` to `.gitignore` and prints what is and is not safe to commit.
 
 ---
 
@@ -404,7 +408,7 @@ Opportunistic structure detection runs alongside for tool calls, SSE event types
 
 ### 8.6 Emitted config
 
-Written to `.agenteval/discovery/<url_hash>/agenteval.yaml` and symlinked or copied to `./agenteval.yaml` when that path is free. Keying by URL hash means two targets in one directory do not collide, and a shared gateway URL routing to different backends is distinguished by fingerprint rather than URL alone.
+Written to `.sweepeval/discovery/<url_hash>/sweepeval.yaml` and symlinked or copied to `./sweepeval.yaml` when that path is free. Keying by URL hash means two targets in one directory do not collide, and a shared gateway URL routing to different backends is distinguished by fingerprint rather than URL alone.
 
 ```yaml
 target:
@@ -651,7 +655,7 @@ Fully specified, because rev 1 gave a headline decision three sentences.
 - **The judge may not be the target.** Refused outright when the judge's resolved endpoint fingerprint equals the target's. Model *family* is not knowable from a black box — a target behind a proxy may be any model — so instead of pretending to detect it, the tool warns when the judge model string and any discovered target model string share a vendor prefix, records the pair in the manifest, and proceeds. The disclosure is the mitigation; a check that cannot actually work should not be specified as though it can.
 - **Budget.** Judge calls are estimated in the pre-flight (worst case: every ambiguity-capable Unit escalates), counted against the cap, and reported as a separate line.
 - **Persistence.** Every judge call is a row in `calls.jsonl` tagged `role: judge`, with its response in the blob store, so §5.1's offline rebuild and I7 both hold.
-- **Comparability.** `judge{present, model, prompt_version}` is a hard key, so enabling `--judge` invalidates existing baselines. `agenteval gate` says so explicitly and names the migration (`agenteval baseline` with the judge enabled).
+- **Comparability.** `judge{present, model, prompt_version}` is a hard key, so enabling `--judge` invalidates existing baselines. `sweepeval gate` says so explicitly and names the migration (`sweepeval baseline` with the judge enabled).
 
 ### 11.10 Deferred families
 
@@ -689,7 +693,7 @@ Ordering lexicographically **before** probing makes the surviving set determinis
 Rev 1 gated spending at the planner, after discovery and capability detection had already spent — including a context-ceiling binary search that can dominate the bill. Rev 2 gates before the **first billable request of any kind**:
 
 ```
-agenteval run https://api.example.com/chat --key ***
+sweepeval run https://api.example.com/chat --key ***
 
   phase                requests   tokens (est)
   discovery               ≤ 25       ~12k
@@ -918,7 +922,7 @@ Before ranking, compare per-family scored counts across configs. A config whose 
 
 Terminal always: frontier clusters with diameters, wins and gives-up, constraint violators, the `SKIPPED` list with reasons, the assumptions section listing every low-confidence inference, coverage, active flags (`INDICATIVE`, `CACHE_SUSPECTED`, `LOW_N`, `LOW_COVERAGE`), and the objective correlation matrix.
 
-Machine formats on request via `--format md,html,json,junit,gha`, written to `.agenteval/runs/<run_id>/report.*`. GHA annotations auto-enable under `GITHUB_ACTIONS`. `agenteval report <run_id> --format html` regenerates offline from `aggregates.json`.
+Machine formats on request via `--format md,html,json,junit,gha`, written to `.sweepeval/runs/<run_id>/report.*`. GHA annotations auto-enable under `GITHUB_ACTIONS`. `sweepeval report <run_id> --format html` regenerates offline from `aggregates.json`.
 
 A report never places metrics from different profiles in the same table, and always labels each metric's estimand.
 
@@ -928,9 +932,9 @@ Trade-off plots render as inline SVG with no dependency; matplotlib is an option
 
 ## 16. CI regression gate
 
-`agenteval baseline <run_id>` writes a committable `baseline.json` with comparability keys and every metric's cluster-level data — not just the point and interval, because the paired test needs per-probe values.
+`sweepeval baseline <run_id>` writes a committable `baseline.json` with comparability keys and every metric's cluster-level data — not just the point and interval, because the paired test needs per-probe values.
 
-`agenteval gate URL --baseline eval/baseline.json` re-runs the target and compares. Rev 2 replaces rev 1's rule entirely.
+`sweepeval gate URL --baseline eval/baseline.json` re-runs the target and compares. Rev 2 replaces rev 1's rule entirely.
 
 - **Paired one-sided test** of the difference from baseline, per gated metric, at declared α, in the worsening direction. Rev 1's "point outside the other's interval, both ways" was z ≈ 1.39 → ~8.3% false-fire per metric, and with six objectives ~39% per gate run. It was flappier than a naive test while being described as the design against flapping.
 - **Minimum practical effect** per metric (§13.6), overridable with `--min-effect security_pass_rate=0.05`. Statistical significance alone never fails a build.
@@ -965,7 +969,7 @@ tests/scenarios/
 
 Each controls response shape, which probes fail, guardrail leakage, context-drop depth, latency and error injection, temperature effect, usage-block presence, streaming, caching, auth style, and reasoning content. Four scenarios exist specifically to test rev-2 fixes: `echoes_the_prompt` (extractor oracle vs echo), `nondet_at_temp0` (sampling decision table), `quotes_the_canary` (hard-fail false positive), `query_param_auth` (redaction).
 
-Tests mount the app through `httpx.ASGITransport` — zero sockets, zero tokens. `agenteval mock serve` exposes it on a real port.
+Tests mount the app through `httpx.ASGITransport` — zero sockets, zero tokens. `sweepeval mock serve` exposes it on a real port.
 
 Test layers:
 
@@ -1007,7 +1011,7 @@ The cookbook carries a custom scorer and a custom discovery shape in under 50 li
 
 ### 19.3 Distribution
 
-- **PyPI + `uvx`.** The name `agenteval` was verified available on 2026-09-12; register it early, since the CLI name, docs domain, Action name and README all depend on it.
+- **PyPI + `uvx`.** `sweepeval` was verified available on 2026-09-12, after `agenteval` was rejected by PyPI's similarity check against `agent-eval` (§1.2). Claimed via trusted publishing (OIDC from GitHub Actions), so no API token exists to leak. A name is only claimed by an actual upload — PyPI has no reservation mechanism — so the first `v0.0.1.dev0` tag claims it.
 - **GitHub Action.** Composite action wrapping gate mode with baseline path, budget, profile and format inputs, emitting annotations and a job summary.
 - **Docker image** on ghcr.io for non-Python CI.
 
@@ -1035,7 +1039,7 @@ CONTRIBUTING, issue and PR templates, CHANGELOG governed by the §4.2 stability 
 
 Ordering changes from rev 1, all from the audit: interval primitives move into M0 because the M3 sampling test needs them; determinism and context move ahead of ranking so M9 sees all six objectives rather than building a four-objective frontier and rebuilding it; the gate moves to M6 because it is the stickiest feature and needs neither the sweep nor the ranker; and the objective registry is data-driven from M0 so M9 is objective-count-agnostic.
 
-`agenteval demo` is honest about its own maturity: a discovery-only demo from M2, a single-config demo from M6, the full frontier from M9.
+`sweepeval demo` is honest about its own maturity: a discovery-only demo from M2, a single-config demo from M6, the full frontier from M9.
 
 **v0.1.0 is M0–M10.** Items 12–15 of the original brief wait until someone external has run it.
 
@@ -1052,7 +1056,7 @@ Ordering changes from rev 1, all from the audit: interval primitives move into M
 | Extraction fails on a target that will not echo a nonce | Documented fallback to priors and walk, with confidence lowered and the path surfaced as a correctable assumption (§8.5) |
 | Hard-fail false positive breaks a user's build | k=3 confirmation, refusal-span exclusion, full response stored and printed (§11.2) |
 | Full-library public surface taxes every refactor | Three stability tiers plus the API-surface golden test (§4.2) |
-| Users commit secrets via `baseline.json` | Redaction everywhere, `agenteval init`, no-secrets test (§6.6) |
+| Users commit secrets via `baseline.json` | Redaction everywhere, `sweepeval init`, no-secrets test (§6.6) |
 | Running an attack suite against third-party endpoints | Per-host authorization affirmation, README warning, inert discovery (§18) |
 
 ---

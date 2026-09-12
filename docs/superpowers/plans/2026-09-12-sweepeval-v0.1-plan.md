@@ -1,14 +1,14 @@
-# agenteval v0.1 Implementation Plan
+# sweepeval v0.1 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build `agenteval` v0.1.0 — a zero-config, black-box sweep and benchmark engine for LLM/agent HTTP endpoints that discovers an endpoint by probing it, brings its own probe corpus, and reports a Pareto frontier with paired-test confidence intervals on every number.
+**Goal:** Build `sweepeval` v0.1.0 — a zero-config, black-box sweep and benchmark engine for LLM/agent HTTP endpoints that discovers an endpoint by probing it, brings its own probe corpus, and reports a Pareto frontier with paired-test confidence intervals on every number.
 
 **Architecture:** Six pure stages (`discover → plan → execute → aggregate → rank → report`) communicating only through an append-only artifact store on disk. Only `execute` touches the network, so five of six stages test with zero transport. A single statistical primitive — the paired cluster bootstrap over the frozen shared probe set — underpins domination, the CI gate, and the capability tests. Layering is enforced mechanically by an import-linter contract, not by convention.
 
 **Tech Stack:** Python 3.10+, httpx (async), pydantic v2, typer, rich, pyyaml, numpy, jinja2. Test stack: pytest, pytest-asyncio, hypothesis, `httpx.ASGITransport` for in-process mock transport, import-linter for layering contracts.
 
-**Spec:** `docs/superpowers/specs/2026-09-12-agenteval-design.md` (**rev 2.1, commit `185878e`**). The plan argues from the spec; executors read both. Every task names the section that governs it.
+**Spec:** `docs/superpowers/specs/2026-09-12-sweepeval-design.md` (**rev 2.1, commit `185878e`**). The plan argues from the spec; executors read both. Every task names the section that governs it.
 
 ---
 
@@ -105,7 +105,7 @@ Created across the plan. Each file has one responsibility; files that change tog
 ```
 pyproject.toml                      packaging, deps, optional extras, entry points
 .importlinter                       layering contract (§5.2)
-src/agenteval/
+src/sweepeval/
   __init__.py                       re-exports Tier 1 only
   api.py                            Tier 1: discover/evaluate/sweep/run/baseline/
                                     gate/run_gate/compare/report/demo + async twins
@@ -171,12 +171,12 @@ tests/
 **Spec:** §5.2, §20 (M0), Global Constraints.
 
 **Files:**
-- Create: `pyproject.toml`, `.importlinter`, `.github/workflows/ci.yml`, `src/agenteval/__init__.py`, `LICENSE`, `.gitignore`
-- Create: `src/agenteval/{schema,store,stats,http,discovery,capabilities,corpus,scorers,execute,rank,report,mock,cli}/__init__.py`
+- Create: `pyproject.toml`, `.importlinter`, `.github/workflows/ci.yml`, `src/sweepeval/__init__.py`, `LICENSE`, `.gitignore`
+- Create: `src/sweepeval/{schema,store,stats,http,discovery,capabilities,corpus,scorers,execute,rank,report,mock,cli}/__init__.py`
 - Test: `tests/contract/test_layering.py`
 
 **Interfaces:**
-- Produces: the package `agenteval` importable from `src/`; a CI job that runs `pytest`, `ruff`, `mypy`, and `lint-imports`.
+- Produces: the package `sweepeval` importable from `src/`; a CI job that runs `pytest`, `ruff`, `mypy`, and `lint-imports`.
 
 **Judgement call flagged:** the spec does not name a linter or type checker. This plan picks `ruff` + `mypy --strict` on `schema/` and `stats/` only (the two layers where a type error is a correctness error). Loosen elsewhere if it slows work.
 
@@ -192,13 +192,13 @@ def test_import_linter_contracts_hold():
 
 def test_schema_imports_nothing_from_package():
     import pathlib, re
-    root = pathlib.Path("src/agenteval/schema")
+    root = pathlib.Path("src/sweepeval/schema")
     offenders = []
     for path in root.rglob("*.py"):
         text = path.read_text(encoding="utf-8")
-        for match in re.finditer(r"^\s*(?:from|import)\s+(agenteval\S*)", text, re.M):
+        for match in re.finditer(r"^\s*(?:from|import)\s+(sweepeval\S*)", text, re.M):
             module = match.group(1)
-            if not module.startswith("agenteval.schema"):
+            if not module.startswith("sweepeval.schema"):
                 offenders.append(f"{path}: {module}")
     assert offenders == [], offenders
 ```
@@ -212,7 +212,7 @@ Expected: FAIL — `lint-imports` not installed / no `.importlinter`.
 
 ```toml
 [project]
-name = "agenteval"
+name = "sweepeval"
 version = "0.1.0.dev0"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
@@ -227,80 +227,80 @@ dev = ["pytest>=8", "pytest-asyncio>=0.23", "hypothesis>=6.100",
        "import-linter>=2.0", "ruff>=0.4", "mypy>=1.10"]
 
 [project.scripts]
-agenteval = "agenteval.cli.main:app"
+sweepeval = "sweepeval.cli.main:app"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/agenteval"]
+packages = ["src/sweepeval"]
 ```
 
 - [ ] **Step 4: Write `.importlinter`**
 
 ```ini
 [importlinter]
-root_package = agenteval
+root_package = sweepeval
 
 [importlinter:contract:schema-is-a-leaf]
 name = schema imports nothing from the package
 type = forbidden
-source_modules = agenteval.schema
+source_modules = sweepeval.schema
 forbidden_modules =
-    agenteval.store
-    agenteval.stats
-    agenteval.http
-    agenteval.discovery
-    agenteval.capabilities
-    agenteval.corpus
-    agenteval.scorers
-    agenteval.execute
-    agenteval.rank
-    agenteval.report
-    agenteval.mock
-    agenteval.cli
+    sweepeval.store
+    sweepeval.stats
+    sweepeval.http
+    sweepeval.discovery
+    sweepeval.capabilities
+    sweepeval.corpus
+    sweepeval.scorers
+    sweepeval.execute
+    sweepeval.rank
+    sweepeval.report
+    sweepeval.mock
+    sweepeval.cli
 
 [importlinter:contract:only-http-requests]
 name = nothing outside http performs a request
 type = forbidden
 source_modules =
-    agenteval.schema
-    agenteval.store
-    agenteval.stats
-    agenteval.corpus
-    agenteval.rank
-    agenteval.report
+    sweepeval.schema
+    sweepeval.store
+    sweepeval.stats
+    sweepeval.corpus
+    sweepeval.rank
+    sweepeval.report
 forbidden_modules = httpx
 
 [importlinter:contract:only-store-writes]
 name = nothing outside store writes an artifact
 type = forbidden
 source_modules =
-    agenteval.stats
-    agenteval.rank
-    agenteval.corpus
-    agenteval.capabilities
-forbidden_modules = agenteval.store.jsonl, agenteval.store.blob, agenteval.store.derived
+    sweepeval.stats
+    sweepeval.rank
+    sweepeval.corpus
+    sweepeval.capabilities
+forbidden_modules = sweepeval.store.jsonl, sweepeval.store.blob, sweepeval.store.derived
 
 [importlinter:contract:only-rank-dominates]
 name = nothing outside rank decides domination
 type = forbidden
 source_modules =
-    agenteval.report
-    agenteval.execute
-    agenteval.scorers
-forbidden_modules = agenteval.rank.domination
+    sweepeval.report
+    sweepeval.execute
+    sweepeval.scorers
+forbidden_modules = sweepeval.rank.domination
 
 [importlinter:contract:only-stats-computes-intervals]
 name = nothing outside stats computes an interval or a p-value
 type = forbidden
 source_modules =
-    agenteval.rank
-    agenteval.report
-    agenteval.scorers
-    agenteval.capabilities
-    agenteval.execute
+    sweepeval.rank
+    sweepeval.report
+    sweepeval.scorers
+    sweepeval.capabilities
+    sweepeval.execute
 forbidden_modules = numpy.random
 ```
 
@@ -309,11 +309,11 @@ Note the last contract is a proxy — it forbids the *seeding surface* rather th
 - [ ] **Step 5: Create the package tree**
 
 ```bash
-mkdir -p src/agenteval/{schema,store,stats,http,discovery,capabilities,corpus,scorers,execute,rank,report,mock,cli}
+mkdir -p src/sweepeval/{schema,store,stats,http,discovery,capabilities,corpus,scorers,execute,rank,report,mock,cli}
 for d in schema store stats http discovery capabilities corpus scorers execute rank report mock cli; do
-  touch "src/agenteval/$d/__init__.py"
+  touch "src/sweepeval/$d/__init__.py"
 done
-printf '__version__ = "0.1.0.dev0"\n' > src/agenteval/__init__.py
+printf '__version__ = "0.1.0.dev0"\n' > src/sweepeval/__init__.py
 ```
 
 - [ ] **Step 6: Write the CI workflow**
@@ -335,7 +335,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: pip install -e ".[dev,plots]"
       - run: ruff check src tests
-      - run: mypy --strict src/agenteval/schema src/agenteval/stats
+      - run: mypy --strict src/sweepeval/schema src/sweepeval/stats
       - run: lint-imports
       - run: pytest -q
 ```
@@ -352,7 +352,7 @@ git add pyproject.toml .importlinter .github LICENSE .gitignore src tests
 git commit -m "chore: repo skeleton, packaging, CI, layering contract"
 ```
 
-**Acceptance:** `pytest`, `ruff`, `mypy`, `lint-imports` all green on a clean checkout. `pip install -e .` yields an importable `agenteval` and an `agenteval` console script stub.
+**Acceptance:** `pytest`, `ruff`, `mypy`, `lint-imports` all green on a clean checkout. `pip install -e .` yields an importable `sweepeval` and an `sweepeval` console script stub.
 
 ---
 
@@ -361,7 +361,7 @@ git commit -m "chore: repo skeleton, packaging, CI, layering contract"
 **Spec:** §6.4 (`params_hash`), §6.5 (corpus hash), §10.3, §12.5 (plan hash).
 
 **Files:**
-- Create: `src/agenteval/schema/hashing.py`, `src/agenteval/schema/versions.py`
+- Create: `src/sweepeval/schema/hashing.py`, `src/sweepeval/schema/versions.py`
 - Test: `tests/unit/test_hashing.py`
 
 **Interfaces:**
@@ -374,7 +374,7 @@ git commit -m "chore: repo skeleton, packaging, CI, layering contract"
 
 ```python
 # tests/unit/test_hashing.py
-from agenteval.schema.hashing import canonical_json, hash_obj, param_hash, corpus_hash
+from sweepeval.schema.hashing import canonical_json, hash_obj, param_hash, corpus_hash
 
 def test_canonical_json_is_key_order_independent():
     assert canonical_json({"b": 1, "a": 2}) == canonical_json({"a": 2, "b": 1})
@@ -418,12 +418,12 @@ def test_corpus_hash_changes_when_profile_definition_changes():
 - [ ] **Step 2: Run and watch fail**
 
 Run: `pytest tests/unit/test_hashing.py -v`
-Expected: FAIL — `ModuleNotFoundError: agenteval.schema.hashing`.
+Expected: FAIL — `ModuleNotFoundError: sweepeval.schema.hashing`.
 
 - [ ] **Step 3: Implement**
 
 ```python
-# src/agenteval/schema/versions.py
+# src/sweepeval/schema/versions.py
 SCHEMA_MAJOR = 1
 SCHEMA_VERSION = "1.0"
 SUITE_VERSION = 1
@@ -431,7 +431,7 @@ TOOL_VERSION = "0.1.0.dev0"
 ```
 
 ```python
-# src/agenteval/schema/hashing.py
+# src/sweepeval/schema/hashing.py
 from __future__ import annotations
 
 import hashlib
@@ -491,7 +491,7 @@ Expected: PASS (10 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agenteval/schema/hashing.py src/agenteval/schema/versions.py tests/unit/test_hashing.py
+git add src/sweepeval/schema/hashing.py src/sweepeval/schema/versions.py tests/unit/test_hashing.py
 git commit -m "feat(schema): canonical hashing and version constants"
 ```
 
@@ -504,7 +504,7 @@ git commit -m "feat(schema): canonical hashing and version constants"
 **Spec:** §6.1, §10.1, §11.7.
 
 **Files:**
-- Create: `src/agenteval/schema/unit.py`
+- Create: `src/sweepeval/schema/unit.py`
 - Test: `tests/unit/test_unit.py`, `tests/property/test_unit_roundtrip.py`
 
 **Interfaces:**
@@ -525,7 +525,7 @@ git commit -m "feat(schema): canonical hashing and version constants"
 ```python
 # tests/unit/test_unit.py
 import pytest
-from agenteval.schema.unit import ScoringContract, Turn, Unit
+from sweepeval.schema.unit import ScoringContract, Turn, Unit
 
 
 def _unit(**over):
@@ -592,7 +592,7 @@ def test_unit_rejects_empty_turns():
 ```python
 # tests/property/test_unit_roundtrip.py
 from hypothesis import given, strategies as st
-from agenteval.schema.unit import ScoringContract, Turn, Unit
+from sweepeval.schema.unit import ScoringContract, Turn, Unit
 
 text = st.text(min_size=1, max_size=40)
 
@@ -625,14 +625,14 @@ Expected: FAIL — module not found.
 - [ ] **Step 3: Implement**
 
 ```python
-# src/agenteval/schema/unit.py
+# src/sweepeval/schema/unit.py
 from __future__ import annotations
 
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from agenteval.schema.hashing import param_hash
+from sweepeval.schema.hashing import param_hash
 
 Role = Literal["system", "user", "assistant"]
 
@@ -728,7 +728,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agenteval/schema/unit.py tests/unit/test_unit.py tests/property/test_unit_roundtrip.py
+git add src/sweepeval/schema/unit.py tests/unit/test_unit.py tests/property/test_unit_roundtrip.py
 git commit -m "feat(schema): Unit as the join key, with stable unit_id and canary names"
 ```
 
@@ -741,7 +741,7 @@ git commit -m "feat(schema): Unit as the join key, with stable unit_id and canar
 **Spec:** §6.4, §13.4, I3.
 
 **Files:**
-- Create: `src/agenteval/schema/metric.py`
+- Create: `src/sweepeval/schema/metric.py`
 - Test: `tests/unit/test_metric_value.py`
 
 **Interfaces:**
@@ -756,7 +756,7 @@ git commit -m "feat(schema): Unit as the join key, with stable unit_id and canar
 # tests/unit/test_metric_value.py
 import pytest
 from pydantic import ValidationError
-from agenteval.schema.metric import CIMethod, Estimand, Flag, MetricValue
+from sweepeval.schema.metric import CIMethod, Estimand, Flag, MetricValue
 
 
 def test_interval_metric_is_accepted():
@@ -817,7 +817,7 @@ Expected: FAIL — module not found.
 - [ ] **Step 3: Implement**
 
 ```python
-# src/agenteval/schema/metric.py
+# src/sweepeval/schema/metric.py
 from __future__ import annotations
 
 from enum import Enum
@@ -897,7 +897,7 @@ Expected: PASS (8 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agenteval/schema/metric.py tests/unit/test_metric_value.py
+git add src/sweepeval/schema/metric.py tests/unit/test_metric_value.py
 git commit -m "feat(schema): MetricValue enforcing I3 at construction"
 ```
 
@@ -910,7 +910,7 @@ git commit -m "feat(schema): MetricValue enforcing I3 at construction"
 **Spec:** §6.1 (observation key), §6.4.
 
 **Files:**
-- Create: `src/agenteval/schema/call.py`, `src/agenteval/schema/observation.py`
+- Create: `src/sweepeval/schema/call.py`, `src/sweepeval/schema/observation.py`
 - Test: `tests/unit/test_rows.py`
 
 **Interfaces:**
@@ -927,8 +927,8 @@ git commit -m "feat(schema): MetricValue enforcing I3 at construction"
 # tests/unit/test_rows.py
 import pytest
 from pydantic import ValidationError
-from agenteval.schema.call import Call, ErrorClass, TimingPart
-from agenteval.schema.observation import Observation, Verdict
+from sweepeval.schema.call import Call, ErrorClass, TimingPart
+from sweepeval.schema.observation import Observation, Verdict
 
 
 def _obs(**over):
@@ -992,7 +992,7 @@ Expected: FAIL — module not found.
 - [ ] **Step 3: Implement**
 
 ```python
-# src/agenteval/schema/call.py
+# src/sweepeval/schema/call.py
 from __future__ import annotations
 
 from enum import Enum
@@ -1101,7 +1101,7 @@ class Call(BaseModel):
 ```
 
 ```python
-# src/agenteval/schema/observation.py
+# src/sweepeval/schema/observation.py
 from __future__ import annotations
 
 from enum import Enum
@@ -1163,7 +1163,7 @@ Expected: PASS (8 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agenteval/schema/call.py src/agenteval/schema/observation.py tests/unit/test_rows.py
+git add src/sweepeval/schema/call.py src/sweepeval/schema/observation.py tests/unit/test_rows.py
 git commit -m "feat(schema): Call and Observation rows with the corrected five-part key"
 ```
 
@@ -1176,7 +1176,7 @@ git commit -m "feat(schema): Call and Observation rows with the corrected five-p
 **Spec:** §6.5. Includes the four rev-2 promotions: profile, pricing source, scorer versions, resolved extraction path.
 
 **Files:**
-- Create: `src/agenteval/schema/comparability.py`
+- Create: `src/sweepeval/schema/comparability.py`
 - Test: `tests/unit/test_comparability.py`, `tests/property/test_comparability_symmetry.py`
 
 **Interfaces:**
@@ -1189,7 +1189,7 @@ git commit -m "feat(schema): Call and Observation rows with the corrected five-p
 
 ```python
 # tests/unit/test_comparability.py
-from agenteval.schema.comparability import Comparability, HardKeys, SoftKeys, compare_keys
+from sweepeval.schema.comparability import Comparability, HardKeys, SoftKeys, compare_keys
 
 
 def _hard(**over):
@@ -1259,7 +1259,7 @@ def test_local_runs_are_never_cross_user_comparable():
 ```python
 # tests/property/test_comparability_symmetry.py
 from hypothesis import given, strategies as st
-from agenteval.schema.comparability import Comparability, HardKeys, SoftKeys, compare_keys
+from sweepeval.schema.comparability import Comparability, HardKeys, SoftKeys, compare_keys
 
 
 def _c(profile, corpus, n_runs):
@@ -1296,7 +1296,7 @@ Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement**
 
-Write `src/agenteval/schema/comparability.py` with `HardKeys` carrying exactly the eleven fields the test asserts, `SoftKeys` carrying `n_runs`, `concurrency`, `tool_version`, and a `compare_keys` that iterates `HardKeys.model_fields`, produces a `KeyMismatch` per differing field with a human-readable message from a per-key message template (`corpus_hash` → `"corpus hash differs: {a:.4}… vs {b:.4}… — the probe corpus changed between these runs"`), and a `local` check that refuses when either side is local and the two are not the same run. Soft mismatches become warnings.
+Write `src/sweepeval/schema/comparability.py` with `HardKeys` carrying exactly the eleven fields the test asserts, `SoftKeys` carrying `n_runs`, `concurrency`, `tool_version`, and a `compare_keys` that iterates `HardKeys.model_fields`, produces a `KeyMismatch` per differing field with a human-readable message from a per-key message template (`corpus_hash` → `"corpus hash differs: {a:.4}… vs {b:.4}… — the probe corpus changed between these runs"`), and a `local` check that refuses when either side is local and the two are not the same run. Soft mismatches become warnings.
 
 **Message table is required, not optional** — §6.5 says refusal is never "results incomparable". Write one template per hard key.
 
@@ -1308,7 +1308,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agenteval/schema/comparability.py tests/unit/test_comparability.py tests/property/test_comparability_symmetry.py
+git add src/sweepeval/schema/comparability.py tests/unit/test_comparability.py tests/property/test_comparability_symmetry.py
 git commit -m "feat(schema): comparability keys with specific refusal messages (I6)"
 ```
 
@@ -1321,7 +1321,7 @@ git commit -m "feat(schema): comparability keys with specific refusal messages (
 **Spec:** §14.1, §13.6, §11.1, §11.4, §14.2, I1, I10.
 
 **Files:**
-- Create: `src/agenteval/schema/objective.py`
+- Create: `src/sweepeval/schema/objective.py`
 - Test: `tests/unit/test_objective_registry.py`
 
 **Interfaces:**
@@ -1333,7 +1333,7 @@ git commit -m "feat(schema): comparability keys with specific refusal messages (
 
 **Naming, per §11.4 and §14.2:** the determinism objective is `target_determinism_at_temp0` — measured at a pinned `temp=0` and scoped to the (model, system_prompt) pair, not the full config. `config_repeatability`, measured at the config's own settings, is registered alongside as a non-default objective and is promotable with `--objective`. Registering both is what stops a `temp=1.0` row from displaying a repeatability number taken at `temp=0` with nothing beside it to correct the impression.
 
-**Invariant I10:** a plugin metric becomes an objective by calling `REGISTRY.register` or declaring an `agenteval.objectives` entry point — no edit to `rank/`. **Invariant I1:** the registry is where within-family weighting is declared, and the reporter reads the declaration rather than recomputing it.
+**Invariant I10:** a plugin metric becomes an objective by calling `REGISTRY.register` or declaring an `sweepeval.objectives` entry point — no edit to `rank/`. **Invariant I1:** the registry is where within-family weighting is declared, and the reporter reads the declaration rather than recomputing it.
 
 **Why in M0:** §20 says the registry is data-driven from M0 so M9 is objective-count-agnostic. If M9 hardcodes six, the plugin story dies.
 
@@ -1342,7 +1342,7 @@ git commit -m "feat(schema): comparability keys with specific refusal messages (
 ```python
 # tests/unit/test_objective_registry.py
 import pytest
-from agenteval.schema.objective import REGISTRY, Objective, ObjectiveRegistry
+from sweepeval.schema.objective import REGISTRY, Objective, ObjectiveRegistry
 
 
 def test_the_six_default_objectives_are_registered():
@@ -1424,7 +1424,7 @@ Expected: FAIL — module not found.
 - [ ] **Step 3: Implement**
 
 ```python
-# src/agenteval/schema/objective.py
+# src/sweepeval/schema/objective.py
 from __future__ import annotations
 
 from importlib.metadata import entry_points
@@ -1473,7 +1473,7 @@ class ObjectiveRegistry:
         return tuple(o for o in self.all() if o.default)
 
     def from_entry_points(self) -> None:
-        for ep in entry_points(group="agenteval.objectives"):
+        for ep in entry_points(group="sweepeval.objectives"):
             self.register(ep.load())
 
 
@@ -1537,7 +1537,7 @@ Expected: PASS (8 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agenteval/schema/objective.py tests/unit/test_objective_registry.py
+git add src/sweepeval/schema/objective.py tests/unit/test_objective_registry.py
 git commit -m "feat(schema): data-driven objective registry with published weightings"
 ```
 
@@ -1550,7 +1550,7 @@ git commit -m "feat(schema): data-driven objective registry with published weigh
 **Spec:** §6.6, §8.4, D38.
 
 **Files:**
-- Create: `src/agenteval/store/redaction.py`
+- Create: `src/sweepeval/store/redaction.py`
 - Test: `tests/unit/test_redaction.py`
 
 **Interfaces:**
@@ -1563,7 +1563,7 @@ git commit -m "feat(schema): data-driven objective registry with published weigh
 
 ```python
 # tests/unit/test_redaction.py
-from agenteval.store.redaction import Redactor
+from sweepeval.store.redaction import Redactor
 
 
 def test_known_auth_param_names_are_masked():
@@ -1636,7 +1636,7 @@ Expected: PASS (9 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agenteval/store/redaction.py tests/unit/test_redaction.py
+git add src/sweepeval/store/redaction.py tests/unit/test_redaction.py
 git commit -m "feat(store): redactor for URLs, text and fingerprints (D38)"
 ```
 
@@ -1649,7 +1649,7 @@ git commit -m "feat(store): redactor for URLs, text and fingerprints (D38)"
 **Spec:** §6.3, D37.
 
 **Files:**
-- Create: `src/agenteval/store/blob.py`
+- Create: `src/sweepeval/store/blob.py`
 - Test: `tests/unit/test_blob_store.py`
 
 **Interfaces:**
@@ -1664,8 +1664,8 @@ git commit -m "feat(store): redactor for URLs, text and fingerprints (D38)"
 ```python
 # tests/unit/test_blob_store.py
 import pytest
-from agenteval.store.blob import BlobStore
-from agenteval.store.redaction import Redactor
+from sweepeval.store.blob import BlobStore
+from sweepeval.store.redaction import Redactor
 
 
 @pytest.fixture
@@ -1735,7 +1735,7 @@ Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement**
 
-Shard as `root/<id[:2]>/<id>`. Truncation appends `b"\n[truncated by agenteval at 65536 bytes]"`. Write via a temp file plus `os.replace` so a crash cannot leave a half blob under a hash that claims to be complete. Writing an already-present id is a no-op (this is what makes it append-only in spirit: content is immutable because the name is the content).
+Shard as `root/<id[:2]>/<id>`. Truncation appends `b"\n[truncated by sweepeval at 65536 bytes]"`. Write via a temp file plus `os.replace` so a crash cannot leave a half blob under a hash that claims to be complete. Writing an already-present id is a no-op (this is what makes it append-only in spirit: content is immutable because the name is the content).
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -1745,7 +1745,7 @@ Expected: PASS (10 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agenteval/store/blob.py tests/unit/test_blob_store.py
+git add src/sweepeval/store/blob.py tests/unit/test_blob_store.py
 git commit -m "feat(store): content-addressed blob store with redaction and caps (D37)"
 ```
 
@@ -1758,7 +1758,7 @@ git commit -m "feat(store): content-addressed blob store with redaction and caps
 **Spec:** §6.2, I7.
 
 **Files:**
-- Create: `src/agenteval/store/jsonl.py`, `src/agenteval/store/derived.py`
+- Create: `src/sweepeval/store/jsonl.py`, `src/sweepeval/store/derived.py`
 - Test: `tests/unit/test_jsonl_store.py`, `tests/property/test_append_only.py`
 
 **Interfaces:**
@@ -1774,9 +1774,9 @@ git commit -m "feat(store): content-addressed blob store with redaction and caps
 ```python
 # tests/unit/test_jsonl_store.py
 import pytest
-from agenteval.schema.call import Call
-from agenteval.store.jsonl import AppendOnlyLog
-from agenteval.store.redaction import Redactor
+from sweepeval.schema.call import Call
+from sweepeval.store.jsonl import AppendOnlyLog
+from sweepeval.store.redaction import Redactor
 
 
 @pytest.fixture
@@ -1833,9 +1833,9 @@ def test_secrets_in_a_row_are_redacted_before_writing(tmp_path):
 ```python
 # tests/property/test_append_only.py
 from hypothesis import given, strategies as st
-from agenteval.schema.call import Call
-from agenteval.store.jsonl import AppendOnlyLog
-from agenteval.store.redaction import Redactor
+from sweepeval.schema.call import Call
+from sweepeval.store.jsonl import AppendOnlyLog
+from sweepeval.store.redaction import Redactor
 
 
 @given(st.lists(st.integers(0, 100), min_size=1, max_size=20))
@@ -1877,7 +1877,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agenteval/store/jsonl.py src/agenteval/store/derived.py tests/unit/test_jsonl_store.py tests/property/test_append_only.py
+git add src/sweepeval/store/jsonl.py src/sweepeval/store/derived.py tests/unit/test_jsonl_store.py tests/property/test_append_only.py
 git commit -m "feat(store): append-only JSONL log and derived-artifact provenance (I7)"
 ```
 
@@ -1890,7 +1890,7 @@ git commit -m "feat(store): append-only JSONL log and derived-artifact provenanc
 **Spec:** §6.2, §12.5.
 
 **Files:**
-- Create: `src/agenteval/store/state.py`, `src/agenteval/store/run.py`
+- Create: `src/sweepeval/store/state.py`, `src/sweepeval/store/run.py`
 - Test: `tests/unit/test_run_state.py`, `tests/integration/test_store_facade.py`
 
 **Interfaces:**
@@ -1906,7 +1906,7 @@ git commit -m "feat(store): append-only JSONL log and derived-artifact provenanc
 
 ```python
 # tests/unit/test_run_state.py
-from agenteval.store.state import RunState, new_run_id
+from sweepeval.store.state import RunState, new_run_id
 
 
 def test_run_ids_sort_chronologically():
@@ -1967,9 +1967,9 @@ Expected: FAIL — module not found.
 
 ```python
 # tests/integration/test_store_facade.py
-from agenteval.schema.call import Call
-from agenteval.store.redaction import Redactor
-from agenteval.store.run import Store, new_run_id
+from sweepeval.schema.call import Call
+from sweepeval.store.redaction import Redactor
+from sweepeval.store.run import Store, new_run_id
 
 
 def test_store_creates_the_documented_layout(tmp_path):
@@ -2000,7 +2000,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/agenteval/store/state.py src/agenteval/store/run.py tests/unit/test_run_state.py tests/integration/test_store_facade.py
+git add src/sweepeval/store/state.py src/sweepeval/store/run.py tests/unit/test_run_state.py tests/integration/test_store_facade.py
 git commit -m "feat(store): run layout, sortable run ids, unit-run resume state"
 ```
 
@@ -2013,7 +2013,7 @@ git commit -m "feat(store): run layout, sortable run ids, unit-run resume state"
 **Spec:** §13.3, §13.4. Moved into M0 per §20 because M3's sampling test needs it.
 
 **Files:**
-- Create: `src/agenteval/stats/resample.py`
+- Create: `src/sweepeval/stats/resample.py`
 - Test: `tests/unit/test_resample.py`, `tests/simulation/test_interval_coverage.py`
 
 **Interfaces:**
@@ -2034,8 +2034,8 @@ git commit -m "feat(store): run layout, sortable run ids, unit-run resume state"
 ```python
 # tests/unit/test_resample.py
 import pytest
-from agenteval.schema.metric import CIMethod, Estimand, Flag
-from agenteval.stats.resample import (CLUSTER_FLOOR, cluster_bootstrap,
+from sweepeval.schema.metric import CIMethod, Estimand, Flag
+from sweepeval.stats.resample import (CLUSTER_FLOOR, cluster_bootstrap,
                                       resample_indices, t_interval)
 
 
@@ -2137,8 +2137,8 @@ def test_estimand_is_stamped_on_the_result():
 ```python
 # tests/simulation/test_interval_coverage.py
 import random
-from agenteval.schema.metric import Estimand
-from agenteval.stats.resample import cluster_bootstrap
+from sweepeval.schema.metric import Estimand
+from sweepeval.stats.resample import cluster_bootstrap
 
 
 def test_cluster_bootstrap_covers_a_known_mean_at_roughly_nominal_rate():
@@ -2174,7 +2174,7 @@ Expected: PASS (11 + 1 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agenteval/stats/resample.py tests/unit/test_resample.py tests/simulation/test_interval_coverage.py
+git add src/sweepeval/stats/resample.py tests/unit/test_resample.py tests/simulation/test_interval_coverage.py
 git commit -m "feat(stats): cluster bootstrap, t-interval, cluster floor, depth stratification"
 ```
 
@@ -2187,8 +2187,8 @@ git commit -m "feat(stats): cluster bootstrap, t-interval, cluster floor, depth 
 **Spec:** §4.2, I10.
 
 **Files:**
-- Create: `src/agenteval/api.py`, `src/agenteval/cli/main.py`, `tests/golden/api_surface.json`
-- Modify: `src/agenteval/__init__.py`
+- Create: `src/sweepeval/api.py`, `src/sweepeval/cli/main.py`, `tests/golden/api_surface.json`
+- Modify: `src/sweepeval/__init__.py`
 - Test: `tests/golden/test_api_surface.py`
 
 **Interfaces:**
@@ -2205,8 +2205,8 @@ import inspect
 import json
 import pathlib
 
-import agenteval
-from agenteval import api
+import sweepeval
+from sweepeval import api
 
 GOLDEN = pathlib.Path(__file__).parent / "api_surface.json"
 
@@ -2237,7 +2237,7 @@ def test_gate_and_run_gate_are_distinct_operations():
 
 def test_tier1_is_reexported_from_the_package_root():
     for name in TIER1:
-        assert hasattr(agenteval, name)
+        assert hasattr(sweepeval, name)
 
 
 def test_api_surface_matches_the_golden_snapshot():
@@ -2259,7 +2259,7 @@ Expected: FAIL — `api` has no attribute `discover`.
 - [ ] **Step 3: Implement the stubs**
 
 ```python
-# src/agenteval/api.py  (excerpt — write all ten pairs in this shape)
+# src/sweepeval/api.py  (excerpt — write all ten pairs in this shape)
 from __future__ import annotations
 
 from pathlib import Path
@@ -2298,7 +2298,7 @@ async def arun_gate(url: str, *, key: str | None = None,
     raise NotImplementedError(f"run_gate {_NYI}")
 ```
 
-Then `src/agenteval/__init__.py` re-exports `__all__` from `api`, and `cli/main.py` is a typer app with one no-op subcommand per verb so `agenteval --help` works from M0.
+Then `src/sweepeval/__init__.py` re-exports `__all__` from `api`, and `cli/main.py` is a typer app with one no-op subcommand per verb so `sweepeval --help` works from M0.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -2308,17 +2308,17 @@ Expected: PASS; `tests/golden/api_surface.json` created on first run — inspect
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/agenteval/api.py src/agenteval/__init__.py src/agenteval/cli/main.py tests/golden/
+git add src/sweepeval/api.py src/sweepeval/__init__.py src/sweepeval/cli/main.py tests/golden/
 git commit -m "feat(api): Tier 1 surface stubs with a golden snapshot test"
 ```
 
-**Acceptance:** `agenteval --help` lists every verb; changing a Tier 1 signature fails CI until the snapshot is updated deliberately.
+**Acceptance:** `sweepeval --help` lists every verb; changing a Tier 1 signature fails CI until the snapshot is updated deliberately.
 
 ---
 
 ### M0 exit criteria
 
-- [ ] `pytest -q` green; `ruff`, `mypy --strict src/agenteval/schema src/agenteval/stats`, `lint-imports` all green.
+- [ ] `pytest -q` green; `ruff`, `mypy --strict src/sweepeval/schema src/sweepeval/stats`, `lint-imports` all green.
 - [ ] `tests/test_no_secrets.py`-equivalent coverage exists via `test_store_facade.py::test_every_writer_handed_out_by_store_is_redacted` (the full scenario-driven version lands at M1 when the query-param-auth mock exists).
 - [ ] A `MetricValue` cannot be constructed without an interval or an explicit refusal.
 - [ ] A `Unit` round-trips through JSON byte-identically, its `unit_id` is run-stable, and it carries canary **names** only.
@@ -2345,8 +2345,8 @@ git commit -m "feat(api): Tier 1 surface stubs with a golden snapshot test"
 | 1.5 | `http/client.py` — the async wrapper; streaming requests ask for usage-in-stream where the shape allows; writes `Call` rows and extracted-text blobs | §7, D29 | Every call produces exactly one `Call` row per attempt; `total_ms` excludes `queue_ms` | Integration against the mock; assert row counts and timing semantics |
 | 1.6 | `mock/app.py` + `mock/scenario.py` — the scenario-driven ASGI app | §17 | Controls shape, failing probes, guardrail leakage, context-drop depth, latency/error injection, temperature effect, usage-block presence, streaming, caching, auth style, reasoning content | Unit per control knob |
 | 1.7 | The 16 scenario YAMLs, including the four rev-2 fixtures: `echoes_the_prompt`, `nondet_at_temp0`, `quotes_the_canary`, `query_param_auth` | §17 | All 16 files load and serve; each is exercised by at least one test by end of M4 | Golden: each scenario's served response shape snapshotted |
-| 1.8 | `tests/conftest.py` in-process harness via `httpx.ASGITransport`; `agenteval mock serve` | §17 | The whole suite runs with zero sockets and zero tokens; `mock serve` exposes the same app on a real port | Integration: a socket-path smoke test for `mock serve` only |
-| 1.9 | `tests/contract/test_no_secrets.py` — every artifact writer against `query_param_auth` | §6.6 | The key appears in no file under `.agenteval/` | Contract: walk every file, assert absence |
+| 1.8 | `tests/conftest.py` in-process harness via `httpx.ASGITransport`; `sweepeval mock serve` | §17 | The whole suite runs with zero sockets and zero tokens; `mock serve` exposes the same app on a real port | Integration: a socket-path smoke test for `mock serve` only |
+| 1.9 | `tests/contract/test_no_secrets.py` — every artifact writer against `query_param_auth` | §6.6 | The key appears in no file under `.sweepeval/` | Contract: walk every file, assert absence |
 
 **Judgement calls an implementer will hit:**
 - The spec does not enumerate which shapes support usage-in-stream. Start with OpenAI (`stream_options.include_usage`) and treat every other shape as unsupported, recording that in the manifest.
@@ -2371,8 +2371,8 @@ git commit -m "feat(api): Tier 1 surface stubs with a golden snapshot test"
 | 2.4 | `discovery/mutate.py` — the six enumerated mutations, ≤2 deep, ≤6 attempts | §8.2 | The mutation set is a finite enumeration, not a search; each attempt records the error that motivated it | Unit: one test per mutation kind; a test that the attempt budget is hard |
 | 2.5 | `discovery/extract.py` — **nonce oracle primary**, priors+walk fallback with the near-duplicate penalty, extended stoplist, and document-order concatenation for `$.content[*].text`; separate delta-path inference for streams | §8.5, D6 | On `echoes_the_prompt`, the oracle finds the real path and the echo is rejected; on a stream-only scenario, a delta path is inferred | Integration on `echoes_the_prompt`, `weird_shape`, `anthropic_streaming`; unit for the fallback scorer's penalties |
 | 2.6 | `discovery/auth.py` — bearer → `x-api-key` → `api-key` → query param | §8.4 | First success wins; a query-param win activates the redactor everywhere downstream | Integration on `query_param_auth` + the no-secrets contract test |
-| 2.7 | `discovery/emit.py` — annotated config at `.agenteval/discovery/<url_hash>/agenteval.yaml`, copied to `./agenteval.yaml` when free; reuse, `--rediscover`, hand-edit protection | §8.6, D27 | Two targets in one directory do not collide; a hand-edited file is not overwritten without `--force` | Golden: the emitted YAML per scenario; unit for the three reuse rules |
-| 2.8 | `cli/discover.py` + `api.discover` | §4.1 | `agenteval discover URL --key K` emits the config and prints the evidence | E2E per scenario |
+| 2.7 | `discovery/emit.py` — annotated config at `.sweepeval/discovery/<url_hash>/sweepeval.yaml`, copied to `./sweepeval.yaml` when free; reuse, `--rediscover`, hand-edit protection | §8.6, D27 | Two targets in one directory do not collide; a hand-edited file is not overwritten without `--force` | Golden: the emitted YAML per scenario; unit for the three reuse rules |
+| 2.8 | `cli/discover.py` + `api.discover` | §4.1 | `sweepeval discover URL --key K` emits the config and prints the evidence | E2E per scenario |
 
 **Judgement calls an implementer will hit:**
 - The nonce oracle's failure criterion is not defined. This plan: the oracle fails if no JSON string value contains the nonce *or* more than one distinct path contains it and they disagree after preferring the deepest. Record which.
@@ -2450,9 +2450,9 @@ determinism or context trial UNSCORABLE (spec 11.8)."""
 
 import pytest
 
-from agenteval.corpus.loader import load_generic_suite
-from agenteval.schema.objective import REGISTRY
-from agenteval.stats.resample import CLUSTER_FLOOR
+from sweepeval.corpus.loader import load_generic_suite
+from sweepeval.schema.objective import REGISTRY
+from sweepeval.stats.resample import CLUSTER_FLOOR
 
 MARGIN = 2
 PROFILES = ["quick", "standard", "deep"]
@@ -2590,7 +2590,7 @@ Both halves test against `min_effect`, so the margin that makes non-inferiority 
 | 6.4 | The gate rule: paired one-sided test, per-metric `min_effect`, Holm across gated metrics, default `--gate-on` = hard-fails + six objectives, latency excluded by default and relative when opted in, `quick` refused | §16 | Measured false-fire rate ≤ α (from 5.7's simulation); `quick` results are refused with a clear message | Simulation + unit per rule clause |
 | 6.5 | Confirm-on-rerun: exactly one failing metric triggers one re-run of that metric's Units, and the two sets of runs are **pooled into a single test** | §16 | Pooling, not a second independent trial. "Fail only if it fails twice" halves sensitivity; "fail if either fails" doubles the false-fire rate; only pooling preserves the stated α. The pooled test determines the exit code, and the report shows **both** the original and the pooled result | Unit with a scripted flaky scenario; a simulation check that the pooled rule's false-fire rate matches the no-rerun rule's (this is the property that justifies pooling, and 5.7's gate simulation is where it is measured) |
 | 6.6 | `scorers/judge/` — §11.9 in full: `AMBIGUOUS`-only trigger, versioned rubric per contract kind, strict JSON `{verdict, confidence, rationale}`, temp 0, pinned model, budgeted, persisted as `role: judge` calls with blobs, hard comparability key. **Judge-is-not-target: refuse outright when the judge's resolved endpoint fingerprint equals the target's; warn, record in the manifest, and proceed when the judge model string and any discovered target model string share a vendor prefix** | §11.9, D4 | Model *family* is not knowable from a black box, so it is not checked as though it were — the disclosure is the mitigation. Offline rebuild works with judge verdicts; enabling `--judge` refuses against a non-judge baseline and names the migration | Unit per clause, including one asserting a same-fingerprint judge is refused and a shared-vendor-prefix judge warns-and-proceeds with a manifest record; E2E with a judge-shaped mock scenario |
-| 6.7 | Reporters: terminal, json, md, gha; `api.report` rebuilding offline from `aggregates.json` with no endpoint contact | §15, D30 | `agenteval report <run_id> --format md` works with the network disabled | Golden per format; a test that runs `report` with a transport that raises on any request |
+| 6.7 | Reporters: terminal, json, md, gha; `api.report` rebuilding offline from `aggregates.json` with no endpoint contact | §15, D30 | `sweepeval report <run_id> --format md` works with the network disabled | Golden per format; a test that runs `report` with a transport that raises on any request |
 | 6.8 | Exit codes 0/1/2/3; PyPI packaging; the composite GitHub Action; README v1 | §16, §19.1, §19.3 | The five-line workflow block in the README actually runs the Action | Integration: exit-code matrix; a workflow smoke test |
 
 **Judgement call an implementer will hit:** `baseline.json` now carries per-probe cluster values for six objectives across one config — order 10 KB, fine. If the owner later wants per-cell breakdowns gateable, the file grows and needs a format decision.
@@ -2669,9 +2669,9 @@ Both halves test against `min_effect`, so the margin that makes non-inferiority 
 
 | Task | Builds | Spec | Acceptance | Tests |
 |---|---|---|---|---|
-| 10.1 | The committed real run in `examples/runs/<id>/` — the README hook | D33, §4.3, §19.1 | `agenteval report examples/runs/<id> --format md` reproduces the README's terminal capture offline, at zero cost, with no credentials | E2E in CI, network disabled |
-| 10.2 | `agenteval demo` at its three maturity levels: discovery-only from M2, single-config from M6, full frontier from M9 | §20, D33 | Honest about what it is; the mock is never presented as evidence | E2E |
-| 10.3 | `agenteval init` — `.gitignore` entries, a starter config, and a printed statement of what is and is not safe to commit | §6.6 | `.agenteval/` is gitignored after `init` | Unit |
+| 10.1 | The committed real run in `examples/runs/<id>/` — the README hook | D33, §4.3, §19.1 | `sweepeval report examples/runs/<id> --format md` reproduces the README's terminal capture offline, at zero cost, with no credentials | E2E in CI, network disabled |
+| 10.2 | `sweepeval demo` at its three maturity levels: discovery-only from M2, single-config from M6, full frontier from M9 | §20, D33 | Honest about what it is; the mock is never presented as evidence | E2E |
+| 10.3 | `sweepeval init` — `.gitignore` entries, a starter config, and a printed statement of what is and is not safe to commit | §6.6 | `.sweepeval/` is gitignored after `init` | Unit |
 | 10.4 | README final: one sentence, `uvx` one-liner, real capture, **cost and wall-clock per profile**, CI snippet, why blind discovery is the hard part, why intervals matter for a gate, the accurate comparison table of §1.2, the side-effects warning, the telemetry stance, and **both** output shapes (12-config frontier and single-config report) | §19.1, §1.2, §18 | The comparison table describes promptfoo/deepeval/ragas/LangSmith/Braintrust accurately and does not call them single-score tools | Manual review + a link checker |
 | 10.5 | mkdocs-material site: quickstart, concepts (comparability, domination, paired tests, `SKIPPED` semantics, why no composite), zero-config walkthrough, declared sweeps, CI gate, plugin cookbook, schema reference, safety and authorization | §19.2 | The cookbook's custom scorer and custom discovery shape are each under 50 lines and are executed in CI | Doc tests over the cookbook snippets |
 | 10.6 | Docker image on ghcr.io; release automation; CONTRIBUTING, issue and PR templates, CHANGELOG governed by the §4.2 tiers | §19.3, §19.4, D34 | A tagged release publishes to PyPI and ghcr | Release dry-run |
