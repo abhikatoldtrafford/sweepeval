@@ -1,0 +1,80 @@
+[project]
+name = "sweepeval"
+version = "0.1.0.dev0"
+description = "Zero-config, black-box sweep and benchmark engine for LLM and agent systems."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "abhikatoldtrafford" }]
+keywords = [
+  "llm", "agent", "evaluation", "benchmark", "pareto",
+  "prompt-injection", "regression-testing", "sweep",
+]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Testing",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Typing :: Typed",
+]
+dependencies = [
+  "httpx>=0.27",
+  "pydantic>=2.6",
+  "typer>=0.12",
+  "rich>=13.7",
+  "pyyaml>=6.0",
+  "numpy>=1.26",
+  "jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+plots = ["matplotlib>=3.8"]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.23",
+  "hypothesis>=6.100",
+  "import-linter>=2.0",
+  "ruff>=0.4",
+  "mypy>=1.10",
+  "types-PyYAML>=6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/abhikatoldtrafford/sweepeval"
+Repository = "https://github.com/abhikatoldtrafford/sweepeval"
+Issues = "https://github.com/abhikatoldtrafford/sweepeval/issues"
+
+[project.scripts]
+sweepeval = "sweepeval.cli.main:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sweepeval"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+  "simulation: Monte Carlo coverage checks; slow, gate M6 (spec §13.5)",
+]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unreachable = true

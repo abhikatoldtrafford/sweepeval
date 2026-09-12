@@ -1,0 +1,78 @@
+[importlinter]
+root_package = sweepeval
+# Required because the request- and RNG-boundary contracts forbid external
+# packages (httpx, numpy.random) rather than only first-party modules.
+include_external_packages = True
+
+[importlinter:contract:schema-is-a-leaf]
+name = schema imports nothing from the package
+type = forbidden
+source_modules =
+    sweepeval.schema
+forbidden_modules =
+    sweepeval.store
+    sweepeval.stats
+    sweepeval.http
+    sweepeval.discovery
+    sweepeval.capabilities
+    sweepeval.corpus
+    sweepeval.scorers
+    sweepeval.execute
+    sweepeval.rank
+    sweepeval.report
+    sweepeval.mock
+    sweepeval.cli
+
+[importlinter:contract:only-http-requests]
+name = nothing outside http performs a request
+type = forbidden
+source_modules =
+    sweepeval.schema
+    sweepeval.store
+    sweepeval.stats
+    sweepeval.corpus
+    sweepeval.rank
+    sweepeval.report
+forbidden_modules =
+    httpx
+
+[importlinter:contract:only-store-writes]
+name = nothing outside store writes an artifact
+type = forbidden
+source_modules =
+    sweepeval.stats
+    sweepeval.rank
+    sweepeval.corpus
+    sweepeval.capabilities
+forbidden_modules =
+    sweepeval.store.jsonl
+    sweepeval.store.blob
+    sweepeval.store.derived
+
+[importlinter:contract:only-rank-dominates]
+name = nothing outside rank decides domination
+type = forbidden
+source_modules =
+    sweepeval.report
+    sweepeval.execute
+    sweepeval.scorers
+forbidden_modules =
+    sweepeval.rank.domination
+
+# Spec §5.2: "nothing outside stats computes an interval or a p-value".
+# import-linter cannot forbid `numpy.random` (subpackages of external packages
+# are not addressable), so this forbids numpy outright in the layers that must
+# delegate numerics to stats. Stricter than the seeding-surface proxy the plan
+# suggested, and closer to the rule as written. Relax deliberately, never
+# incidentally, if a layer turns out to need array maths of its own.
+[importlinter:contract:only-stats-computes-numerics]
+name = nothing outside stats computes an interval or a p-value
+type = forbidden
+source_modules =
+    sweepeval.rank
+    sweepeval.report
+    sweepeval.scorers
+    sweepeval.capabilities
+    sweepeval.execute
+forbidden_modules =
+    numpy
