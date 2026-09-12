@@ -67,6 +67,19 @@ class Estimate:
         return sum(p.tokens for p in self.phases)
 
     @property
+    def unavoidable_requests(self) -> int:
+        """Discovery and capability detection.
+
+        Nothing can be measured without them, so a cap below this figure does
+        not buy a smaller sweep — it buys no sweep, and the run declines
+        before sending anything rather than spending the budget on discovery
+        and then having nothing left to score with.
+        """
+        return sum(
+            p.requests for p in self.phases if p.phase in ("discovery", "capabilities")
+        )
+
+    @property
     def wall_clock_minutes(self) -> float:
         """At roughly 2.5s per request, divided by concurrency."""
         return (self.total_requests * 2.5) / max(1, self.concurrency) / 60.0
@@ -78,6 +91,27 @@ class BudgetCap:
 
     value: float | None = None
     unit: Literal["requests", "tokens", "dollars"] = "requests"
+
+    def forbids_starting(self, estimate: Estimate) -> bool:
+        """Whether the cap makes even one configuration impossible (§12.3).
+
+        Distinct from :meth:`exceeded_by`. A cap below the *estimate* is a
+        deliberate request for a partial sweep — the runner stops between
+        configs and says so. A cap below the *unavoidable* phases is a request
+        for something that cannot happen at all.
+        """
+        if self.value is None:
+            return False
+        if self.unit == "requests":
+            return estimate.unavoidable_requests > self.value
+        if self.unit == "tokens":
+            unavoidable = sum(
+                p.tokens
+                for p in estimate.phases
+                if p.phase in ("discovery", "capabilities")
+            )
+            return unavoidable > self.value
+        return False
 
     def exceeded_by(self, estimate: Estimate) -> bool:
         if self.value is None:

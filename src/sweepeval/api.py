@@ -44,8 +44,6 @@ _M = {
     "gate": "M6",
     "run_gate": "M6",
     "demo": "M6",
-    "sweep": "M8",
-    "run": "M8",
     "report": "M9",
     "compare": "M9",
 }
@@ -72,14 +70,18 @@ def evaluate(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
     return asyncio.run(aevaluate(url, key=key, **kwargs))
 
 
-def sweep(config: Path | str | None = None, **kwargs: Any) -> Any:
-    """Sweep declared axes (§12)."""
-    raise _pending("sweep")
+def sweep(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
+    """Discover, plan and sweep every discoverable configuration (§12)."""
+    import asyncio
+
+    return asyncio.run(asweep(url, key=key, **kwargs))
 
 
 def run(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
     """Zero-config: discover, plan, sweep, rank, report (§1)."""
-    raise _pending("run")
+    import asyncio
+
+    return asyncio.run(arun(url, key=key, **kwargs))
 
 
 def baseline(result: Any, **kwargs: Any) -> Any:
@@ -140,12 +142,16 @@ async def aevaluate(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
     return await aevaluate_target(url, key=key, **kwargs)
 
 
-async def asweep(config: Path | str | None = None, **kwargs: Any) -> Any:
-    raise _pending("sweep")
+async def asweep(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
+    """Async twin of :func:`sweep`."""
+    from sweepeval.execute.sweep import asweep_target
+
+    return await asweep_target(url, key=key, **kwargs)
 
 
 async def arun(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
-    raise _pending("run")
+    """Async twin of :func:`run`. The zero-config path is a sweep (§12.1)."""
+    return await asweep(url, key=key, **kwargs)
 
 
 async def agate(result: Any, *, baseline: Path | str, **kwargs: Any) -> Any:

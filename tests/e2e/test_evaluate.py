@@ -83,7 +83,7 @@ async def test_deferred_families_are_reported_as_skipped(tmp_path: Path) -> None
 
 async def test_rejected_axes_are_named(tmp_path: Path) -> None:
     """D15: a frontier of one says why it is a frontier of one."""
-    result = await _evaluate("openai_clean", tmp_path, key="test-key-abcdefgh")
+    result = await _evaluate("ignores_system_role", tmp_path)
     axes = {a for a, _ in result.axes_rejected}
     assert "system_prompt" in axes
     for _, reason in result.axes_rejected:

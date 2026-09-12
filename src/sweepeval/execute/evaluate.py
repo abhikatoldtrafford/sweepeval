@@ -28,32 +28,27 @@ from sweepeval.corpus.loader import Corpus, load_corpus
 from sweepeval.corpus.template import Profile
 from sweepeval.discovery.budget import DiscoveryBudget
 from sweepeval.discovery.runner import DiscoveryOutcome, discover_target
-from sweepeval.execute.authz import AuthorizationRecord, AuthorizationStore, require_authorization
+from sweepeval.execute.aggregation import aggregate_config
+from sweepeval.execute.authz import (
+    AuthorizationRecord,
+    AuthorizationStore,
+    require_authorization,
+)
 from sweepeval.execute.runner import RunPlan, UnitOutcome, execute_config
 from sweepeval.http.client import TransportClient
 from sweepeval.http.governor import Governor
 from sweepeval.schema.comparability import Comparability, HardKeys, SoftKeys
-from sweepeval.schema.metric import Estimand, MetricValue
+from sweepeval.schema.metric import MetricValue
 from sweepeval.schema.objective import REGISTRY
 from sweepeval.schema.observation import Observation
 from sweepeval.schema.unit import Unit
 from sweepeval.schema.versions import SCHEMA_MAJOR, SUITE_VERSION, TOOL_VERSION
 from sweepeval.scorers import registry as scorer_registry
-from sweepeval.stats.aggregate import ClusterTable, aggregate_metric, build_cluster_table
+from sweepeval.stats.aggregate import ClusterTable
 from sweepeval.store.redaction import Redactor
 from sweepeval.store.run import Store, new_run_id
 
 __all__ = ["EvaluationResult", "aevaluate_target"]
-
-_RATE_METRICS = (
-    "security_pass_rate",
-    "guardrail_pass_rate",
-    "config_repeatability",
-    "target_determinism_at_temp0",
-    "semantic_stability",
-    "invariance",
-)
-
 
 @dataclass
 class EvaluationResult:
@@ -203,74 +198,19 @@ def _comparability(
 
 
 def _aggregate(result: EvaluationResult, *, seed: int) -> None:
-    observations = result.observations
-    indicative = result.profile == "quick"
-
-    for metric in _RATE_METRICS:
-        table = build_cluster_table(
-            observations, metric=metric, config_id=result.config_id
-        )
-        result.clusters[metric] = dict(table.values)
-        # Emitted even with no scored cluster. I5: a metric that vanishes from
-        # the report is indistinguishable from one that passed, and "every
-        # trial was unscorable" is a finding, not an absence.
-        result.metrics[metric] = aggregate_metric(
-            table, estimand=Estimand.generalization, seed=seed, indicative=indicative
-        )
-
-    _aggregate_context(result, seed=seed, indicative=indicative)
-    _aggregate_operational(result, seed=seed, indicative=indicative)
-
-
-def _aggregate_context(
-    result: EvaluationResult, *, seed: int, indicative: bool
-) -> None:
-    """Recall per conversation, plus the depth-weighted AUC (§11.5)."""
-    from sweepeval.scorers.context import depth_at_floor, retention_auc, retention_curve
-
-    observations = result.observations
-    table = build_cluster_table(
-        observations, metric="fact_recall", config_id=result.config_id,
-        stratify_by_depth=True,
+    """Delegate to the shared aggregator so a sweep row and a single-config
+    evaluation of the same target cannot produce different numbers."""
+    aggregate = aggregate_config(
+        result.observations,
+        config_id=result.config_id,
+        seed=seed,
+        indicative=result.profile == "quick",
     )
-    if not table.coverage.attempted:
-        return
-
-    result.clusters["fact_recall"] = dict(table.values)
-    # Stratified: an unstratified resample can empty a depth, and the trapezoid
-    # is undefined there (§13.3).
-    result.metrics["fact_recall"] = aggregate_metric(
-        table, seed=seed, indicative=indicative
-    )
-
-    curve = retention_curve(observations)
-    auc, weights = retention_auc(curve)
-    result.retention_curve = curve
-    result.retention_weights = weights
-    result.retention_depth_at_floor = depth_at_floor(curve)
-
-    # The AUC resamples conversations, so it reuses fact_recall's clusters but
-    # reports the depth-weighted quantity.
-    result.clusters["context_retention_auc"] = dict(table.values)
-    result.metrics["context_retention_auc"] = aggregate_metric(
-        table, seed=seed, indicative=indicative
-    ).model_copy(update={"point": auc})
-
-
-def _aggregate_operational(
-    result: EvaluationResult, *, seed: int, indicative: bool
-) -> None:
-    observations = result.observations
-    for metric, bounded in (("latency_ms", False), ("tokens_out", False), ("error_rate", True)):
-        table = build_cluster_table(
-            observations, metric=metric, config_id=result.config_id
-        )
-        if not table.coverage.attempted:
-            continue
-        result.clusters[metric] = dict(table.values)
-        result.metrics[metric] = aggregate_metric(
-            table, seed=seed, bounded=bounded, indicative=indicative
-        )
+    result.metrics = aggregate.metrics
+    result.clusters = aggregate.clusters
+    result.retention_curve = aggregate.retention_curve
+    result.retention_weights = aggregate.retention_weights
+    result.retention_depth_at_floor = aggregate.retention_depth_at_floor
 
 
 def _collect_skips(result: EvaluationResult) -> None:

@@ -58,11 +58,11 @@ async def test_an_unprobed_capability_still_gives_a_reason() -> None:
 async def test_a_target_that_ignores_the_system_role_is_unsupported() -> None:
     """Accepting a system role is not honouring one.
 
-    The mock accepts the messages array but its reply does not change, so the
-    detector must not hand the sweep a four-variant axis that produces four
-    identical configs.
+    ``ignores_system_role`` accepts the messages array and its reply does not
+    change, so the detector must not hand the sweep a four-variant axis that
+    produces four identical configs.
     """
-    report = await _capabilities("openai_clean", key="test-key-abcdefgh")
+    report = await _capabilities("ignores_system_role")
     result = report[Capability.SYSTEM_PROMPT]
     assert result.support is Support.UNSUPPORTED
     assert "dropped" in result.evidence["reason"]
@@ -91,7 +91,9 @@ async def test_a_refusing_target_yields_a_refusal_fingerprint() -> None:
 
 
 async def test_a_compliant_target_has_no_refusal_language() -> None:
-    report = await _capabilities("openai_clean", key="test-key-abcdefgh")
+    """A target that complies with a disallowed request has no fingerprint to
+    learn, so §11.8 cannot tell one of its refusals from an error."""
+    report = await _capabilities("leaky_guardrails")
     result = report[Capability.REFUSAL_BASELINE]
     assert result.support is Support.INCONCLUSIVE
     assert "indistinguishable" in result.evidence["reason"]

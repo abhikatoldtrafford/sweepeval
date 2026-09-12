@@ -18,6 +18,7 @@ from sweepeval.cli.evaluate import (
     gate_command,
     init_command,
 )
+from sweepeval.cli.sweep import run_command, sweep_command
 
 app = typer.Typer(
     name="sweepeval",
@@ -43,6 +44,8 @@ def version() -> None:
     typer.echo(__version__)
 
 
+app.command(name="run")(run_command)
+app.command(name="sweep")(sweep_command)
 app.command(name="discover")(discover_command)
 app.command(name="evaluate")(evaluate_command)
 app.command(name="baseline")(baseline_command)

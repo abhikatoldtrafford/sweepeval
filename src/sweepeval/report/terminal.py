@@ -21,7 +21,7 @@ from rich.table import Table
 
 from sweepeval.schema.metric import CIMethod, Flag, MetricValue
 
-__all__ = ["render_evaluation"]
+__all__ = ["format_flags", "format_interval", "format_point", "render_evaluation"]
 
 _FLAG_STYLE = {
     Flag.INDICATIVE: "yellow",
@@ -32,13 +32,13 @@ _FLAG_STYLE = {
 }
 
 
-def _interval(value: MetricValue) -> str:
+def format_interval(value: MetricValue) -> str:
     if value.method is CIMethod.none or value.lo is None or value.hi is None:
         return "[red]no valid interval[/red]"
     return f"[{value.lo:.3g}, {value.hi:.3g}]"
 
 
-def _point(value: MetricValue) -> str:
+def format_point(value: MetricValue) -> str:
     """The number, or an em dash when there is no number to show.
 
     A metric with NO_VALID_INTERVAL carries a placeholder point. Printing it
@@ -50,7 +50,7 @@ def _point(value: MetricValue) -> str:
     return f"{value.point:.4g}"
 
 
-def _flags(value: MetricValue) -> str:
+def format_flags(value: MetricValue) -> str:
     if not value.flags:
         return ""
     return " ".join(
@@ -101,10 +101,10 @@ def _metrics_table(console: Console, result: object) -> None:
         value = metrics[name]
         table.add_row(
             name,
-            _point(value),
-            _interval(value),
+            format_point(value),
+            format_interval(value),
             str(value.n_clusters),
-            _flags(value),
+            format_flags(value),
         )
     console.print(table)
 

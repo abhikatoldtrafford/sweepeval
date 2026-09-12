@@ -6,4 +6,6 @@ shape: openai
 paths: ["/v1/chat/completions"]
 auth: none
 cache_responses: true
+latency_ms: 60
+
 temperature_effect: false

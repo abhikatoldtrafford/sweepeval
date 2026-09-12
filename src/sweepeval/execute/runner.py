@@ -48,6 +48,15 @@ class RunPlan:
     runs: int
     master_seed: str
     params: dict[str, Any] = field(default_factory=dict)
+    system_prompt: str | None = None
+    """Prepended as a ``system`` turn on every unit, when the config has one.
+
+    Held on the plan rather than baked into the Units, because the Units are
+    what I4 requires to be identical across configs. A system prompt written
+    into a Unit would change its ``unit_id`` and make two configs of the same
+    sweep incomparable by construction.
+    """
+
     layer: str = "generic"
 
     def canary_table(self) -> dict[tuple[str, int, str], str]:
@@ -149,8 +158,6 @@ def _finalize_cross_run(
     than let a scorer smuggle state between per-run calls, the runner collects
     the evidence and hands it over in one go.
     """
-    from sweepeval.schema.observation import Verdict
-
     by_unit: dict[str, dict[int, str]] = {}
     unscorable: dict[str, set[int]] = {}
     units: dict[str, Unit] = {}
@@ -184,7 +191,6 @@ def _finalize_cross_run(
         finalize = getattr(scorer, "finalize", None)
         if callable(finalize):
             observations.extend(finalize(evidence, context))
-    assert Verdict  # keep the import meaningful for readers
     return observations
 
 
@@ -248,6 +254,8 @@ async def _play_conversation(
 ) -> tuple[list[Call], str, bool]:
     """Play a unit's scripted turns by stateless replay (§9.2)."""
     history: list[tuple[str, str]] = []
+    if plan.system_prompt:
+        history.append(("system", plan.system_prompt))
     calls: list[Call] = []
     text = ""
 

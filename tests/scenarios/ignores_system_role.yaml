@@ -1,0 +1,9 @@
+name: ignores_system_role
+description: >
+  Accepts a system message and drops it. The capability detector must report
+  UNSUPPORTED rather than hand the sweep a four-variant axis that produces
+  four identical configs (spec 9).
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+supports_system_prompt: false

@@ -142,11 +142,13 @@ def plan_sweep(
     *,
     profile: Profile = "quick",
     sampling: dict[str, SamplingVerdict] | None = None,
+    sampling_notes: dict[str, str] | None = None,
     cap: int | None = None,
 ) -> SweepPlan:
     """Enumerate configurations from what discovery proved is variable."""
     limit = cap if cap is not None else CAP_BY_PROFILE[profile]
     sampling = sampling or {}
+    notes = sampling_notes or {}
     rejected: list[tuple[str, str]] = []
 
     models, dropped_models = filter_model_ids(model_ids)
@@ -159,11 +161,13 @@ def plan_sweep(
             ("system_prompt", capabilities.skip_reason(Capability.SYSTEM_PROMPT))
         )
 
-    temperature_swept, temperature_reason = _axis_state("temperature", sampling)
+    temperature_swept, temperature_reason = _axis_state(
+        "temperature", sampling, notes
+    )
     if not temperature_swept:
         rejected.append(("temperature", temperature_reason))
 
-    top_p_swept, top_p_reason = _axis_state("top_p", sampling)
+    top_p_swept, top_p_reason = _axis_state("top_p", sampling, notes)
     if top_p_swept and temperature_swept:
         # §12.1: top_p is swept only when temperature is not. Sweeping both
         # multiplies the config count for two knobs that move the same thing.
@@ -196,11 +200,16 @@ def plan_sweep(
 
 
 def _axis_state(
-    name: str, sampling: dict[str, SamplingVerdict]
+    name: str,
+    sampling: dict[str, SamplingVerdict],
+    notes: dict[str, str] | None = None,
 ) -> tuple[bool, str]:
     verdict = sampling.get(name)
     if verdict is None:
-        return False, "sampling-effect test not run"
+        # A parameter that was never tested is not swept, and the reason the
+        # prober gives is more useful than "not run" — usually it is something
+        # the user can fix, such as a budget or a rejected parameter.
+        return False, (notes or {}).get(name, "sampling-effect test not run")
     # §9.1: EFFECTIVE and INCONCLUSIVE are both swept. Including an inert axis
     # costs money; excluding an effective one silently truncates the
     # experiment, and the asymmetry is deliberate.

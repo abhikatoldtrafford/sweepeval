@@ -6,7 +6,7 @@
     "areport": "def(run_id: 'str', *, fmt: 'str' = 'terminal', **kwargs: 'Any') -> 'Any'",
     "arun": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'",
     "arun_gate": "def(url: 'str', *, baseline: 'Path | str', **kwargs: 'Any') -> 'Any'",
-    "asweep": "def(config: 'Path | str | None' = None, **kwargs: 'Any') -> 'Any'",
+    "asweep": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'",
     "baseline": "def(result: 'Any', **kwargs: 'Any') -> 'Any'",
     "compare": "def(run_a: 'str', run_b: 'str', **kwargs: 'Any') -> 'Any'",
     "demo": "def(**kwargs: 'Any') -> 'Any'",
@@ -16,7 +16,7 @@
     "report": "def(run_id: 'str', *, fmt: 'str' = 'terminal', **kwargs: 'Any') -> 'Any'",
     "run": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'",
     "run_gate": "def(url: 'str', *, baseline: 'Path | str', **kwargs: 'Any') -> 'Any'",
-    "sweep": "def(config: 'Path | str | None' = None, **kwargs: 'Any') -> 'Any'"
+    "sweep": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'"
   },
   "sweepeval.schema.call": {
     "Call": "model(fields=attempt,config_id,extraction,refusal,request,response,role,run_id,run_idx,timing,tokens,ts,turn_idx,unit_id;methods=)",
