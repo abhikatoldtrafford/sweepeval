@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from rich.console import Console
 from tests.conftest import make_app, make_client
 
@@ -156,3 +157,43 @@ async def test_an_unmeasurable_metric_shows_no_number(tmp_path: Path) -> None:
     for name in unmeasured:
         assert payload["metrics"][name]["point"] is None
         assert payload["metrics"][name]["measured"] is False
+
+
+# --- context retention discriminates (§11.5) ------------------------------
+
+
+async def test_the_retention_curve_separates_a_forgetful_target(tmp_path: Path) -> None:
+    """A curve that is flat regardless of the target measures nothing."""
+    remembers = await _evaluate(
+        "openai_clean", tmp_path / "a", key="test-key-abcdefgh", profile="standard"
+    )
+    forgets = await _evaluate("drops_context_at_8", tmp_path / "b", profile="standard")
+
+    assert remembers.retention_curve[15] > forgets.retention_curve[15]
+    assert (
+        remembers.metrics["context_retention_auc"].point
+        > forgets.metrics["context_retention_auc"].point
+    )
+
+
+async def test_the_auc_weights_are_published(tmp_path: Path) -> None:
+    """§11.5: depth spacing sets them, and `deep` changes them — which is why
+    profile is a hard comparability key."""
+    result = await _evaluate(
+        "openai_clean", tmp_path, key="test-key-abcdefgh", profile="standard"
+    )
+    weights = result.retention_weights
+    assert set(weights) == {3, 8, 15}
+    assert sum(weights.values()) == pytest.approx(1.0)
+    assert weights[8] > weights[3], "the middle depth carries the most area"
+
+
+async def test_a_family_ruled_out_by_capabilities_is_not_executed(
+    tmp_path: Path,
+) -> None:
+    """Running probes for a SKIPPED family spends real money producing rows
+    the report says do not exist."""
+    result = await _evaluate("weird_shape", tmp_path, profile="standard")
+    for family in result.families_not_run:
+        assert family in {f for f, _ in result.skipped}
+        assert not [o for o in result.observations if o.family == family]

@@ -331,9 +331,55 @@ class MockApp:
         system = request.get("system")
         return system if isinstance(system, str) else ""
 
-    def _turn_count(self, request: dict[str, Any]) -> int:
+    _CANARY_SHAPED = re.compile(r"\b[0-9BCDFGHJKLMNPQRSTVWXYZ]{10}\b")
+
+    def _recall(self, request: dict[str, Any]) -> str:
+        """Quote earlier user turns back, when the final turn asks a question.
+
+        Crude, and deliberately so: the point is a target that demonstrably
+        carries information forward, so a scorer looking for a planted fact
+        finds it. Anything cleverer would be modelling comprehension, which is
+        not what the context family measures.
+        """
         messages = request.get("messages")
-        return len(messages) if isinstance(messages, list) else 1
+        if not isinstance(messages, list) or len(messages) < 3:
+            return ""
+
+        user_turns = [
+            m.get("content", "")
+            for m in messages
+            if isinstance(m, dict) and m.get("role") == "user"
+        ]
+        if len(user_turns) < 2:
+            return ""
+
+        final = str(user_turns[-1])
+        if "?" not in final:
+            return ""
+
+        earlier = " ".join(str(t) for t in user_turns[:-1])
+        # Strip canary-shaped tokens before quoting. A well-behaved assistant
+        # answers from memory without parroting an instruction payload back,
+        # and without this the "clean" scenario re-emits the canary planted by
+        # a cross-turn injection probe — scoring as a leak while the target is
+        # doing nothing wrong.
+        earlier = self._CANARY_SHAPED.sub("[redacted]", earlier)
+        return f"Earlier you told me: {earlier}"
+
+    def _turn_count(self, request: dict[str, Any]) -> int:
+        """USER turns, not messages.
+
+        Replay sends the assistant's replies back too, so counting messages
+        makes `context_drop_depth: 8` fire at four user turns — the knob would
+        not mean what its name says, and a depth-8 conversation would be
+        scored as forgotten when the scenario says it should be remembered.
+        """
+        messages = request.get("messages")
+        if not isinstance(messages, list):
+            return 1
+        return sum(
+            1 for m in messages if isinstance(m, dict) and m.get("role") == "user"
+        )
 
     def _reply_text(self, request: dict[str, Any], prompt: str) -> str:
         scenario = self.scenario
@@ -398,6 +444,15 @@ class MockApp:
             and self._turn_count(request) > scenario.context_drop_depth
         ):
             return "I don't recall that from earlier in our conversation."
+
+        # A competent assistant remembers what it was told. Recall is the
+        # DEFAULT and forgetting is the scenario knob — without this the mock
+        # scores 0.00 at every depth, the retention curve is flat regardless of
+        # `context_drop_depth`, and the context family cannot discriminate
+        # between a target that remembers and one that does not.
+        recalled = self._recall(request)
+        if recalled:
+            return recalled
 
         if scenario.echoes_prompt:
             return _INERT_REPLY

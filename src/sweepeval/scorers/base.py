@@ -24,6 +24,8 @@ from sweepeval.schema.unit import Unit
 
 __all__ = [
     "SCORER_ENTRY_POINT_GROUP",
+    "CrossRunScorer",
+    "RunEvidence",
     "ScoreContext",
     "Scorer",
     "ScorerRegistry",
@@ -90,6 +92,18 @@ class ScoreContext:
         )
 
 
+@dataclass
+class RunEvidence:
+    """One unit's text across every run, for cross-run scorers."""
+
+    unit: Unit
+    texts: tuple[str, ...]
+    """Extracted final-turn text, indexed by ``run_idx``."""
+
+    unscorable: tuple[int, ...] = ()
+    """Run indices excluded under §11.8 — refused, or the conversation failed."""
+
+
 @runtime_checkable
 class Scorer(Protocol):
     """One scorer family."""
@@ -104,6 +118,26 @@ class Scorer(Protocol):
         self, unit: Unit, calls: Sequence[Call], context: ScoreContext
     ) -> list[Observation]:
         """Return one or more Observations for this unit run."""
+        ...
+
+
+@runtime_checkable
+class CrossRunScorer(Protocol):
+    """A scorer that cannot work one run at a time.
+
+    Determinism is the case that forces this: repeatability, semantic
+    stability and invariance are all statements *about the set of runs*, and a
+    per-run ``score()`` has nothing to compare against. Rather than let such a
+    scorer smuggle state between calls, the runner hands it every run at once.
+    """
+
+    family: str
+    version: int
+
+    def finalize(
+        self, evidence: Sequence[RunEvidence], context: ScoreContext
+    ) -> list[Observation]:
+        """Return Observations computed across all runs of all units."""
         ...
 
 

@@ -77,6 +77,7 @@ def render_evaluation(result: object, console: Console | None = None) -> None:
     )
 
     _metrics_table(console, result)
+    _retention(console, result)
     _axes(console, result)
     _skipped(console, result)
     _coverage(console, result)
@@ -111,6 +112,30 @@ def _metrics_table(console: Console, result: object) -> None:
         console.print(
             "[yellow]INDICATIVE[/yellow]: intervals are valid but wide, so few "
             "pairs will separate. Use --profile standard for decisions or gating."
+        )
+
+
+def _retention(console: Console, result: object) -> None:
+    """The decay curve and the depth where retention crosses the floor (§11.5)."""
+    curve: dict[int, float] = getattr(result, "retention_curve", {})
+    if not curve:
+        return
+
+    weights: dict[int, float] = getattr(result, "retention_weights", {})
+    console.print("\n[bold]context retention by depth[/bold]")
+    for depth in sorted(curve):
+        bar = "#" * round(curve[depth] * 20)
+        share = f"  (AUC weight {weights[depth]:.0%})" if depth in weights else ""
+        console.print(f"  depth {depth:>3}  {curve[depth]:>5.2f}  {bar}{share}")
+
+    floor = getattr(result, "retention_depth_at_floor", None)
+    if floor is not None:
+        console.print(f"  retention crosses 0.5 at depth {floor}")
+
+    if len(curve) == 1:
+        console.print(
+            "  [yellow]one measured depth: the AUC is that depth's recall, not "
+            "an area[/yellow]"
         )
 
 

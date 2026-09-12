@@ -193,9 +193,11 @@ def test_a_deferred_family_reports_skipped_with_a_reason(family: str) -> None:
     assert "v0.2" in (obs[0].reason or "")
 
 
-def test_all_six_families_are_registered() -> None:
+def test_every_shipped_and_deferred_family_is_registered() -> None:
     assert {s.family for s in registry().all()} == {
-        "security", "guardrail", "operational",
+        # shipped in v0.1
+        "security", "guardrail", "operational", "determinism", "context",
+        # declared, reporting SKIPPED until v0.2 (§11.10)
         "tool_integrity", "retrieval", "degradation",
     }
 

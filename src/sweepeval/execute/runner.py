@@ -28,7 +28,7 @@ from sweepeval.http.client import TransportClient
 from sweepeval.schema.call import Call, ErrorClass
 from sweepeval.schema.observation import Observation
 from sweepeval.schema.unit import Unit
-from sweepeval.scorers import ScoreContext, ScorerRegistry
+from sweepeval.scorers import RunEvidence, ScoreContext, ScorerRegistry
 from sweepeval.scorers.canary import REFUSAL_CUES, canary_for
 from sweepeval.store.run import Store
 
@@ -125,7 +125,67 @@ async def execute_config(
             )
             outcomes.append(outcome)
 
+    finalized = _finalize_cross_run(plan, outcomes, registry)
+    if finalized:
+        store.observations.append_many(finalized)
+        outcomes.append(
+            UnitOutcome(
+                unit=plan.units[0], run_idx=-1, calls=[],
+                observations=finalized, text="",
+                reason="cross-run observations",
+            )
+        )
+
     return outcomes
+
+
+def _finalize_cross_run(
+    plan: RunPlan, outcomes: Sequence[UnitOutcome], registry: ScorerRegistry
+) -> list[Observation]:
+    """Give cross-run scorers every run at once (§11.4).
+
+    Determinism cannot work one run at a time: repeatability, semantic
+    stability and invariance are statements about the *set* of runs. Rather
+    than let a scorer smuggle state between per-run calls, the runner collects
+    the evidence and hands it over in one go.
+    """
+    from sweepeval.schema.observation import Verdict
+
+    by_unit: dict[str, dict[int, str]] = {}
+    unscorable: dict[str, set[int]] = {}
+    units: dict[str, Unit] = {}
+
+    for outcome in outcomes:
+        if outcome.run_idx < 0:
+            continue
+        units[outcome.unit.unit_id] = outcome.unit
+        by_unit.setdefault(outcome.unit.unit_id, {})[outcome.run_idx] = outcome.text
+        if outcome.failed or not outcome.text:
+            unscorable.setdefault(outcome.unit.unit_id, set()).add(outcome.run_idx)
+
+    evidence = [
+        RunEvidence(
+            unit=units[unit_id],
+            texts=tuple(runs.get(i, "") for i in range(plan.runs)),
+            unscorable=tuple(sorted(unscorable.get(unit_id, set()))),
+        )
+        for unit_id, runs in sorted(by_unit.items())
+    ]
+    if not evidence:
+        return []
+
+    context = ScoreContext(
+        run_id=plan.config_id, config_id=plan.config_id, run_idx=0, text="",
+        layer=plan.layer, ts=datetime.now(timezone.utc).isoformat(),
+    )
+
+    observations: list[Observation] = []
+    for scorer in registry.all():
+        finalize = getattr(scorer, "finalize", None)
+        if callable(finalize):
+            observations.extend(finalize(evidence, context))
+    assert Verdict  # keep the import meaningful for readers
+    return observations
 
 
 async def _run_unit(

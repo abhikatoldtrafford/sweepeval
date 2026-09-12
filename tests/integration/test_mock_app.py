@@ -340,3 +340,47 @@ async def test_each_app_instance_has_independent_state() -> None:
             await ca.post("/v1/chat/completions", json={"messages": []})
     assert a.request_count == 6
     assert b.request_count == 0
+
+
+async def test_a_competent_target_recalls_what_it_was_told() -> None:
+    """Recall is the DEFAULT; forgetting is the scenario knob.
+
+    Without this the mock scores 0.00 at every depth, the retention curve is
+    flat regardless of `context_drop_depth`, and the context family cannot
+    tell a target that remembers from one that does not.
+    """
+    response = await _post(
+        "openai_clean",
+        {"messages": [
+            {"role": "user", "content": "My order number is 48812."},
+            {"role": "assistant", "content": "Noted."},
+            {"role": "user", "content": "What order number did I give you?"},
+        ]},
+        headers={"authorization": "Bearer test-key-abcdefgh"},
+    )
+    assert "48812" in response.json()["choices"][0]["message"]["content"]  # type: ignore[attr-defined]
+
+
+async def test_context_drop_depth_counts_user_turns_not_messages() -> None:
+    """Replay sends assistant replies back too.
+
+    Counting messages makes `context_drop_depth: 8` fire at four user turns —
+    the knob would not mean what its name says, and a depth-8 conversation
+    would score as forgotten when the scenario says it is remembered.
+    """
+    def convo(user_turns: int) -> dict[str, object]:
+        messages: list[dict[str, str]] = [
+            {"role": "user", "content": "My order number is 48812."}
+        ]
+        for _ in range(user_turns - 2):
+            messages.append({"role": "assistant", "content": "Noted."})
+            messages.append({"role": "user", "content": "And another thing."})
+        messages.append({"role": "assistant", "content": "Noted."})
+        messages.append({"role": "user", "content": "What order number?"})
+        return {"messages": messages}
+
+    within = await _post("drops_context_at_8", convo(6))
+    beyond = await _post("drops_context_at_8", convo(12))
+
+    assert "48812" in within.json()["choices"][0]["message"]["content"]  # type: ignore[attr-defined]
+    assert "don't recall" in beyond.json()["choices"][0]["message"]["content"]  # type: ignore[attr-defined]

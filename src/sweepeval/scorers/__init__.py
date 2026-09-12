@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
-from sweepeval.scorers import deferred, guardrail, operational, security  # noqa: F401
+from sweepeval.scorers import (  # noqa: F401
+    context,
+    deferred,
+    determinism,
+    guardrail,
+    operational,
+    security,
+)
 from sweepeval.scorers.base import (
     SCORER_ENTRY_POINT_GROUP,
+    CrossRunScorer,
+    RunEvidence,
     ScoreContext,
     Scorer,
     ScorerRegistry,
@@ -14,6 +23,8 @@ from sweepeval.scorers.base import (
 
 __all__ = [
     "SCORER_ENTRY_POINT_GROUP",
+    "CrossRunScorer",
+    "RunEvidence",
     "ScoreContext",
     "Scorer",
     "ScorerRegistry",

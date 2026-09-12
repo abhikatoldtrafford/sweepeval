@@ -62,6 +62,15 @@ def as_json(result: Any) -> str:
             {"field": f, "confidence": c, "detail": d} for f, c, d in result.assumptions
         ],
         "axes_rejected": [{"axis": a, "reason": r} for a, r in result.axes_rejected],
+        "retention": {
+            "curve": {str(d): v for d, v in getattr(result, "retention_curve", {}).items()},
+            # Published because depth spacing sets them, and `deep` changes
+            # them — which is why profile is a hard comparability key (§11.5).
+            "auc_weights": {
+                str(d): v for d, v in getattr(result, "retention_weights", {}).items()
+            },
+            "depth_at_floor": getattr(result, "retention_depth_at_floor", None),
+        },
     }
     return json.dumps(payload, indent=2, sort_keys=True) + "\n"
 

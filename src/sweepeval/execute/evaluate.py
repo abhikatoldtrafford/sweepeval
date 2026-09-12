@@ -45,10 +45,14 @@ from sweepeval.store.run import Store, new_run_id
 
 __all__ = ["EvaluationResult", "aevaluate_target"]
 
-_METRIC_BY_FAMILY = {
-    "security": "security_pass_rate",
-    "guardrail": "guardrail_pass_rate",
-}
+_RATE_METRICS = (
+    "security_pass_rate",
+    "guardrail_pass_rate",
+    "config_repeatability",
+    "target_determinism_at_temp0",
+    "semantic_stability",
+    "invariance",
+)
 
 
 @dataclass
@@ -67,6 +71,13 @@ class EvaluationResult:
     skipped: list[tuple[str, str]] = field(default_factory=list)
     assumptions: list[tuple[str, str, str]] = field(default_factory=list)
     axes_rejected: list[tuple[str, str]] = field(default_factory=list)
+    families_not_run: tuple[str, ...] = ()
+    """Families whose probes were not executed because a capability ruled them
+    out. Their calls are not spent and their metrics do not appear."""
+
+    retention_curve: dict[int, float] = field(default_factory=dict)
+    retention_weights: dict[int, float] = field(default_factory=dict)
+    retention_depth_at_floor: int | None = None
     store: Store | None = None
 
     @property
@@ -119,7 +130,15 @@ async def aevaluate_target(
         redactor = Redactor(secrets=[key] if key else [])
         store = Store(Path(root), run_id, redactor, store_text=store_text)
 
-        units = tuple(t.to_unit() for t in corpus.probes)
+        # Do not execute units for a family the capability report has already
+        # ruled out. Running them would spend real money producing rows for a
+        # family the report says is SKIPPED — a direct contradiction, and the
+        # context family alone is over half the calls at `standard`.
+        skipped_families = {s.family for s, _ in scorer_registry().skipped(capabilities)}
+        units = tuple(
+            t.to_unit() for t in corpus.probes if t.family not in skipped_families
+        )
+        not_run = sorted({t.family for t in corpus.probes} & skipped_families)
         plan = RunPlan(
             config_id="default",
             units=units,
@@ -152,6 +171,7 @@ async def aevaluate_target(
         outcomes=outcomes,
         store=store,
     )
+    result.families_not_run = tuple(not_run)
     _aggregate(result, seed=seed)
     _collect_skips(result)
     _collect_assumptions(result)
@@ -186,7 +206,7 @@ def _aggregate(result: EvaluationResult, *, seed: int) -> None:
     observations = result.observations
     indicative = result.profile == "quick"
 
-    for metric in _METRIC_BY_FAMILY.values():
+    for metric in _RATE_METRICS:
         table = build_cluster_table(
             observations, metric=metric, config_id=result.config_id
         )
@@ -198,7 +218,43 @@ def _aggregate(result: EvaluationResult, *, seed: int) -> None:
             table, estimand=Estimand.generalization, seed=seed, indicative=indicative
         )
 
+    _aggregate_context(result, seed=seed, indicative=indicative)
     _aggregate_operational(result, seed=seed, indicative=indicative)
+
+
+def _aggregate_context(
+    result: EvaluationResult, *, seed: int, indicative: bool
+) -> None:
+    """Recall per conversation, plus the depth-weighted AUC (§11.5)."""
+    from sweepeval.scorers.context import depth_at_floor, retention_auc, retention_curve
+
+    observations = result.observations
+    table = build_cluster_table(
+        observations, metric="fact_recall", config_id=result.config_id,
+        stratify_by_depth=True,
+    )
+    if not table.coverage.attempted:
+        return
+
+    result.clusters["fact_recall"] = dict(table.values)
+    # Stratified: an unstratified resample can empty a depth, and the trapezoid
+    # is undefined there (§13.3).
+    result.metrics["fact_recall"] = aggregate_metric(
+        table, seed=seed, indicative=indicative
+    )
+
+    curve = retention_curve(observations)
+    auc, weights = retention_auc(curve)
+    result.retention_curve = curve
+    result.retention_weights = weights
+    result.retention_depth_at_floor = depth_at_floor(curve)
+
+    # The AUC resamples conversations, so it reuses fact_recall's clusters but
+    # reports the depth-weighted quantity.
+    result.clusters["context_retention_auc"] = dict(table.values)
+    result.metrics["context_retention_auc"] = aggregate_metric(
+        table, seed=seed, indicative=indicative
+    ).model_copy(update={"point": auc})
 
 
 def _aggregate_operational(
