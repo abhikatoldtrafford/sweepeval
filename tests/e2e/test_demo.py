@@ -54,3 +54,64 @@ def test_the_demo_target_cannot_resolve_if_it_escaped(tmp_path: Path) -> None:
     from sweepeval.cli.demo import DEMO_URL
 
     assert DEMO_URL.split("/")[2].endswith(".invalid")
+
+
+def test_run_calls_sweep_with_every_parameter_it_has() -> None:
+    """`run` forwards to `sweep` by keyword, so a new sweep parameter without
+    a default silently breaks `run` at runtime and nowhere else.
+
+    This is not hypothetical: adding `cap` to the confirmer builder broke the
+    sweep verb the same way, and no test caught it.
+    """
+    import inspect
+
+    from sweepeval.cli.sweep import run_command, sweep_command
+
+    sweep_params = set(inspect.signature(sweep_command).parameters)
+    call = inspect.getsource(run_command)
+    forwarded = {
+        name for name in sweep_params if f"{name}=" in call
+    }
+    missing = sweep_params - forwarded
+    assert not missing, f"run_command does not forward: {sorted(missing)}"
+
+
+def test_run_is_invocable_end_to_end(tmp_path: Path) -> None:
+    """The forwarding test above is static; this one actually calls it."""
+    import sweepeval.cli.sweep as cli_sweep
+    from sweepeval.cli.mock import find_scenario
+    from sweepeval.mock.app import MockApp
+    from sweepeval.mock.scenario import load_scenario
+
+    scenario = find_scenario("demo")
+    assert scenario is not None
+    mock = MockApp(load_scenario(scenario))
+    original = cli_sweep.asweep_target
+
+    async def patched(url, **kwargs):
+        import httpx
+
+        client = httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=mock), base_url="https://demo.test"
+        )
+        kwargs["client"] = client
+        kwargs["authorization_prompt"] = False
+        kwargs["authorized"] = True
+        kwargs["config_cap"] = 1
+        try:
+            return await original(url, **kwargs)
+        finally:
+            await client.aclose()
+
+    cli_sweep.asweep_target = patched  # type: ignore[assignment]
+    try:
+        result = runner.invoke(
+            app,
+            ["run", "https://demo.test/v1/chat/completions",
+             "--root", str(tmp_path), "--yes", "-n", "2"],
+        )
+    finally:
+        cli_sweep.asweep_target = original  # type: ignore[assignment]
+
+    assert result.exit_code == 0, result.output
+    assert "frontier" in result.output
