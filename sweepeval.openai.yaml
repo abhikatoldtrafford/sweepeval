@@ -1,0 +1,19 @@
+# A declared sweep against OpenAI's chat completions API.
+#
+# Zero-config would work -- discovery identifies the shape, the auth and the
+# response path on its own -- but the model axis is declared here on purpose.
+# OpenAI lists 134 models; the planner sorts them and takes the first 20, which
+# on this account means babbage-002, davinci-002, gpt-3.5-turbo-instruct and
+# computer-use-preview: models that cannot serve a chat completion at all.
+# Naming two current, cheap models keeps the run honest and the bill small.
+
+target:
+  url: https://api.openai.com/v1/chat/completions
+
+axes:
+  model:
+    - gpt-4o-mini
+    - gpt-4.1-mini
+
+profile: quick
+runs: 2

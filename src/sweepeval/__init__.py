@@ -1,7 +1,5 @@
 """sweepeval — zero-config, black-box sweep and benchmark engine."""
 
-__version__ = "0.1.0.dev0"
-
 from sweepeval.api import (
     baseline,
     compare,
@@ -15,6 +13,7 @@ from sweepeval.api import (
     run_gate,
     sweep,
 )
+from sweepeval.schema.versions import TOOL_VERSION as __version__
 
 __all__ = [
     "__version__", "baseline", "compare", "demo", "discover", "evaluate",

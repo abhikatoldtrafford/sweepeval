@@ -69,7 +69,7 @@ async def climb(
 ) -> LadderResult:
     """Identify the request shape, or abort with a full diagnostic."""
     budget = budget or DiscoveryBudget()
-    sniffed = await sniff(client, url)
+    sniffed = await sniff(client, url, key)
 
     shapes = list(ladder_order())
     if sniffed.suggested_shape:
@@ -84,6 +84,15 @@ async def climb(
     # exhausts the budget before the correct shape is ever reached.
     resolved: list[AuthMethod | None] = [None]
 
+    # Values the free metadata sniff actually saw, for the mutator to use when
+    # an error demands a field. `model` is the one that decides whether
+    # discovery against OpenAI succeeds at all: it rejects a body with no
+    # model, and a guessed name only turns that into "the model does not
+    # exist". A model id from /v1/models is the endpoint's own answer.
+    hints: dict[str, object] = {}
+    if sniffed.models:
+        hints["model"] = _preferred_model(sniffed.models)
+
     # --- stage B: the exact URL -------------------------------------------
     # Two passes. Every shape is tried unmutated before any shape is mutated,
     # because a mutated near-miss can satisfy a different family's endpoint:
@@ -94,7 +103,7 @@ async def climb(
         for shape in shapes:
             outcome = await _try_shape(
                 client, url, shape, key, budget, stage="B",
-                resolved=resolved, allow_mutation=allow_mutation,
+                resolved=resolved, allow_mutation=allow_mutation, hints=hints,
             )
             if outcome is not None:
                 outcome.sniff = sniffed
@@ -114,7 +123,7 @@ async def climb(
                     continue
                 outcome = await _try_shape(
                     client, candidate, shape, key, budget, stage="C",
-                    resolved=resolved,
+                    resolved=resolved, hints=hints,
                 )
                 if outcome is not None:
                     outcome.sniff = sniffed
@@ -132,6 +141,30 @@ async def climb(
     )
 
 
+def _preferred_model(models: tuple[str, ...]) -> str:
+    """Which discovered model to put in a probe body.
+
+    Discovery has to answer with *one* model before the planner has run, and
+    the choice is not neutral: a gateway lists embeddings, moderation and TTS
+    models that will never answer a chat request, and reasoning models reject
+    the sampling parameters later probes send. Prefer a cheap, plain chat
+    model, then anything that is not obviously non-chat, then give up and take
+    the first -- an inert prompt against the wrong model still produces an
+    error message worth reading.
+    """
+    from sweepeval.execute.planner import filter_model_ids
+
+    usable, _dropped = filter_model_ids(list(models), bound=len(models) or 1)
+    if not usable:
+        return models[0]
+
+    for token in ("mini", "flash", "haiku", "small", "lite", "turbo"):
+        for model in usable:
+            if token in model.lower():
+                return model
+    return usable[0]
+
+
 def body_for_turns(
     ladder: LadderResult, turns: list[tuple[str, str]], **params: Any
 ) -> dict[str, Any]:
@@ -147,9 +180,27 @@ def body_for_turns(
     With no mutations the shape builds the body directly, history and all.
     With mutations the conversation is flattened into whichever field carried
     the inert prompt, because a mutated body has no history slot to fill.
+
+    **A purely additive mutation is the exception**, and it is the common case
+    rather than a corner: OpenAI is discovered as ``openai.chat_completions +
+    add:model``, because it rejects a body with no model. The shape's own
+    structure is untouched there — only an extra top-level key was added — so
+    flattening would throw away the history slot the shape does have. Measured
+    against the real endpoint, that collapsed every multi-turn probe into one
+    message and silently dropped the swept ``model`` and ``temperature``, so
+    the context family measured nothing and two axes of the sweep did not
+    exist. The shape builds the body; the added keys are merged back; swept
+    params win over the discovered value.
     """
     if not ladder.mutations:
         return ladder.shape.build_multi_turn(turns, **params)
+
+    additions = _additive_only(ladder)
+    if additions is not None:
+        # Additions first, so a swept parameter wins over the value discovery
+        # happened to probe with. The other order pins `model` to whichever id
+        # the metadata sniff picked, and the model axis silently does nothing.
+        return {**additions, **ladder.shape.build_multi_turn(turns, **params)}
 
     flattened = "\n".join(f"{role}: {text}" for role, text in turns)
     if "__raw__" in ladder.body:
@@ -159,6 +210,30 @@ def body_for_turns(
     if substituted != ladder.body:
         return substituted
     return ladder.shape.build_multi_turn(turns, **params)
+
+
+def _additive_only(ladder: LadderResult) -> dict[str, Any] | None:
+    """The keys a mutation *added*, if it changed nothing the shape built.
+
+    Returns ``None`` when the mutation touched the shape's own structure — a
+    rename, a nest, an unwrap, a coercion — because there the shape can no
+    longer build a body the target accepts and flattening is the honest
+    fallback.
+
+    Only top-level keys the shape did not produce count as additions, and
+    every key the shape *did* produce must still be present and unchanged.
+    Anything less strict would let a rename look additive.
+    """
+    built = ladder.shape.build(INERT_PROMPT)
+    if not isinstance(ladder.body, dict) or "__raw__" in ladder.body:
+        return None
+
+    for key, value in built.items():
+        if key not in ladder.body or ladder.body[key] != value:
+            return None
+
+    additions = {k: v for k, v in ladder.body.items() if k not in built}
+    return additions or None
 
 
 def _substitute_prompt(node: Any, old: str, new: str) -> Any:
@@ -197,6 +272,7 @@ async def _try_shape(
     stage: str,
     resolved: list[AuthMethod | None] | None = None,
     allow_mutation: bool = True,
+    hints: dict[str, object] | None = None,
 ) -> LadderResult | None:
     """Try one shape, walking the auth ladder and then mutating on rejection."""
     body = shape.build(INERT_PROMPT)
@@ -208,7 +284,7 @@ async def _try_shape(
         assert auth is not None
         result = await _post_and_mutate(
             client, url, shape, auth, key, body, budget, stage=stage,
-            allow_mutation=allow_mutation,
+            allow_mutation=allow_mutation, hints=hints,
         )
         if result is not None:
             cell[0] = auth
@@ -238,6 +314,7 @@ async def _post_and_mutate(
     mutations: tuple[str, ...] = (),
     spent: list[int] | None = None,
     allow_mutation: bool = True,
+    hints: dict[str, object] | None = None,
 ) -> LadderResult | None:
     if budget.exhausted():
         return None
@@ -281,7 +358,7 @@ async def _post_and_mutate(
     if not allow_mutation or status not in (400, 422) or depth >= MAX_MUTATION_DEPTH:
         return None
 
-    for mutation, mutated in mutations_for(body, raw, INERT_PROMPT):
+    for mutation, mutated in mutations_for(body, raw, INERT_PROMPT, hints):
         if spent[0] >= MAX_MUTATION_ATTEMPTS or budget.exhausted():
             break
         spent[0] += 1
@@ -298,6 +375,7 @@ async def _post_and_mutate(
             mutations=(*mutations, mutation.label()),
             spent=spent,
             allow_mutation=True,
+            hints=hints,
         )
         if result is not None:
             return result

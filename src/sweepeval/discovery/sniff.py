@@ -5,6 +5,18 @@ collapses the ladder to one confirming request — and on a target that lists it
 models, it also supplies the model axis the sweep will later need.
 
 Nothing here is a prompt. These are GETs and an OPTIONS.
+
+The sniff **authenticates when a key is supplied**. It did not, and the
+consequence was severe: OpenAI requires auth on ``/v1/models``, so the sniff
+got a 401, learned no models and suggested no shape, and the mutator that
+later needed a model id had nothing to offer but a guess. Discovery against
+the most common endpoint in the world failed on a metadata request that would
+have succeeded with the key the user had already handed over.
+
+Auth style is not known yet at this point -- that is what the POST ladder
+resolves -- so the sniff tries the two header styles that cover essentially
+every endpoint. These are GETs against metadata paths: they cost no tokens and
+are not charged against the POST budget, so a second attempt is cheap.
 """
 
 from __future__ import annotations
@@ -49,7 +61,16 @@ class SniffResult:
         return bool(self.models or self.openapi_paths or self.suggested_shape)
 
 
-async def sniff(client: httpx.AsyncClient, base: str) -> SniffResult:
+def _auth_attempts(key: str | None) -> tuple[dict[str, str], ...]:
+    """Header sets to try, cheapest first: none, then the two common styles."""
+    if not key:
+        return ({},)
+    return ({}, {"authorization": f"Bearer {key}"}, {"x-api-key": key})
+
+
+async def sniff(
+    client: httpx.AsyncClient, base: str, key: str | None = None
+) -> SniffResult:
     """GET the metadata endpoints. Never raises; a sniff is best-effort."""
     result = SniffResult()
     evidence: dict[str, Any] = {}
@@ -68,14 +89,21 @@ async def sniff(client: httpx.AsyncClient, base: str) -> SniffResult:
 
     for path in SNIFF_PATHS:
         url = f"{origin}{path}"
-        try:
-            response = await client.get(url)
-        except httpx.HTTPError as exc:
-            evidence[path] = f"error: {type(exc).__name__}"
-            continue
+        response = None
+        for headers in _auth_attempts(key):
+            try:
+                response = await client.get(url, headers=headers)
+            except httpx.HTTPError as exc:
+                evidence[path] = f"error: {type(exc).__name__}"
+                response = None
+                break
+            evidence[path] = response.status_code
+            # Only an auth rejection is worth another header style. A 404 is a
+            # path that does not exist, and no credential fixes that.
+            if response.status_code not in (401, 403):
+                break
 
-        evidence[path] = response.status_code
-        if response.status_code != 200:
+        if response is None or response.status_code != 200:
             continue
         result.reachable = True
 

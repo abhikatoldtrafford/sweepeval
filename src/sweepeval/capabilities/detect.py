@@ -24,7 +24,7 @@ from sweepeval.capabilities.normalise import normalise, token_jaccard
 from sweepeval.discovery.auth import apply_auth
 from sweepeval.discovery.budget import Attempt, DiscoveryBudget
 from sweepeval.discovery.extract import extract_at
-from sweepeval.discovery.ladder import LadderResult, _post
+from sweepeval.discovery.ladder import LadderResult, _post, body_for_turns
 
 __all__ = [
     "DEFAULT_CAPABILITY_REQUESTS",
@@ -161,7 +161,27 @@ def _text_of(payload: Any, path: str | None) -> str:
 
 
 def _turns_body(ladder: LadderResult, turns: list[tuple[str, str]]) -> dict[str, Any]:
-    return ladder.shape.build_multi_turn(turns)
+    """Build a probe body the way the *runner* will.
+
+    Through ``body_for_turns``, not ``shape.build_multi_turn``. A shape that
+    reached a 200 only through mutation needs whatever the mutation added --
+    for OpenAI that is the required ``model`` field -- and building straight
+    from the shape omits it.
+
+    Measured against api.openai.com: every capability probe returned 400 "you
+    must provide a model parameter". Multi-turn and system-prompt support both
+    reported UNSUPPORTED, the refusal baseline came back empty, the whole
+    context family was skipped, and both sweep axes were rejected. Nothing in
+    the report said the probes had simply failed to be well-formed, because
+    from the detector's point of view a 400 is indistinguishable from a
+    capability the target lacks.
+    """
+    return body_for_turns(ladder, turns)
+
+
+def _prompt_body(ladder: LadderResult, prompt: str) -> dict[str, Any]:
+    """Single-turn probe body, for the same reason."""
+    return body_for_turns(ladder, [("user", prompt)])
 
 
 # --- individual detectors --------------------------------------------------
@@ -286,7 +306,7 @@ async def detect_tool_calling(
     budget: DiscoveryBudget,
 ) -> CapabilityResult:
     """Send a probe that clearly requires a tool; look for structure."""
-    body = ladder.shape.build(_TOOL_PROBE)
+    body = _prompt_body(ladder, _TOOL_PROBE)
     status, payload, _ = await _ask(client, ladder, key, budget, body, label="tool")
 
     if status == 0 or status >= 400:
@@ -312,7 +332,7 @@ async def detect_retrieval(
     budget: DiscoveryBudget,
 ) -> CapabilityResult:
     """Does the response surface documents? (§9)"""
-    body = ladder.shape.build("What sources support your answer? Cite them.")
+    body = _prompt_body(ladder, "What sources support your answer? Cite them.")
     status, payload, _ = await _ask(client, ladder, key, budget, body, label="retrieval")
 
     if status == 0 or status >= 400:
@@ -343,7 +363,7 @@ async def detect_refusal_baseline(
     Needed before any scoring: without it a refusal is indistinguishable from
     an error, and §11.8's per-family policy has nothing to key on.
     """
-    body = ladder.shape.build(_DISALLOWED)
+    body = _prompt_body(ladder, _DISALLOWED)
     status, payload, _ = await _ask(client, ladder, key, budget, body, label="refusal")
 
     if status == 0:

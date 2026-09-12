@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -41,6 +41,29 @@ _MISSING = re.compile(
     r"['\"`]?([A-Za-z_][A-Za-z0-9_.\-]{1,40})['\"`]?",
     re.I,
 )
+_BEFORE_KEYWORD = re.compile(
+    r"['\"`]?([A-Za-z_][A-Za-z0-9_.\-]{1,40})['\"`]?\s+"
+    r"(?:field|parameter|param|property|key|argument)\b",
+    re.I,
+)
+"""The name can come *before* the keyword.
+
+OpenAI says "you must provide a model parameter" — no quotes, no "missing",
+and ``error.param`` is null. Every other pattern here looks for the name
+after the keyword, so discovery against the single most common endpoint in
+the world extracted no field name, never mutated, and aborted. English error
+messages put the noun on either side and the mutator has to read both.
+"""
+
+_STOPWORDS = frozenset(
+    {
+        "a", "an", "the", "this", "that", "each", "any", "some", "no",
+        "one", "such", "which", "what", "another", "invalid", "unknown",
+        "missing", "required", "unsupported", "unexpected", "extra",
+    }
+)
+"""Words that are grammar, not field names. "provide a model parameter"
+yields "a" from the before-keyword pattern as readily as "model"."""
 
 
 @dataclass(frozen=True)
@@ -65,8 +88,11 @@ def field_names_in_error(body: bytes | str, max_names: int = 4) -> list[str]:
     names: list[str] = []
 
     def add(name: str | None) -> None:
-        if name and name not in names and name.isidentifier():
-            names.append(name)
+        if not name or name in names or not name.isidentifier():
+            return
+        if name.lower() in _STOPWORDS:
+            return
+        names.append(name)
 
     try:
         parsed = json.loads(text)
@@ -90,7 +116,7 @@ def field_names_in_error(body: bytes | str, max_names: int = 4) -> list[str]:
                     if isinstance(loc, list) and loc:
                         add(str(loc[-1]))
 
-    for pattern in (_MISSING, _AFTER_KEYWORD, _QUOTED):
+    for pattern in (_MISSING, _AFTER_KEYWORD, _BEFORE_KEYWORD, _QUOTED):
         for match in pattern.finditer(text):
             add(match.group(1))
 
@@ -98,7 +124,10 @@ def field_names_in_error(body: bytes | str, max_names: int = 4) -> list[str]:
 
 
 def mutations_for(
-    body: dict[str, Any], error_body: bytes | str, prompt: str = ""
+    body: dict[str, Any],
+    error_body: bytes | str,
+    prompt: str = "",
+    hints: Mapping[str, Any] | None = None,
 ) -> Iterator[tuple[Mutation, dict[str, Any]]]:
     """Yield ``(mutation, mutated_body)`` for each enumerated transformation.
 
@@ -141,7 +170,7 @@ def mutations_for(
         # 2. add a required field with a type-appropriate minimal value
         yield (
             Mutation("add", name, excerpt),
-            {**body, name: _minimal_for(name, prompt)},
+            {**body, name: _minimal_for(name, prompt, hints)},
         )
 
         # 3. nest the payload under the named field
@@ -154,7 +183,9 @@ def mutations_for(
             yield (Mutation("unwrap", payload_keys[0], excerpt), dict(inner))
 
 
-def _minimal_for(name: str, prompt: str = "") -> Any:
+def _minimal_for(
+    name: str, prompt: str = "", hints: Mapping[str, Any] | None = None
+) -> Any:
     """A plausible value for a field we only know the name of.
 
     An unknown string field defaults to the **prompt**, not to ``""``. A field
@@ -164,6 +195,16 @@ def _minimal_for(name: str, prompt: str = "") -> Any:
     subsequent probe measures the target's response to an empty request.
     """
     lowered = name.lower()
+
+    # A value the free metadata sniff actually saw beats any guess. `model` is
+    # the case that matters: OpenAI demands one, and "default" is not a model
+    # it has, so a guessed value turns "you must provide a model" into "the
+    # model `default` does not exist" and discovery fails one step later
+    # having learned nothing.
+    for key, value in (hints or {}).items():
+        if key.lower() in lowered or lowered in key.lower():
+            return value
+
     if any(token in lowered for token in ("token", "length", "count", "limit", "n_")):
         return 16
     if any(token in lowered for token in ("stream", "echo", "enable")):

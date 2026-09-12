@@ -33,7 +33,7 @@ from sweepeval.capabilities.sampling import (
 )
 from sweepeval.discovery.budget import Attempt, DiscoveryBudget
 from sweepeval.discovery.extract import extract_at
-from sweepeval.discovery.ladder import LadderResult
+from sweepeval.discovery.ladder import LadderResult, body_for_turns
 
 __all__ = [
     "RUNS_PER_SETTING",
@@ -167,7 +167,12 @@ async def _repeat(
     from sweepeval.discovery.auth import apply_auth
 
     headers, params = apply_auth(ladder.auth, key)
-    body = ladder.shape.build_multi_turn([("user", prompt)], **{parameter: value})
+    # Through body_for_turns: a mutated shape needs whatever the mutation
+    # added. Built from the shape alone, every sampling probe against OpenAI
+    # 400'd and both temperature and top_p were reported as "the target did
+    # not answer", which reads as a property of the target rather than a
+    # malformed request.
+    body = body_for_turns(ladder, [("user", prompt)], **{parameter: value})
 
     texts: list[str] = []
     for _ in range(RUNS_PER_SETTING):
