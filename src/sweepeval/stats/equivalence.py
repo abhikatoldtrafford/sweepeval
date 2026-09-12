@@ -16,6 +16,7 @@ from itertools import combinations
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 
 __all__ = [
     "DEFAULT_RESAMPLES",
@@ -57,7 +58,7 @@ def _replicates(
     similarity: Callable[[str, str], float],
     n_resamples: int,
     seed: int,
-) -> np.ndarray:
+) -> npt.NDArray[np.float64]:
     rng = np.random.default_rng(seed)
     return np.array(
         [

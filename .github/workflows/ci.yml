@@ -26,6 +26,10 @@ jobs:
       - name: ruff
         run: ruff check src tests
       - name: mypy (schema, stats)
+        # Unpinned python_version, so each matrix job checks its own semantics.
+        # 3.10 and 3.12 disagree about numpy's stubs, and only running both
+        # catches it -- a 3.12-only check passed a bare np.ndarray that 3.10
+        # rejects.
         run: mypy src/sweepeval/schema src/sweepeval/stats
       - name: layering contract
         run: lint-imports
