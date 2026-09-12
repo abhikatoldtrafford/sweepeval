@@ -43,9 +43,7 @@ _M = {
     "baseline": "M6",
     "gate": "M6",
     "run_gate": "M6",
-    "demo": "M6",
-    "report": "M9",
-    "compare": "M9",
+    "demo": "M10",
 }
 
 
@@ -106,13 +104,17 @@ def run_gate(url: str, *, baseline: Path | str, **kwargs: Any) -> Any:
 
 
 def compare(run_a: str, run_b: str, **kwargs: Any) -> Any:
-    """Diff two results, refusing invalid comparisons (§6.5, I6)."""
-    raise _pending("compare")
+    """Diff two results, refusing invalid comparisons (§6.5, I6). Pure."""
+    from sweepeval.report.compare import compare_runs
+
+    return compare_runs(run_a, run_b, **kwargs)
 
 
 def report(run_id: str, *, fmt: str = "terminal", **kwargs: Any) -> Any:
-    """Rebuild a report offline from stored aggregates (§15)."""
-    raise _pending("report")
+    """Rebuild a report offline from stored aggregates (§15). Sends nothing."""
+    from sweepeval.report.stored import load_run
+
+    return load_run(run_id)
 
 
 def demo(**kwargs: Any) -> Any:
@@ -173,4 +175,5 @@ async def arun_gate(url: str, *, baseline: Path | str, **kwargs: Any) -> Any:
 
 
 async def areport(run_id: str, *, fmt: str = "terminal", **kwargs: Any) -> Any:
-    raise _pending("report")
+    """Async twin of :func:`report`. Pure, so it merely defers."""
+    return report(run_id, fmt=fmt, **kwargs)

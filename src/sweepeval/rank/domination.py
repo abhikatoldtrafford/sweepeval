@@ -70,6 +70,7 @@ def comparisons_for_pair(
                 objective=objective.id,
                 difference=result.difference,
                 min_effect=objective.min_effect,
+                applied_margin=result.margin,
                 p_superior=result.p_superior,
                 p_non_inferior=result.p_non_inferior,
             )
@@ -103,11 +104,15 @@ def compare_all(
                 p_non_inferior=p_ni,
                 p_superior=p_sup,
                 per_objective=tuple(comparisons),
+                # Against the margin actually applied, so a relative
+                # min_effect is compared in the metric's own units.
                 wins=tuple(
-                    c.objective for c in comparisons if c.difference >= c.min_effect
+                    c.objective for c in comparisons if c.difference >= c.applied_margin
                 ),
                 concedes=tuple(
-                    c.objective for c in comparisons if c.difference <= -c.min_effect
+                    c.objective
+                    for c in comparisons
+                    if c.difference <= -c.applied_margin
                 ),
             )
 

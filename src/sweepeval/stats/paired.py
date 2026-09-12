@@ -64,6 +64,14 @@ class PairedResult:
     """
 
     method: CIMethod
+    margin: float = 0.0
+    """The margin actually applied, after a relative min_effect was scaled.
+
+    Reported rather than recomputed by the caller: a relative min_effect of
+    0.10 becomes some number of milliseconds, and printing the 0.10 beside a
+    latency difference in milliseconds tells the reader nothing true.
+    """
+
     flags: tuple[Flag, ...] = ()
     evidence: Mapping[str, Any] | None = None
 
@@ -125,6 +133,7 @@ def paired_difference(
             p_superior=1.0,
             p_non_inferior=1.0,
             method=CIMethod.none,
+            margin=margin,
             flags=(Flag.NO_VALID_INTERVAL, Flag.LOW_N),
             evidence={"reason": "fewer than 3 clusters"},
         )
@@ -169,6 +178,7 @@ def paired_difference(
         p_superior=p_superior,
         p_non_inferior=p_non_inferior,
         method=CIMethod.cluster_bootstrap,
+        margin=margin,
         flags=tuple(flags),
         evidence={
             "resamples": n_resamples,

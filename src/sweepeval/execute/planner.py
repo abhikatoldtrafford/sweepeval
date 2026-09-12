@@ -73,8 +73,18 @@ SHRINK_LADDER: tuple[str, ...] = (
     "drop temperature=0.7",
     "drop system_prompt=terse_permissive",
     "cap models",
+    "truncate to the cap",
 )
-"""Fixed and disclosed. Applied in order until the cross product fits."""
+"""Fixed and disclosed. Applied in order until the cross product fits.
+
+The last step exists because the four axis-level steps cannot always reach an
+arbitrary cap: with the model axis already collapsed to one, four system
+variants and three temperatures leave six configs whatever else is dropped.
+The cap has to bind anyway — the pre-flight estimate is computed from it
+(§12.3), so a plan that exceeded it would spend more than the user consented
+to. Truncation is deterministic (the cross product is already totally ordered)
+and is printed like every other step, rather than silently trimming the table.
+"""
 
 
 @dataclass(frozen=True)
@@ -188,6 +198,9 @@ def plan_sweep(
 
     axes, steps = _shrink(axes, limit)
     configs = _cross_product(axes)
+    if len(configs) > limit:
+        steps.append(f"truncate to the cap ({len(configs)} -> {limit} configs)")
+        configs = configs[:limit]
 
     return SweepPlan(
         configs=configs,

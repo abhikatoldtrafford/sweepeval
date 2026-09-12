@@ -21,19 +21,34 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
+from sweepeval.execute.artifacts import write_json
 from sweepeval.execute.budget import BudgetCap, Estimate, render_estimate
 from sweepeval.execute.sweep import SweepResult, SweepStatus, asweep_target
+from sweepeval.pipeline import rank_sweep
+from sweepeval.report.frontier import render_frontier, render_preference
+from sweepeval.report.frontier_json import frontier_payload
 from sweepeval.report.sweep import render_sweep
 
 console = Console()
 
 
-def _confirmer(yes: bool, *, no_input: bool) -> object:
+def _confirmer(
+    yes: bool, *, no_input: bool = False, cap: BudgetCap | None = None
+) -> object:
     """Build the pre-flight predicate (§12.3)."""
 
     def confirm(estimate: Estimate) -> bool:
         console.print("\n[bold]before spending anything[/bold]")
         console.print(render_estimate(estimate))
+        if cap is not None and cap.exceeded_by(estimate):
+            # The cap will bind mid-sweep rather than up front, so say so now
+            # instead of letting INCOMPLETE arrive as a surprise at the end.
+            console.print(
+                f"\n[yellow]this estimate exceeds your {cap.unit} cap of "
+                f"{cap.value}[/yellow] — the sweep will stop between configs "
+                "when the cap is reached and report INCOMPLETE, naming every "
+                "config that never ran."
+            )
         console.print()
         if yes:
             console.print("[dim]--yes: proceeding without asking[/dim]")
@@ -75,6 +90,19 @@ def sweep_command(
     resume: str | None = typer.Option(
         None, "--resume", help="Continue an existing run id."
     ),
+    objectives: str | None = typer.Option(
+        None, "--objectives", help="Narrow the frontier, e.g. security,latency."
+    ),
+    prefer: str | None = typer.Option(
+        None,
+        "--prefer",
+        help=(
+            "Apply your own priority to the frontier: 'security,cost,latency' "
+            "or 'maximize security_pass_rate subject to latency_p95_ms < 2000'."
+        ),
+    ),
+    alpha: float = typer.Option(0.05, "--alpha", help="Family-wise error rate."),
+    fmt: str | None = typer.Option(None, "--format", help="html,junit,json"),
 ) -> None:
     """Discover, plan and sweep every discoverable configuration."""
     result = asyncio.run(
@@ -94,7 +122,9 @@ def sweep_command(
             on_progress=lambda msg: console.print(f"[dim]{msg}[/dim]"),
         )
     )
-    _finish(result)
+    _finish(
+        result, objectives=objectives, prefer=prefer, alpha=alpha, seed=seed, fmt=fmt
+    )
 
 
 def run_command(
@@ -106,6 +136,7 @@ def run_command(
     seed: int = typer.Option(0, "--seed"),
     authorized: bool = typer.Option(False, "--i-am-authorized"),
     yes: bool = typer.Option(False, "--yes", "-y"),
+    prefer: str | None = typer.Option(None, "--prefer"),
 ) -> None:
     """Zero-config: discover, plan, sweep and report. One URL, one key."""
     sweep_command(
@@ -119,14 +150,108 @@ def run_command(
         yes=yes,
         max_requests=None,
         resume=None,
+        objectives=None,
+        prefer=prefer,
+        alpha=0.05,
+        fmt=None,
     )
 
 
-def _finish(result: SweepResult) -> None:
+def _finish(
+    result: SweepResult,
+    *,
+    objectives: str | None = None,
+    prefer: str | None = None,
+    alpha: float = 0.05,
+    seed: int = 0,
+    fmt: str | None = None,
+) -> None:
     render_sweep(result, console)
+
+    frontier = None
+    if result.configs:
+        frontier = _rank(
+            result, objectives=objectives, prefer=prefer, alpha=alpha, seed=seed
+        )
+    if result.store is not None:
+        from sweepeval.report.stored import write_aggregates
+
+        write_aggregates(result)
+    _emit(result, frontier, fmt)
+
     if result.store is not None:
         console.print(f"\n[dim]artifacts in {result.store.run_dir}[/dim]")
     if result.status is SweepStatus.REFUSED:
         raise typer.Exit(code=2)
     if result.status is SweepStatus.DECLINED:
         raise typer.Exit(code=0)
+
+
+def _rank(
+    result: SweepResult,
+    *,
+    objectives: str | None,
+    prefer: str | None,
+    alpha: float,
+    seed: int,
+):
+    """Rank, report and store the frontier (§14, §6.2)."""
+    names = [n.strip() for n in (objectives or "").split(",") if n.strip()]
+    try:
+        frontier = rank_sweep(result, objectives=names, alpha=alpha, seed=seed)
+    except ValueError as error:
+        console.print(f"[red]{error}[/red]")
+        raise typer.Exit(code=2) from error
+
+    labels = {row.config_id: row.config.label() for row in result.configs}
+    render_frontier(frontier, labels, console)
+
+    if result.store is not None:
+        write_json(result.store.frontier_path, frontier_payload(frontier, labels))
+
+    if not prefer:
+        return frontier
+
+    from sweepeval.rank.prefer import apply_preference, parse_preference
+
+    try:
+        preference = parse_preference(prefer)
+    except ValueError as error:
+        console.print(f"[red]{error}[/red]")
+        raise typer.Exit(code=2) from error
+
+    outcome = apply_preference(
+        preference, frontier, {r.config_id: r.metrics for r in result.configs}
+    )
+    render_preference(outcome, labels, console)
+    return frontier
+
+
+def _emit(result: SweepResult, frontier, fmt: str | None) -> None:
+    """Machine formats only when asked (§15)."""
+    if not fmt or result.store is None:
+        return
+
+    from sweepeval.report.html import as_html, as_junit
+
+    wanted = {f.strip() for f in fmt.split(",") if f.strip()}
+    written: list[str] = []
+    for name in sorted(wanted):
+        if name == "html":
+            result.store.report_path("html").write_text(
+                as_html(result, frontier), encoding="utf-8"
+            )
+            written.append("report.html")
+        elif name == "junit":
+            result.store.report_path("xml").write_text(
+                as_junit(result, frontier), encoding="utf-8"
+            )
+            written.append("report.xml")
+        elif name == "json":
+            written.append("frontier.json")
+        else:
+            console.print(f"[yellow]unknown --format {name!r}, skipped[/yellow]")
+    if written:
+        console.print(
+            f"\nwrote {', '.join(written)} to {result.store.run_dir}"
+        )

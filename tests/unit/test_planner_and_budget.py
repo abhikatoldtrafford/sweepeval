@@ -166,7 +166,30 @@ def test_the_ladder_is_fixed_and_ordered() -> None:
         "drop temperature=0.7",
         "drop system_prompt=terse_permissive",
         "cap models",
+        "truncate to the cap",
     )
+
+
+def test_the_cap_binds_even_when_the_axis_steps_cannot_reach_it() -> None:
+    """The pre-flight estimate is computed from the cap (§12.3), so a plan
+    that exceeded it would spend more than the user consented to."""
+    plan = plan_sweep(
+        _caps(), ["m1", "m2"], profile="quick", cap=4,
+        sampling=_sampling(temperature=Verdict.EFFECTIVE),
+    )
+    assert len(plan.configs) == 4
+    assert any(s.startswith("truncate to the cap") for s in plan.shrink_steps)
+
+
+def test_truncation_is_the_last_resort_not_the_first() -> None:
+    """Dropping an axis value is preferable to trimming the design: the
+    axis-level steps are disclosed and balanced, truncation is neither."""
+    plan = plan_sweep(
+        _caps(), ["m1", "m2"], profile="standard",
+        sampling=_sampling(temperature=Verdict.EFFECTIVE),
+    )
+    assert len(plan.configs) <= 12
+    assert not any(s.startswith("truncate") for s in plan.shrink_steps)
 
 
 def test_every_shrink_step_taken_is_recorded() -> None:

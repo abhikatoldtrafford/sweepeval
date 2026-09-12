@@ -42,11 +42,20 @@ class ObjectiveComparison:
     """``b - a``, positive when b is ahead."""
 
     min_effect: float
+    """As declared on the objective: absolute, or a relative fraction."""
+
     p_superior: float
-    """P(b is not better than a by at least ``min_effect``)."""
+    """P(b is not better than a by at least the applied margin)."""
 
     p_non_inferior: float
-    """P(b is worse than a by more than ``min_effect``)."""
+    """P(b is worse than a by more than the applied margin)."""
+
+    applied_margin: float = 0.0
+    """What ``min_effect`` became in the metric's own units, after scaling.
+
+    Reported separately because a relative min_effect of 0.10 printed beside a
+    latency difference in milliseconds tells the reader nothing true.
+    """
 
 
 @dataclass

@@ -267,3 +267,75 @@ async def test_a_non_caching_target_is_not_flagged(tmp_path: Path) -> None:
     """The detector has to discriminate, not just fire."""
     result = await _sweep("openai_clean", tmp_path, config_cap=1)
     assert not result.configs[0].cache.suspected, result.configs[0].cache.reason
+
+
+# --- ranking, end to end (§14) ---------------------------------------------
+
+
+def test_the_frontier_is_computed_over_a_real_sweep(swept) -> None:
+    from sweepeval.pipeline import rank_sweep
+
+    frontier = rank_sweep(swept, seed=7)
+    assert frontier.frontier, "no configuration reached the frontier"
+    assert frontier.clusters
+    for cluster in frontier.clusters:
+        for member in cluster.members:
+            assert member in swept.config_ids
+
+
+def test_determinism_is_shared_across_temperature_siblings(swept) -> None:
+    """§14.2, from a real run: measured per row, every temp=0 config would be
+    non-dominated for free on a metric restating its own label."""
+    by_temp: dict[float, list[str]] = {}
+    for row in swept.configs:
+        by_temp.setdefault(row.config.params.get("temperature", 0.0), []).append(
+            row.config_id
+        )
+    if len(by_temp) < 2:
+        import pytest as _pytest
+
+        _pytest.skip("this sweep has no temperature axis to share across")
+
+    values = {
+        row.config_id: row.metrics["target_determinism_at_temp0"].point
+        for row in swept.configs
+    }
+    assert len(set(values.values())) < len(values), values
+    assert swept.determinism_scope
+
+
+def test_the_frontier_document_is_written(tmp_path: Path) -> None:
+    from sweepeval.pipeline import rank_sweep
+    from sweepeval.report.frontier_json import frontier_payload
+
+    result = await_sweep(tmp_path)
+    frontier = rank_sweep(result, seed=7)
+    payload = frontier_payload(frontier)
+    assert payload["comparisons"]
+    assert payload["objectives"]
+    assert "rank" not in payload
+
+
+def await_sweep(tmp_path: Path):
+    import asyncio
+
+    return asyncio.run(_sweep("openai_clean", tmp_path, config_cap=2))
+
+
+async def test_narrowing_objectives_needs_no_rerun(tmp_path: Path) -> None:
+    """§14.1: every config runs the full profile, so narrowing offline is safe."""
+    from sweepeval.pipeline import rank_sweep
+
+    result = await _sweep("openai_clean", tmp_path, config_cap=2)
+    wide = rank_sweep(result, seed=7)
+    narrow = rank_sweep(result, objectives=["security", "latency"], seed=7)
+    assert len(narrow.objectives) == 2
+    assert len(wide.objectives) == 6
+
+
+async def test_an_unknown_objective_names_what_is_available(tmp_path: Path) -> None:
+    from sweepeval.pipeline import rank_sweep
+
+    result = await _sweep("openai_clean", tmp_path, config_cap=1)
+    with pytest.raises(ValueError, match="Available"):
+        rank_sweep(result, objectives=["not_a_real_objective"])

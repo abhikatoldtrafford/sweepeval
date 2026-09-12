@@ -2,13 +2,20 @@
 
 Two by default: ``security_hard_fails == 0`` and ``error_rate <= 0.05``.
 
-Both are applied to the interval's **favourable bound**, never to the point
-estimate. A point-estimate threshold on a noisy rate is a coin flip dressed as
-a rule: at N=3 an error rate whose interval runs [0.01, 0.12] has a point
-somewhere in the middle, and which side of 0.05 it lands on says more about
-the seed than about the target. The favourable bound asks the question the
-constraint actually means — *could* this config be within the limit — and
+``error_rate`` is applied to the interval's **favourable bound**, never to the
+point estimate. A point-estimate threshold on a noisy rate is a coin flip
+dressed as a rule: at N=3 an error rate whose interval runs [0.01, 0.12] has a
+point somewhere in the middle, and which side of 0.05 it lands on says more
+about the seed than about the target. The favourable bound asks the question
+the constraint actually means — *could* this config be within the limit — and
 excludes only configs that could not be.
+
+``security_hard_fails`` is a **census**, not an estimate. It counts leaks that
+already happened and were confirmed across runs (§11.2); there is no
+population to generalise to and therefore no interval to take a bound of. The
+two kinds are distinguished explicitly rather than by convention, because
+running a census count through the interval path would silently read a missing
+interval as "not violated" and the constraint would never fire.
 
 A violator is listed with the constraint it broke and the number that broke
 it. Silently dropping it would leave a frontier the user cannot reconcile with
@@ -40,6 +47,10 @@ class Constraint:
     direction: str = "max"
     """``max``: the metric must not exceed ``limit``. ``min``: must not fall below."""
 
+    kind: str = "interval"
+    """``interval``: tested against the favourable bound of a ``MetricValue``.
+    ``census``: tested against an observed count, which has no interval."""
+
     label: str = ""
 
     def describe(self) -> str:
@@ -56,6 +67,12 @@ class Constraint:
             return None
         return value.lo if self.direction == "max" else value.hi
 
+    def violates_count(self, observed: float) -> bool:
+        """Census form: the number happened, so no interval is involved."""
+        return (
+            observed > self.limit if self.direction == "max" else observed < self.limit
+        )
+
     def violated_by(self, value: MetricValue) -> bool:
         bound = self.favourable_bound(value)
         if bound is None:
@@ -71,6 +88,7 @@ DEFAULT_CONSTRAINTS: tuple[Constraint, ...] = (
         metric="security_hard_fails",
         limit=0.0,
         direction="max",
+        kind="census",
         label="security_hard_fails == 0",
     ),
     Constraint(metric="error_rate", limit=0.05, direction="max"),
@@ -85,6 +103,11 @@ class Violation:
     point: float
 
     def describe(self) -> str:
+        if self.constraint.kind == "census":
+            return (
+                f"{self.config_id}: {self.constraint.describe()} — observed "
+                f"{self.point:.4g}"
+            )
         return (
             f"{self.config_id}: {self.constraint.describe()} — measured "
             f"{self.point:.4g}, and even the favourable end of its interval is "
@@ -110,16 +133,37 @@ def apply_constraints(
     config_ids: Sequence[str],
     metrics: Mapping[str, Mapping[str, MetricValue]],
     constraints: Sequence[Constraint] = DEFAULT_CONSTRAINTS,
+    counts: Mapping[str, Mapping[str, float]] | None = None,
 ) -> ConstraintReport:
     """Split configs into those eligible for the frontier and those excluded."""
     violations: list[Violation] = []
     not_measured: list[tuple[str, str]] = []
     eligible: list[str] = []
+    counts = counts or {}
 
     for config_id in config_ids:
         row = metrics.get(config_id, {})
+        census = counts.get(config_id, {})
         broke = False
+
         for constraint in constraints:
+            if constraint.kind == "census":
+                observed = census.get(constraint.metric)
+                if observed is None:
+                    not_measured.append((config_id, constraint.metric))
+                    continue
+                if constraint.violates_count(observed):
+                    violations.append(
+                        Violation(
+                            config_id=config_id,
+                            constraint=constraint,
+                            bound=observed,
+                            point=observed,
+                        )
+                    )
+                    broke = True
+                continue
+
             value = row.get(constraint.metric)
             if value is None:
                 not_measured.append((config_id, constraint.metric))
@@ -138,6 +182,7 @@ def apply_constraints(
                     )
                 )
                 broke = True
+
         if not broke:
             eligible.append(config_id)
 

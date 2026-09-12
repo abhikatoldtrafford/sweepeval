@@ -330,21 +330,53 @@ def _score(
         ts=datetime.now(timezone.utc).isoformat(),
     )
 
+    # Operational metrics derive from calls.jsonl and therefore from EVERY
+    # unit, not from a family of its own (§6.2). Scoring them only for units
+    # whose family is "operational" left latency, tokens and error_rate with
+    # no data at all — and two of the six default objectives, latency_p95_ms
+    # and cost_per_probe, silently measuring nothing.
+    observations: list[Observation] = list(
+        _operational(unit, calls, context, registry)
+    )
+
     if failed:
         # I5: a failed conversation is UNSCORABLE with a reason, never a zero.
-        return [
+        observations.append(
             context.observation(
                 scorer=unit.family, version=0, metric=f"{unit.family}_pass_rate",
                 family=unit.family, verdict=Verdict.UNSCORABLE,
                 reason=reason, unit=unit,
             )
-        ]
+        )
+        return observations
 
     try:
         scorer = registry.get(unit.family)
     except KeyError:
+        return observations
+    observations.extend(scorer.score(unit, list(calls), context))
+    return observations
+
+
+def _operational(
+    unit: Unit,
+    calls: Sequence[Call],
+    context: ScoreContext,
+    registry: ScorerRegistry,
+) -> list[Observation]:
+    """Latency, tokens and error rate for one unit-run.
+
+    Skipped when the unit is itself operational, which would score it twice,
+    and when there are no calls, because an empty conversation has no timing
+    to report and a zero would read as an instant answer.
+    """
+    if unit.family == "operational" or not calls:
         return []
-    return scorer.score(unit, list(calls), context)
+    try:
+        scorer = registry.get("operational")
+    except KeyError:
+        return []
+    return list(scorer.score(unit, list(calls), context))
 
 
 def _looks_like_refusal(text: str) -> bool:

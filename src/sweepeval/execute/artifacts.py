@@ -15,11 +15,9 @@ artifact saying so.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 from sweepeval.execute.planner import SweepPlan
@@ -27,6 +25,7 @@ from sweepeval.schema.comparability import Comparability, KeyMismatch, compare_k
 from sweepeval.schema.hashing import hash_obj
 from sweepeval.schema.unit import Unit
 from sweepeval.schema.versions import SCHEMA_MAJOR, SUITE_VERSION, TOOL_VERSION
+from sweepeval.store.json_io import read_json, write_json
 
 __all__ = [
     "PlanDocument",
@@ -270,22 +269,3 @@ def verify_resume(
 
 def _short(value: str) -> str:
     return f"{value[:12]}…" if len(value) > 14 else (value or "(absent)")
-
-
-def write_json(path: Path, payload: Any) -> None:
-    """Write a metadata artifact readably and deterministically."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
-
-
-def read_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        loaded = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {}
-    return loaded if isinstance(loaded, dict) else {}

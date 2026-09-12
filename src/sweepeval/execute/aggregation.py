@@ -47,6 +47,15 @@ class ConfigAggregate:
     """Per-metric cluster values, kept because the paired test needs the
     matched blocks, not the summary (§13.3)."""
 
+    strata: dict[str, dict[str, str]] = field(default_factory=dict)
+    """Per-metric stratum labels, carried through for the same reason.
+
+    Retention resamples within depth; an unstratified resample empties a depth
+    in a few percent of replicates and the trapezoid is undefined there
+    (§13.3). Dropping the labels after aggregation would silently unstratify
+    every paired comparison downstream.
+    """
+
     retention_curve: dict[int, float] = field(default_factory=dict)
     retention_weights: dict[int, float] = field(default_factory=dict)
     retention_depth_at_floor: int | None = None
@@ -95,6 +104,7 @@ def _context(
         return
 
     out.clusters["fact_recall"] = dict(table.values)
+    out.strata["fact_recall"] = dict(table.strata)
     # Stratified: an unstratified resample can empty a depth, and the
     # trapezoid is undefined there (§13.3).
     out.metrics["fact_recall"] = aggregate_metric(
@@ -110,6 +120,7 @@ def _context(
     # The AUC resamples conversations, so it reuses fact_recall's clusters and
     # reports the depth-weighted quantity.
     out.clusters["context_retention_auc"] = dict(table.values)
+    out.strata["context_retention_auc"] = dict(table.strata)
     out.metrics["context_retention_auc"] = aggregate_metric(
         table, seed=seed, indicative=indicative
     ).model_copy(update={"point": auc})

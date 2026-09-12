@@ -23,7 +23,7 @@ Three things this module refuses to do, each because an earlier revision did:
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -59,6 +59,7 @@ from sweepeval.execute.authz import (
 from sweepeval.execute.budget import BudgetCap, Estimate, estimate_run
 from sweepeval.execute.cache_detect import CacheVerdict, detect_cache, flag_affected
 from sweepeval.execute.cost import CostAccounting, Pricing, account
+from sweepeval.execute.hard_fail import HardFailReport, classify_hard_fails
 from sweepeval.execute.planner import CAP_BY_PROFILE, ConfigSpec, SweepPlan, plan_sweep
 from sweepeval.execute.runner import RunPlan, UnitOutcome, execute_config
 from sweepeval.http.client import TransportClient
@@ -105,6 +106,7 @@ class ConfigResult:
     aggregate: ConfigAggregate | None = None
     cache: CacheVerdict = field(default_factory=CacheVerdict)
     cost: CostAccounting | None = None
+    hard_fails: HardFailReport = field(default_factory=HardFailReport)
     requests: int = 0
 
     @property
@@ -126,6 +128,17 @@ class ConfigResult:
     @property
     def clusters(self) -> dict[str, dict[str, float]]:
         return dict(self.aggregate.clusters) if self.aggregate else {}
+
+    @property
+    def strata(self) -> dict[str, dict[str, str]]:
+        return dict(self.aggregate.strata) if self.aggregate else {}
+
+    @property
+    def coverage(self) -> dict[str, tuple[int, int]]:
+        """``family -> (scored, attempted)``, for §14.5's parity check."""
+        from sweepeval.rank.coverage import count_coverage
+
+        return count_coverage(self.observations)
 
 
 @dataclass
@@ -151,6 +164,11 @@ class SweepResult:
     skipped: list[tuple[str, str]] = field(default_factory=list)
     assumptions: list[tuple[str, str, str]] = field(default_factory=list)
     sampling: SamplingReport = field(default_factory=SamplingReport)
+    determinism_scope: dict[str, str] = field(default_factory=dict)
+    """Which config each row's ``target_determinism_at_temp0`` was measured on
+    (§14.2). A row pointing at itself measured its own; a row pointing
+    elsewhere inherited its (model, system_prompt) sibling's temp=0 figure."""
+
     resume: ResumeVerdict | None = None
     stop_reason: str = ""
     store: Store | None = None
@@ -451,6 +469,8 @@ async def asweep_target(
             )
             spent += row.requests
             result.configs.append(row)
+
+        _share_determinism(result, _determinism_sharing(plan))
     finally:
         if owned:
             await http.aclose()
@@ -458,6 +478,58 @@ async def asweep_target(
     _collect_skips(result)
     _collect_assumptions(result)
     return result
+
+
+def _share_determinism(result: SweepResult, sharing: Mapping[str, str]) -> None:
+    """Apply §14.2: temp=0 determinism is shared, not re-measured per row.
+
+    Measured at each config's own settings, ``target_determinism_at_temp0``
+    would be ~1.0 for every temp=0 config and ~0 for every temp=1.0 config by
+    construction — a manufactured win on a metric that merely restates the
+    row's own label, and every temp=0 config would be non-dominated for free.
+
+    Sharing relocates the structure rather than removing it: the objective
+    takes one value per (model, system_prompt) pair and is exactly tied within
+    each temperature triple. A tie does not block domination the way a
+    manufactured win does, which is the whole point.
+
+    ``config_repeatability`` is deliberately left alone. It is the
+    production-truth number at the row's own settings, and it is reported
+    beside the shared one.
+    """
+    metric = "target_determinism_at_temp0"
+    rows = {row.config_id: row for row in result.configs}
+
+    for config_id, owner_id in sorted(sharing.items()):
+        row = rows.get(config_id)
+        if row is None or row.aggregate is None:
+            continue
+        if owner_id == config_id:
+            result.determinism_scope[config_id] = config_id
+            continue
+
+        owner = rows.get(owner_id)
+        if owner is None or owner.aggregate is None:
+            # The owner never ran — the budget cap stopped before it. Keep the
+            # row's own measurement rather than dropping the objective, and
+            # say whose it is, because a shared number attributed to a config
+            # that was never executed is worse than an honest self-measurement.
+            result.determinism_scope[config_id] = f"{config_id} (own settings)"
+            continue
+
+        shared = owner.aggregate.metrics.get(metric)
+        if shared is None:
+            result.determinism_scope[config_id] = f"{config_id} (own settings)"
+            continue
+
+        row.aggregate.metrics[metric] = shared
+        # The clusters go with it: the paired test resamples them, and leaving
+        # the row's own blocks beside a borrowed point estimate would compare
+        # one config's number against another config's variance.
+        row.aggregate.clusters[metric] = dict(
+            owner.aggregate.clusters.get(metric, {})
+        )
+        result.determinism_scope[config_id] = owner_id
 
 
 async def _run_one(
@@ -498,6 +570,9 @@ async def _run_one(
     row.requests = len(row.calls)
     row.cache = detect_cache(row.calls, config_id=config.config_id)
     row.cost = account(row.calls, pricing=pricing)
+    row.hard_fails = classify_hard_fails(
+        row.observations, config_id=config.config_id
+    )
 
     aggregate = aggregate_config(
         row.observations,

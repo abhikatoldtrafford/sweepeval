@@ -65,13 +65,53 @@ def render_sweep(result: Any, console: Console | None = None) -> None:
     if result.status.value in {"DECLINED", "REFUSED"}:
         return
 
+    _profile_note(console, result)
     _axes(console, result)
     _matrix(console, result)
+    _coverage(console, result)
     _cache(console, result)
     _cost(console, result)
     _not_run(console, result)
     _skipped(console, result)
     _assumptions(console, result)
+
+
+def _profile_note(console: Console, result: Any) -> None:
+    """§10.2, §15: `quick` is fast because it is smaller, and it says so.
+
+    The wording matters. An earlier 16-unit `quick` genuinely produced no
+    valid intervals; the 40-unit one produces valid intervals that are wide.
+    Writing the first when the second is true tells the user their numbers are
+    unusable when they are merely imprecise.
+    """
+    if result.profile != "quick":
+        return
+    console.print(
+        "[yellow]profile quick[/yellow]: intervals are valid but wide, so few "
+        "pairs will separate.\nThese results are [bold]not gate-eligible[/bold] "
+        "— use --profile standard for decisions or gating.\n"
+    )
+
+
+def _coverage(console: Console, result: Any) -> None:
+    """§14.5, §11.8: silently-excluded trials have to be visible."""
+    rows = [(row.config_id, row.coverage) for row in result.configs]
+    interesting = [
+        (config_id, coverage)
+        for config_id, coverage in rows
+        if any(s < a for s, a in coverage.values())
+    ]
+    if not interesting:
+        return
+
+    console.print("\n[bold]coverage[/bold] (scored / attempted)")
+    for config_id, coverage in interesting:
+        parts = [
+            f"{family} {scored}/{attempted}"
+            for family, (scored, attempted) in sorted(coverage.items())
+            if attempted
+        ]
+        console.print(f"  {config_id:10s} {'  '.join(parts)}")
 
 
 def _target(result: Any) -> str:

@@ -31,6 +31,8 @@ __all__ = [
     "EXCLUDE_THRESHOLD",
     "CoverageMatrix",
     "FamilyCoverage",
+    "count_coverage",
+    "coverage_from_counts",
     "coverage_matrix",
 ]
 
@@ -93,6 +95,45 @@ class CoverageMatrix:
             if gap > worst_gap:
                 worst_family, worst_gap = family, gap
         return worst_family, worst_gap
+
+
+def coverage_from_counts(
+    counts: Mapping[str, Mapping[str, tuple[int, int]]],
+    families: Sequence[str] = ("security", "guardrail", "determinism", "context"),
+) -> CoverageMatrix:
+    """Build the matrix from stored ``(scored, attempted)`` pairs.
+
+    A stored run has aggregates, not observations. Re-reading
+    ``observations.jsonl`` to recount would make offline reporting depend on
+    the full log, so the counts are summarised into ``aggregates.json`` and
+    read back here — the same numbers, without the log.
+    """
+    matrix = CoverageMatrix(families=tuple(families))
+    for config_id, per_family in counts.items():
+        for family in families:
+            scored, attempted = per_family.get(family, (0, 0))
+            matrix.rows[(config_id, family)] = FamilyCoverage(
+                config_id=config_id,
+                family=family,
+                scored=int(scored),
+                attempted=int(attempted),
+            )
+    return matrix
+
+
+def count_coverage(
+    observations: Iterable[Observation],
+    families: Sequence[str] = ("security", "guardrail", "determinism", "context"),
+) -> dict[str, tuple[int, int]]:
+    """``family -> (scored, attempted)`` for one config."""
+    counts: dict[str, list[int]] = {f: [0, 0] for f in families}
+    for observation in observations:
+        if observation.family not in counts:
+            continue
+        counts[observation.family][1] += 1
+        if observation.verdict not in (Verdict.UNSCORABLE, Verdict.SKIPPED):
+            counts[observation.family][0] += 1
+    return {f: (v[0], v[1]) for f, v in counts.items()}
 
 
 def coverage_matrix(
