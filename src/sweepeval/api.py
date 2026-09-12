@@ -67,7 +67,9 @@ def discover(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
 
 def evaluate(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
     """Score a single configuration (§12.1 empty-sweep path)."""
-    raise _pending("evaluate")
+    import asyncio
+
+    return asyncio.run(aevaluate(url, key=key, **kwargs))
 
 
 def sweep(config: Path | str | None = None, **kwargs: Any) -> Any:
@@ -126,7 +128,10 @@ async def adiscover(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
 
 
 async def aevaluate(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
-    raise _pending("evaluate")
+    """Async twin of :func:`evaluate`."""
+    from sweepeval.execute.evaluate import aevaluate_target
+
+    return await aevaluate_target(url, key=key, **kwargs)
 
 
 async def asweep(config: Path | str | None = None, **kwargs: Any) -> Any:

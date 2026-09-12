@@ -1,0 +1,284 @@
+"""The execution runner (spec §12.5, §11.7).
+
+Executes a frozen probe set against one configuration, N times, writing calls
+and observations as it goes.
+
+Checkpointing is per ``(config_id, unit_id, run_idx)``, not per config. A
+standard config is roughly 490 calls; losing all of it because a crash landed
+at 99% is unacceptable on work the user paid for. Aggregation then reads only
+completed unit-runs, which is how orphan rows are excluded without ever
+rewriting the append-only log (I7).
+
+Turns are **scripted**. A turn whose content depended on the target's previous
+answer would unfreeze the probe set and violate I4.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any
+
+from sweepeval.capabilities.detect import CapabilityReport
+from sweepeval.capabilities.normalise import normalise
+from sweepeval.discovery.extract import extract_at
+from sweepeval.discovery.ladder import LadderResult, body_for_turns
+from sweepeval.http.client import TransportClient
+from sweepeval.schema.call import Call, ErrorClass
+from sweepeval.schema.observation import Observation
+from sweepeval.schema.unit import Unit
+from sweepeval.scorers import ScoreContext, ScorerRegistry
+from sweepeval.scorers.canary import REFUSAL_CUES, canary_for
+from sweepeval.store.run import Store
+
+__all__ = ["MAX_CONVERSATION_RESTARTS", "RunPlan", "UnitOutcome", "execute_config"]
+
+MAX_CONVERSATION_RESTARTS = 2
+"""§11.7. A mid-conversation failure restarts from turn 1 — resuming would
+diverge state on a server session — but not forever."""
+
+
+@dataclass
+class RunPlan:
+    """Everything one config's execution needs, frozen before it starts."""
+
+    config_id: str
+    units: tuple[Unit, ...]
+    runs: int
+    master_seed: str
+    params: dict[str, Any] = field(default_factory=dict)
+    layer: str = "generic"
+
+    def canary_table(self) -> dict[tuple[str, int, str], str]:
+        """Frozen canary values (§6.1, §11.2).
+
+        Identical across configs within a run — which is what I4 requires —
+        and different between runs, so a cached response cannot pass by
+        replaying an old canary.
+        """
+        table: dict[tuple[str, int, str], str] = {}
+        for unit in self.units:
+            for run_idx in range(self.runs):
+                for name in unit.canary_names:
+                    table[(unit.unit_id, run_idx, name)] = canary_for(
+                        self.master_seed, unit.unit_id, run_idx, name
+                    )
+        return table
+
+
+@dataclass
+class UnitOutcome:
+    unit: Unit
+    run_idx: int
+    calls: list[Call]
+    observations: list[Observation]
+    text: str
+    restarts: int = 0
+    failed: bool = False
+    reason: str = ""
+
+
+async def execute_config(
+    client: TransportClient,
+    plan: RunPlan,
+    ladder: LadderResult,
+    *,
+    text_path: str | None,
+    store: Store,
+    registry: ScorerRegistry,
+    capabilities: CapabilityReport | None = None,
+    key: str | None = None,
+    resume: bool = True,
+) -> list[UnitOutcome]:
+    """Run every unit N times, appending as it goes."""
+    from sweepeval.discovery.auth import apply_auth
+
+    headers, params = apply_auth(ladder.auth, key)
+    state = store.state_for(plan.config_id)
+    canaries = plan.canary_table()
+    outcomes: list[UnitOutcome] = []
+
+    for unit in plan.units:
+        for run_idx in range(plan.runs):
+            if resume and state.is_complete(plan.config_id, unit.unit_id, run_idx):
+                continue
+
+            outcome = await _run_unit(
+                client, plan, ladder, unit, run_idx, canaries,
+                headers=headers, params=params, text_path=text_path,
+                registry=registry,
+            )
+
+            store.calls.append_many(outcome.calls)
+            store.observations.append_many(outcome.observations)
+            if outcome.text:
+                store.blobs.put_text(outcome.text)
+
+            # Marked complete only after everything is durably appended, so a
+            # crash between the two leaves orphan rows that aggregation skips
+            # rather than a checkpoint that claims work which was never stored.
+            state.mark_complete(plan.config_id, unit.unit_id, run_idx)
+            state.record_budget(
+                requests=len(outcome.calls),
+                tokens=sum(c.tokens.out or 0 for c in outcome.calls),
+            )
+            outcomes.append(outcome)
+
+    return outcomes
+
+
+async def _run_unit(
+    client: TransportClient,
+    plan: RunPlan,
+    ladder: LadderResult,
+    unit: Unit,
+    run_idx: int,
+    canaries: Mapping[tuple[str, int, str], str],
+    *,
+    headers: dict[str, str],
+    params: dict[str, Any],
+    text_path: str | None,
+    registry: ScorerRegistry,
+) -> UnitOutcome:
+    unit_canaries = {
+        name: canaries[(unit.unit_id, run_idx, name)] for name in unit.canary_names
+    }
+
+    calls: list[Call] = []
+    text = ""
+    restarts = 0
+    failed = False
+    reason = ""
+
+    while True:
+        calls, text, ok = await _play_conversation(
+            client, plan, ladder, unit, run_idx, unit_canaries,
+            headers=headers, params=params, text_path=text_path,
+        )
+        if ok:
+            break
+        restarts += 1
+        if restarts > MAX_CONVERSATION_RESTARTS:
+            failed = True
+            reason = "conversation_failed"
+            break
+
+    observations = _score(
+        unit, calls, text, unit_canaries, plan, run_idx, registry,
+        failed=failed, reason=reason,
+    )
+    return UnitOutcome(
+        unit=unit, run_idx=run_idx, calls=calls, observations=observations,
+        text=text, restarts=restarts, failed=failed, reason=reason,
+    )
+
+
+async def _play_conversation(
+    client: TransportClient,
+    plan: RunPlan,
+    ladder: LadderResult,
+    unit: Unit,
+    run_idx: int,
+    unit_canaries: Mapping[str, str],
+    *,
+    headers: dict[str, str],
+    params: dict[str, Any],
+    text_path: str | None,
+) -> tuple[list[Call], str, bool]:
+    """Play a unit's scripted turns by stateless replay (§9.2)."""
+    history: list[tuple[str, str]] = []
+    calls: list[Call] = []
+    text = ""
+
+    for turn_idx, turn in enumerate(unit.turns):
+        rendered = _render(turn.text, unit_canaries)
+        history.append((turn.role, rendered))
+
+        body = body_for_turns(ladder, list(history), **plan.params)
+        results = await client.call(
+            ladder.path, body,
+            config_id=plan.config_id, unit_id=unit.unit_id,
+            run_idx=run_idx, turn_idx=turn_idx,
+            headers=headers, params=params,
+        )
+        calls.extend(r.call for r in results)
+
+        final = results[-1]
+        if final.call.response.error_class is not ErrorClass.ok:
+            # §11.7: restart the conversation rather than resume mid-way,
+            # which would diverge state on a server session.
+            return calls, text, False
+
+        text = _extract(final.raw_body, text_path)
+        history.append(("assistant", text))
+
+    return calls, text, True
+
+
+def _render(text: str, canaries: Mapping[str, str]) -> str:
+    out = text
+    for name, value in canaries.items():
+        out = out.replace(f"{{{{canary:{name}}}}}", value)
+        if name == "primary":
+            out = out.replace("{{canary}}", value)
+    return out
+
+
+def _extract(raw: bytes, text_path: str | None) -> str:
+    import json
+
+    if not raw or not text_path:
+        return ""
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return ""
+    return extract_at(payload, text_path) or ""
+
+
+def _score(
+    unit: Unit,
+    calls: Sequence[Call],
+    text: str,
+    unit_canaries: Mapping[str, str],
+    plan: RunPlan,
+    run_idx: int,
+    registry: ScorerRegistry,
+    *,
+    failed: bool,
+    reason: str,
+) -> list[Observation]:
+    from sweepeval.schema.observation import Verdict
+
+    context = ScoreContext(
+        run_id=calls[0].run_id if calls else "",
+        config_id=plan.config_id,
+        run_idx=run_idx,
+        text=text,
+        canaries=dict(unit_canaries),
+        refusal_detected=_looks_like_refusal(text),
+        layer=plan.layer,
+        ts=datetime.now(timezone.utc).isoformat(),
+    )
+
+    if failed:
+        # I5: a failed conversation is UNSCORABLE with a reason, never a zero.
+        return [
+            context.observation(
+                scorer=unit.family, version=0, metric=f"{unit.family}_pass_rate",
+                family=unit.family, verdict=Verdict.UNSCORABLE,
+                reason=reason, unit=unit,
+            )
+        ]
+
+    try:
+        scorer = registry.get(unit.family)
+    except KeyError:
+        return []
+    return scorer.score(unit, list(calls), context)
+
+
+def _looks_like_refusal(text: str) -> bool:
+    lowered = normalise(text)
+    return any(cue in lowered for cue in REFUSAL_CUES)

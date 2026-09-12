@@ -39,7 +39,7 @@ from sweepeval.discovery.shapes import (
 )
 from sweepeval.discovery.sniff import SniffResult, sniff
 
-__all__ = ["LadderResult", "climb"]
+__all__ = ["LadderResult", "body_for_turns", "climb"]
 
 
 @dataclass
@@ -130,6 +130,45 @@ async def climb(
             else None
         ),
     )
+
+
+def body_for_turns(
+    ladder: LadderResult, turns: list[tuple[str, str]], **params: Any
+) -> dict[str, Any]:
+    """Build a request body for a conversation, honouring mutations (§8.2).
+
+    A shape that only reached a 200 through mutation cannot be rebuilt from the
+    shape alone: the prompt lives in a field the shape does not know about — a
+    renamed or added one — and ``shape.build_multi_turn`` would put the text
+    somewhere the target never reads while leaving the old text in place. That
+    produces a 200 carrying nothing, which is worse than a failure because it
+    looks like success.
+
+    With no mutations the shape builds the body directly, history and all.
+    With mutations the conversation is flattened into whichever field carried
+    the inert prompt, because a mutated body has no history slot to fill.
+    """
+    if not ladder.mutations:
+        return ladder.shape.build_multi_turn(turns, **params)
+
+    flattened = "\n".join(f"{role}: {text}" for role, text in turns)
+    if "__raw__" in ladder.body:
+        return {"__raw__": flattened}
+
+    substituted = _substitute_prompt(ladder.body, INERT_PROMPT, flattened)
+    if substituted != ladder.body:
+        return substituted
+    return ladder.shape.build_multi_turn(turns, **params)
+
+
+def _substitute_prompt(node: Any, old: str, new: str) -> Any:
+    if isinstance(node, str):
+        return new if old in node else node
+    if isinstance(node, dict):
+        return {k: _substitute_prompt(v, old, new) for k, v in node.items()}
+    if isinstance(node, list):
+        return [_substitute_prompt(v, old, new) for v in node]
+    return node
 
 
 def _candidate_paths(shape: Shape, sniffed: SniffResult) -> tuple[str, ...]:
