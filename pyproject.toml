@@ -43,6 +43,7 @@ dev = [
   "ruff>=0.4",
   "mypy>=1.10",
   "types-PyYAML>=6.0",
+  "uvicorn>=0.30",
 ]
 
 [project.urls]
@@ -63,6 +64,7 @@ packages = ["src/sweepeval"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --strict-markers"
+asyncio_mode = "auto"
 markers = [
   "simulation: Monte Carlo coverage checks; slow, gate M6 (spec §13.5)",
 ]

@@ -1,0 +1,10 @@
+name: echoes_the_prompt
+description: >
+  Mirrors the request text back in echo and request_text. The echo is long,
+  varies perfectly with input, and appears in every response, so it outscores
+  the real answer on every heuristic the blind walk uses. Rev-2 fixture for the
+  nonce oracle (spec 8.5).
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+echoes_prompt: true

@@ -1,0 +1,7 @@
+name: base_url_404s
+description: >
+  Only answers on a suffix path, so the bare URL 404s. Drives stage C path
+  completion (spec 8.1).
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none

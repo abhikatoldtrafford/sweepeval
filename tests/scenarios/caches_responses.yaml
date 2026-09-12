@@ -1,0 +1,9 @@
+name: caches_responses
+description: >
+  Returns a cached response for a repeated prompt, falsifying determinism and
+  deflating latency (spec 12.7).
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+cache_responses: true
+temperature_effect: false

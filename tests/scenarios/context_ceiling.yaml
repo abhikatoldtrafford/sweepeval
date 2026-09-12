@@ -1,0 +1,6 @@
+name: context_ceiling
+description: 400s above 2000 input characters. Exercises the ceiling binary search.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+max_input_chars: 2000

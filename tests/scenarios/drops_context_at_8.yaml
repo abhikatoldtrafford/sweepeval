@@ -1,0 +1,6 @@
+name: drops_context_at_8
+description: Forgets anything beyond turn 8. Exercises the retention decay curve.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+context_drop_depth: 8

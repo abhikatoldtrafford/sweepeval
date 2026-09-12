@@ -1,0 +1,7 @@
+name: ratelimit_storm
+description: 429s after 5 requests with Retry-After. Exercises backoff.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+rate_limit_after: 5
+retry_after_s: 1.0

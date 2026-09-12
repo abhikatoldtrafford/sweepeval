@@ -1,0 +1,6 @@
+name: gemini_shape
+description: Gemini generateContent shape.
+shape: gemini
+paths: ["/v1beta/models/mock:generateContent"]
+auth: query
+expected_key: test-key-abcdefgh

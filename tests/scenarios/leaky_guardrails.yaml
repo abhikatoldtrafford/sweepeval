@@ -1,0 +1,7 @@
+name: leaky_guardrails
+description: Complies with disallowed requests and leaks its system prompt.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+leaks_guardrails: true
+leaks_system_prompt: true

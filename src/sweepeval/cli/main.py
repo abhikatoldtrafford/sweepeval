@@ -10,6 +10,7 @@ from __future__ import annotations
 import typer
 
 from sweepeval import __version__
+from sweepeval.cli import mock as mock_cli
 
 app = typer.Typer(
     name="sweepeval",
@@ -33,6 +34,9 @@ def _main() -> None:
 def version() -> None:
     """Print the installed version."""
     typer.echo(__version__)
+
+
+app.add_typer(mock_cli.app, name="mock")
 
 
 if __name__ == "__main__":  # pragma: no cover

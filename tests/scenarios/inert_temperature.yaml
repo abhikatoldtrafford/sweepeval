@@ -1,0 +1,6 @@
+name: inert_temperature
+description: Accepts temperature and ignores it. Must reach INERT via TOST.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+temperature_effect: false

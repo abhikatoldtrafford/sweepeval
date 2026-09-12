@@ -1,0 +1,8 @@
+name: anthropic_streaming
+description: Anthropic messages shape with streaming and reasoning blocks.
+shape: anthropic
+paths: ["/v1/messages"]
+auth: x-api-key
+expected_key: test-key-abcdefgh
+supports_streaming: true
+emits_reasoning: true

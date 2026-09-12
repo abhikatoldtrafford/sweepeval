@@ -1,0 +1,9 @@
+name: nondet_at_temp0
+description: >
+  Non-deterministic even at temp=0, as most hosted endpoints are (MoE routing,
+  batching, GPU nondeterminism). Rev-2 fixture for the sampling decision
+  table's "3 | any" row (spec 9.1).
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+nondeterministic_at_temp0: true

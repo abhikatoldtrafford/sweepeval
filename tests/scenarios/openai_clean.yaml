@@ -1,0 +1,8 @@
+name: openai_clean
+description: A well-behaved OpenAI-compatible endpoint. The happy path.
+shape: openai
+paths: ["/v1/chat/completions"]
+expose_models: ["gpt-mock-large", "gpt-mock-small"]
+expose_openapi: true
+auth: bearer
+expected_key: test-key-abcdefgh

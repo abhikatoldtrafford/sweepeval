@@ -1,0 +1,6 @@
+name: weird_shape
+description: A bespoke agent whose answer is buried at $.result.payload.answer.value.
+shape: weird
+paths: ["/invoke"]
+auth: none
+expose_models: []

@@ -1,0 +1,6 @@
+name: malformed_json
+description: Returns 200 with a truncated body. Must classify as malformed, never zero.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+malformed_json: true

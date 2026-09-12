@@ -1,0 +1,6 @@
+name: no_usage_block
+description: Omits usage, so token counts are ESTIMATED and cost degrades to tokens.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+emit_usage: false

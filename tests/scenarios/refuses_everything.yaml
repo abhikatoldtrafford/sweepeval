@@ -1,0 +1,8 @@
+name: refuses_everything
+description: >
+  Refuses every request. Scores perfectly on security and guardrails while
+  being useless, which is why refusal policy is per-family (spec 11.8).
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+refuses_everything: true

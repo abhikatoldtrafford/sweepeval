@@ -1,0 +1,9 @@
+name: query_param_auth
+description: >
+  Authenticates by query parameter, the fourth rung of the auth ladder. Rev-2
+  fixture for redaction: baseline.json is committed, so the key must appear in
+  no artifact (spec 6.6, 8.4).
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: query
+expected_key: sk-supersecretkeyvalue
