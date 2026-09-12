@@ -7,15 +7,14 @@ name: release
 # a release is the one build where "it passed on main" is not good enough,
 # because what ships is built from this checkout, not from that one.
 
+# A manual run is inherently a dry run: `verify` and `build` are unconditional,
+# and both publish jobs are gated on a `v*` tag. There is deliberately no
+# `dry_run` input -- a knob nothing reads is worse than no knob, because
+# setting it to false would look like consent to publish and would not be.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "Build and check, but publish nothing"
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -47,6 +46,28 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: the tag must match the version in pyproject.toml
+        # PyPI accepts a version exactly once, ever. Tagging v0.1.0 while
+        # pyproject still says 0.1.0.dev0 would publish the dev artifact under
+        # a release tag, and there is no way to take that back -- only to
+        # burn the version number and try again.
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          python - <<'PY'
+          import os, sys, tomllib, pathlib
+          version = tomllib.loads(
+              pathlib.Path("pyproject.toml").read_text(encoding="utf-8")
+          )["project"]["version"]
+          tag = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          if tag != version:
+              sys.exit(
+                  f"tag {tag!r} does not match pyproject version {version!r}. "
+                  "Bump the version, commit, and re-tag."
+              )
+          print(f"tag and version agree: {version}")
+          PY
+
       - run: pip install build twine
       - run: python -m build
       - run: twine check dist/*
