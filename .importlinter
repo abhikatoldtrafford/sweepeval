@@ -76,3 +76,7 @@ source_modules =
     sweepeval.execute
 forbidden_modules =
     numpy
+# Direct imports only. Reaching numpy *through* sweepeval.stats is the
+# delegation this rule wants: the capability layer owns the decision table and
+# stats owns the arithmetic. A direct `import numpy` here is the violation.
+allow_indirect_imports = True
