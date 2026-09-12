@@ -206,7 +206,7 @@ def plan_sweep(
         axes[name] = list(values)
         rejected = [(a, r) for a, r in rejected if a != name]
 
-    axes, steps = _shrink(axes, limit)
+    axes, steps = _shrink(axes, limit, frozenset(declared_axes or {}))
     configs = _cross_product(axes)
     if len(configs) > limit:
         steps.append(f"truncate to the cap ({len(configs)} -> {limit} configs)")
@@ -246,8 +246,22 @@ def _size(axes: dict[str, list[Any]]) -> int:
     return total
 
 
-def _shrink(axes: dict[str, list[Any]], cap: int) -> tuple[dict[str, list[Any]], list[str]]:
-    """Apply the fixed ladder until the cross product fits (D22)."""
+def _shrink(
+    axes: dict[str, list[Any]],
+    cap: int,
+    protected: frozenset[str] = frozenset(),
+) -> tuple[dict[str, list[Any]], list[str]]:
+    """Apply the fixed ladder until the cross product fits (D22).
+
+    ``protected`` names axes the user declared. The ladder shrinks discovered
+    axes first and touches a declared one only when nothing else is left.
+
+    That distinction is not cosmetic. Declaring ``model: [gpt-4o-mini,
+    gpt-4.1-mini]`` against OpenAI and getting a sweep with no model axis --
+    because "cap models" fired on the one axis the user had asked for -- is
+    the tool overruling an explicit instruction with a default heuristic, and
+    the printed ladder made it look like a considered decision.
+    """
     axes = {k: list(v) for k, v in axes.items()}
     steps: list[str] = []
 
@@ -255,6 +269,10 @@ def _shrink(axes: dict[str, list[Any]], cap: int) -> tuple[dict[str, list[Any]],
         if _size(axes) <= cap:
             break
         before = _size(axes)
+
+        if _touches(step) in protected:
+            steps.append(f"{step}: skipped, that axis was declared in your config")
+            continue
 
         if step == "drop top_p" and "top_p" in axes:
             axes.pop("top_p")
@@ -276,7 +294,45 @@ def _shrink(axes: dict[str, list[Any]], cap: int) -> tuple[dict[str, list[Any]],
         if _size(axes) != before:
             steps.append(f"{step} ({before} -> {_size(axes)} configs)")
 
+    # The fixed ladder trims values; it cannot remove a whole discovered axis.
+    # When a declared axis is protected the remaining discovered ones have to
+    # give way entirely, or truncation would trim the declared axis instead --
+    # which is the thing being protected against.
+    if protected:
+        for axis in _DROP_ORDER:
+            if _size(axes) <= cap:
+                break
+            if axis in protected or axis not in axes:
+                continue
+            before = _size(axes)
+            axes.pop(axis)
+            steps.append(
+                f"drop the whole {axis} axis ({before} -> {_size(axes)} configs), "
+                "so the axis you declared survives"
+            )
+
     return axes, steps
+
+
+_DROP_ORDER: tuple[str, ...] = ("top_p", "system_prompt", "temperature", "model")
+"""Which discovered axis to sacrifice first for a declared one.
+
+Reverse of how much each tells you about a configuration decision: ``top_p``
+is usually redundant with temperature, and ``model`` is the axis most likely
+to separate configs, so it goes last."""
+
+
+def _touches(step: str) -> str:
+    """The axis a ladder step would modify."""
+    if "top_p" in step:
+        return "top_p"
+    if "temperature" in step:
+        return "temperature"
+    if "system_prompt" in step:
+        return "system_prompt"
+    if "model" in step:
+        return "model"
+    return ""
 
 
 def _cross_product(axes: dict[str, list[Any]]) -> tuple[ConfigSpec, ...]:

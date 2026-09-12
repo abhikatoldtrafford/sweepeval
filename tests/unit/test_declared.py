@@ -18,10 +18,26 @@ from sweepeval.execute.declared import load_declared
 from sweepeval.execute.planner import plan_sweep
 
 
+def _write_tmp(payload: dict) -> Path:
+    """A config in a throwaway directory, for tests with no tmp_path."""
+    import tempfile
+
+    path = Path(tempfile.mkdtemp()) / "sweepeval.yaml"
+    path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+    return path
+
+
 def _write(tmp_path: Path, payload: dict) -> Path:
     path = tmp_path / "sweepeval.yaml"
     path.write_text(yaml.safe_dump(payload), encoding="utf-8")
     return path
+
+
+def _sampling(**verdicts: Verdict) -> dict[str, SamplingVerdict]:
+    return {
+        name: SamplingVerdict(parameter=name, verdict=v, tier=2, reason="test")
+        for name, v in verdicts.items()
+    }
 
 
 def _caps(system_prompt: bool = True) -> CapabilityReport:
@@ -243,3 +259,61 @@ def test_the_summary_names_every_override(tmp_path: Path) -> None:
     assert "pricing" in summary
     assert "constraint" in summary
     assert "objectives narrowed" in summary
+
+
+# --- a declared axis survives the shrink ladder ---------------------------
+
+
+def test_the_ladder_does_not_discard_an_axis_the_user_declared() -> None:
+    """Found against OpenAI: declaring two models produced a sweep with no
+    model axis, because "cap models" fired on the one axis that was asked for.
+    The printed ladder made it look like a considered decision."""
+    declared = load_declared(
+        _write_tmp({"axes": {"model": ["gpt-4o-mini", "gpt-4.1-mini"]}})
+    )
+    plan = plan_sweep(
+        _caps(),
+        ["discovered-a", "discovered-b", "discovered-c"],
+        profile="quick",
+        sampling=_sampling(temperature=Verdict.EFFECTIVE),
+        declared_axes=declared.axes,
+    )
+    assert plan.axes["model"] == ["gpt-4o-mini", "gpt-4.1-mini"]
+    assert len(plan.configs) <= 6
+
+
+def test_the_sacrifice_is_disclosed() -> None:
+    """A discovered axis dropped whole is a bigger change than trimming a
+    value, so it is printed like every other ladder step."""
+    declared = load_declared(_write_tmp({"axes": {"model": ["a", "b"]}}))
+    plan = plan_sweep(
+        _caps(), ["x"], profile="quick",
+        sampling=_sampling(temperature=Verdict.EFFECTIVE),
+        declared_axes=declared.axes,
+    )
+    steps = " ".join(plan.shrink_steps)
+    assert "declared in your config" in steps or "so the axis you declared" in steps
+
+
+def test_an_undeclared_sweep_still_uses_the_plain_ladder() -> None:
+    """Protection must not change behaviour when nothing was declared."""
+    plan = plan_sweep(
+        _caps(), ["a", "b", "c"], profile="quick",
+        sampling=_sampling(temperature=Verdict.EFFECTIVE),
+    )
+    assert not any("declared" in s for s in plan.shrink_steps)
+    assert len(plan.configs) <= 6
+
+
+def test_a_declared_axis_bigger_than_the_cap_is_truncated_not_dropped() -> None:
+    """There is nothing left to sacrifice, so the design is trimmed -- but the
+    axis still exists rather than vanishing."""
+    declared = load_declared(
+        _write_tmp({"axes": {"model": [f"m{i}" for i in range(10)]}})
+    )
+    plan = plan_sweep(
+        _caps(system_prompt=False), ["x"], profile="quick",
+        declared_axes=declared.axes,
+    )
+    assert len(plan.configs) == 6
+    assert "model" in plan.axes
