@@ -1,0 +1,202 @@
+"""The objective registry (spec §14.1, §13.6, §11.4, §14.2). I1 and I10 load-bearing.
+
+Data-driven from M0 so that M9's ranking is objective-count-agnostic. If the
+ranker hardcoded six objectives, a plugin metric could never reach the frontier
+and I10 ("adding a scorer, discovery shape, objective or reporter touches no
+runner code") would be false.
+
+**I1** — no *cross-family* composite. Within-family aggregation is legitimate
+but must be declared, so ``weighting`` states it and the reporter reads the
+declaration rather than recomputing it. ``security_pass_rate`` weights all
+eight attack classes equally despite their differing severities; severity
+drives hard-fail classification (§11.2), not weighting.
+
+**The two determinism objectives.** ``target_determinism_at_temp0`` is measured
+at a pinned ``temp=0`` and is a property of the (model, system_prompt) pair,
+not of a full config. ``config_repeatability`` is measured at each config's own
+settings and is registered alongside as a non-default, promotable objective.
+Registering both is what stops a ``temp=1.0`` row from displaying a
+repeatability number taken at ``temp=0`` with nothing beside it to correct the
+impression (§11.4, §14.2).
+"""
+
+from __future__ import annotations
+
+from importlib.metadata import entry_points
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict
+
+__all__ = ["OBJECTIVE_ENTRY_POINT_GROUP", "REGISTRY", "Objective", "ObjectiveRegistry"]
+
+OBJECTIVE_ENTRY_POINT_GROUP = "sweepeval.objectives"
+
+Direction = Literal["maximize", "minimize"]
+MinEffectKind = Literal["absolute", "relative"]
+
+
+class Objective(BaseModel):
+    """One rankable metric."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    display_label: str
+    direction: Direction
+    family: str
+    cluster_key: str
+    """The resampling unit for this objective's paired bootstrap (§13.3)."""
+
+    min_effect: float
+    """Below this difference, configs are treated as equivalent regardless of
+    p-value (§13.6). Statistical significance is not importance."""
+
+    min_effect_kind: MinEffectKind
+    default: bool = False
+    note: str = ""
+    weighting: str = ""
+    """How this metric aggregates within its family, stated for I1."""
+
+
+class ObjectiveRegistry:
+    """Registry of objectives. Plugins add to it; ``rank/`` only reads it."""
+
+    def __init__(self) -> None:
+        self._objectives: dict[str, Objective] = {}
+
+    def register(self, objective: Objective) -> None:
+        if objective.id in self._objectives:
+            raise ValueError(
+                f"objective {objective.id!r} is already registered; "
+                "re-registering would silently change what a frontier axis means"
+            )
+        self._objectives[objective.id] = objective
+
+    def get(self, objective_id: str) -> Objective:
+        try:
+            return self._objectives[objective_id]
+        except KeyError:
+            known = ", ".join(sorted(self._objectives))
+            raise KeyError(f"unknown objective {objective_id!r}; known: {known}") from None
+
+    def all(self) -> tuple[Objective, ...]:
+        return tuple(self._objectives[k] for k in sorted(self._objectives))
+
+    def defaults(self) -> tuple[Objective, ...]:
+        return tuple(o for o in self.all() if o.default)
+
+    def from_entry_points(self) -> None:
+        """Load third-party objectives (I10)."""
+        for entry in entry_points(group=OBJECTIVE_ENTRY_POINT_GROUP):
+            loaded = entry.load()
+            for objective in loaded() if callable(loaded) else loaded:
+                self.register(objective)
+
+
+REGISTRY = ObjectiveRegistry()
+
+# The six defaults of §14.1: one per shipped family, except operational, which
+# contributes latency and cost separately because they trade off against each
+# other.
+for _objective in (
+    Objective(
+        id="security_pass_rate",
+        display_label="Security pass rate",
+        direction="maximize",
+        family="security",
+        cluster_key="security_probe",
+        min_effect=0.02,
+        min_effect_kind="absolute",
+        default=True,
+        weighting="all 8 attack classes weighted equally; severity drives "
+        "hard-fail classification, not weighting (§14.1, I1)",
+    ),
+    Objective(
+        id="guardrail_pass_rate",
+        display_label="Guardrail pass rate",
+        direction="maximize",
+        family="guardrail",
+        cluster_key="guardrail_probe",
+        min_effect=0.02,
+        min_effect_kind="absolute",
+        default=True,
+        weighting="all 5 policy areas and 4 pressure levels weighted equally",
+    ),
+    Objective(
+        id="target_determinism_at_temp0",
+        display_label="Determinism at temp=0",
+        direction="maximize",
+        family="determinism",
+        cluster_key="determinism_base_prompt",
+        min_effect=0.02,
+        min_effect_kind="absolute",
+        default=True,
+        note="A property of the (model, system_prompt) pair, measured at a pinned "
+        "temp=0 and shared across that pair's temperature siblings. It does not "
+        "describe the row's own sampling settings — see config_repeatability for "
+        "that (§11.4, §14.2).",
+        weighting="unweighted mean over base prompts",
+    ),
+    Objective(
+        id="context_retention_auc",
+        display_label="Context retention (AUC)",
+        direction="maximize",
+        family="context",
+        cluster_key="conversation",
+        min_effect=0.02,
+        min_effect_kind="absolute",
+        default=True,
+        note="Normalised trapezoid area over the measured depth ladder. Depth "
+        "spacing sets the weights, which is why profile is a hard comparability "
+        "key (§11.5).",
+        weighting="trapezoid over depths; weights published in the report",
+    ),
+    Objective(
+        id="latency_p95_ms",
+        display_label="Latency p95",
+        direction="minimize",
+        family="operational",
+        cluster_key="probe",
+        min_effect=0.10,
+        min_effect_kind="relative",
+        default=True,
+        note="Coverage of the cluster bootstrap for this objective is validated "
+        "by simulation, not assumed; the fallback is latency_p90_ms (§13.3).",
+        weighting="pooled quantile over calls of resampled probes; retries and "
+        "queue time excluded",
+    ),
+    Objective(
+        id="cost_per_probe",
+        display_label="Cost per probe",
+        direction="minimize",
+        family="operational",
+        cluster_key="probe",
+        min_effect=0.10,
+        min_effect_kind="relative",
+        default=True,
+        note="Degrades to tokens_out_per_probe when no pricing is supplied; that "
+        "is a different quantity, so pricing_source is a hard comparability key "
+        "(§12.4).",
+        weighting="mean over probes",
+    ),
+    # Registered, not default: reported beside the objective above so the
+    # production-truth number is visible without distorting the frontier.
+    Objective(
+        id="config_repeatability",
+        display_label="Repeatability at own settings",
+        direction="maximize",
+        family="determinism",
+        cluster_key="determinism_base_prompt",
+        min_effect=0.02,
+        min_effect_kind="absolute",
+        default=False,
+        note="Byte-match rate at the config's OWN sampling settings — the "
+        "production-truth number. Not a default objective because it is a "
+        "deterministic restatement of the temperature axis: every temp=0 config "
+        "would score ~1.0 and be automatically non-dominated (§11.4).",
+        weighting="unweighted mean over base prompts",
+    ),
+):
+    REGISTRY.register(_objective)
+
+del _objective
