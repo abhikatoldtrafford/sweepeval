@@ -26,13 +26,17 @@ jobs:
         # that 404s on its own nav is worse than no docs site.
         run: mkdocs build --strict
       - uses: actions/upload-pages-artifact@v3
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && vars.PUBLISH_DOCS == 'true'
         with:
           path: site
 
   deploy:
     needs: build
-    if: github.ref == 'refs/heads/main'
+    # Opt-in: publishing needs GitHub Pages enabled on the repository, and a
+    # deploy job that fails for want of a setting turns the docs check red on
+    # every push while the thing it actually checks -- that the site builds --
+    # was fine. Set the PUBLISH_DOCS repository variable to "true" to publish.
+    if: github.ref == 'refs/heads/main' && vars.PUBLISH_DOCS == 'true'
     runs-on: ubuntu-latest
     permissions:
       pages: write
