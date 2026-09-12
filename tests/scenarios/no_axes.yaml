@@ -1,0 +1,11 @@
+name: no_axes
+description: >
+  A custom agent system: one endpoint, no model list, a system role it drops,
+  and a temperature knob that does nothing. Nothing is variable, so a sweep
+  over it is a single-configuration evaluation with a banner (spec D15) --
+  which for a bespoke agent is the modal outcome, not an edge case.
+shape: prompt
+paths: ["/chat"]
+auth: none
+supports_system_prompt: false
+temperature_effect: false

@@ -229,7 +229,11 @@ async def test_a_target_with_no_axes_is_an_evaluation_with_a_banner(
     tmp_path: Path,
 ) -> None:
     """The modal outcome for a custom agent system, not an edge case."""
-    result = await _sweep("weird_shape", tmp_path)
+    # A scenario with genuinely nothing to sweep: no model list, a system role
+    # it drops, an inert temperature. `weird_shape` used to serve here only
+    # because its capability probes were malformed and every capability came
+    # back UNSUPPORTED -- the test was passing for the wrong reason.
+    result = await _sweep("no_axes", tmp_path)
     assert result.single_config
     assert len(result.configs) == 1
     assert result.plan.rejected_axes
