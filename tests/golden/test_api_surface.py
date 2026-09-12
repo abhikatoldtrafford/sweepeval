@@ -168,16 +168,21 @@ def test_async_twins_exist_for_the_io_bound_verbs() -> None:
         assert inspect.iscoroutinefunction(getattr(api, f"a{name}"))
 
 
-def test_unimplemented_verbs_say_which_milestone_they_land_in() -> None:
-    """Verbs whose milestone has not landed name it, rather than failing
-    with an opaque AttributeError or a silent no-op."""
-    with pytest.raises(NotImplementedError, match="M10"):
-        api.demo()
+def test_no_verb_is_still_pending() -> None:
+    """Every v0.1 verb has landed.
+
+    The placeholder mechanism stays in the module for verbs a later version
+    adds, but nothing may reach 0.1 still raising it: a verb that raises
+    ``NotImplementedError`` from a released package is a documented API that
+    does not exist.
+    """
+    assert not api._M, f"still pending: {sorted(api._M)}"
 
 
-def test_landed_verbs_are_implemented() -> None:
-    """A verb whose milestone has landed must no longer raise."""
+def test_every_landed_verb_is_implemented() -> None:
+    """A verb in ``__all__`` must not be a placeholder."""
     import inspect
 
-    for name in ("discover", "evaluate", "sweep", "run", "compare", "report"):
-        assert "raise _pending" not in inspect.getsource(getattr(api, name)), name
+    for name in api.__all__:
+        function = getattr(api, name)
+        assert "raise _pending" not in inspect.getsource(function), name

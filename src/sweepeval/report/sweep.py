@@ -169,19 +169,35 @@ def _matrix(console: Console, result: Any) -> None:
         console.print("[red]no metric produced a value in any configuration[/red]")
         return
 
+    # The config id is the column, and the labels are a legend above it. Six
+    # metric columns of "point [lo, hi] FLAGS" leave a label column narrow
+    # enough that rich truncates every row to the same "tempera… sys=none",
+    # which is worse than useless: the table stops distinguishing the configs
+    # it exists to compare.
+    console.print("[bold]configurations[/bold]")
+    for row in result.configs:
+        console.print(f"  {row.config_id:8s} {row.config.label()}")
+    console.print()
+
     table = Table(
         title="measurements (unranked — the frontier is computed by `rank`)",
         header_style="bold",
     )
-    table.add_column("config")
+    table.add_column("config", no_wrap=True)
     for metric in present:
-        table.add_column(metric.replace("_", " "), justify="right")
+        table.add_column(_short(metric), justify="right")
+
+    # INDICATIVE is a property of the profile, not of an individual number.
+    # Repeating it in all forty-two cells of a quick run buries the flags that
+    # do vary — LOW_N, LOW_COVERAGE, CACHE_SUSPECTED — in noise, so it is
+    # stated once below the table instead.
+    hide = frozenset({Flag.INDICATIVE}) if result.profile == "quick" else frozenset()
 
     for row in result.configs:
-        cells = [row.config.label()]
+        cells = [row.config_id]
         for metric in present:
             value = row.metrics.get(metric)
-            cells.append(_cell(value))
+            cells.append(_cell(value, hide=hide))
         table.add_row(*cells)
     console.print(table)
 
@@ -196,11 +212,28 @@ def _matrix(console: Console, result: Any) -> None:
         )
 
 
-def _cell(value: MetricValue | None) -> str:
+def _short(metric: str) -> str:
+    """Header names that survive six columns of intervals side by side."""
+    return {
+        "security_pass_rate": "security",
+        "guardrail_pass_rate": "guardrail",
+        "context_retention_auc": "retention",
+        "target_determinism_at_temp0": "det@temp0",
+        "config_repeatability": "repeatable",
+        "latency_ms": "latency ms",
+        "error_rate": "error rate",
+        "tokens_out": "tokens out",
+    }.get(metric, metric.replace("_", " "))
+
+
+def _cell(value: MetricValue | None, *, hide: frozenset[Flag] = frozenset()) -> str:
     if value is None:
         return "[dim]—[/dim]"
-    flags = format_flags(value)
-    return f"{format_point(value)} {format_interval(value)}" + (f" {flags}" if flags else "")
+    shown = value.model_copy(update={"flags": tuple(f for f in value.flags if f not in hide)})
+    flags = format_flags(shown)
+    return f"{format_point(value)} {format_interval(value)}" + (
+        f" {flags}" if flags else ""
+    )
 
 
 def _cache(console: Console, result: Any) -> None:

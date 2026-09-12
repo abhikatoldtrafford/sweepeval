@@ -301,12 +301,32 @@ def test_the_heuristic_is_the_one_the_manifest_names() -> None:
 
 
 def test_no_price_table_ships_in_the_repo() -> None:
-    """D8. A stale bundled price is a confidently wrong dollar figure."""
+    """D8. A stale bundled price is a confidently wrong dollar figure.
+
+    The check is for a price *literal*, not for the word "price". Reading a
+    number the user supplied is the supported path; writing one down is not.
+    """
+    import re
+
     src = Path(__file__).resolve().parents[2] / "src" / "sweepeval"
+    literal = re.compile(r"per_mtok\s*[=:]\s*[0-9]")
+    table = re.compile(r"(PRICES|PRICE_TABLE|price_table)")
+
     suspicious = []
-    for path in src.rglob("*.py"):
+    for path in [*src.rglob("*.py"), *src.rglob("*.yaml")]:
         text = path.read_text(encoding="utf-8")
-        for marker in ("per_mtok=", "gpt-4o:", "$0.0", "price_table", "PRICES"):
-            if marker in text and path.name not in {"cost.py"}:
-                suspicious.append(f"{path.name}: {marker}")
+        if literal.search(text):
+            suspicious.append(f"{path.name}: a hardcoded price")
+        if table.search(text):
+            suspicious.append(f"{path.name}: a price table")
     assert not suspicious, suspicious
+
+
+def test_the_price_literal_check_would_catch_one(tmp_path: Path) -> None:
+    """A check you have not seen fail is not a check."""
+    import re
+
+    literal = re.compile(r"per_mtok\s*[=:]\s*[0-9]")
+    assert literal.search('Pricing(input_per_mtok=0.15, output_per_mtok=0.60)')
+    assert literal.search("  input_per_mtok: 2.50")
+    assert not literal.search("input_per_mtok=float(value[\"input_per_mtok\"])")

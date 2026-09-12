@@ -1,0 +1,24 @@
+# The scenario `sweepeval demo` runs against (spec §20, D33).
+#
+# Bundled inside the package, not in tests/, because an installed user has no
+# tests directory. It is a SIMULATED endpoint and the demo says so every time:
+# the mock is never presented as evidence about a real target.
+#
+# Tuned so the demo shows the tool working rather than a flat table. Two
+# models, an honoured system role and a live temperature knob give the planner
+# real axes; leaking guardrails give the frontier a real trade-off to find.
+name: demo
+description: >
+  A simulated OpenAI-compatible endpoint with two models, an honoured system
+  role, a live temperature knob and guardrails that a permissive system prompt
+  can talk it out of.
+shape: openai
+paths: ["/v1/chat/completions"]
+expose_models: ["demo-fast", "demo-strong"]
+expose_openapi: true
+auth: none
+supports_system_prompt: true
+supports_multi_turn: true
+temperature_effect: true
+context_drop_depth: 8
+latency_ms: 0

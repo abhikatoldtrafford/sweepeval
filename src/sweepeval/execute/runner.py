@@ -57,6 +57,15 @@ class RunPlan:
     sweep incomparable by construction.
     """
 
+    headers: dict[str, str] = field(default_factory=dict)
+    """Per-config request headers, from a declared ``headers.*`` axis (§4.1).
+
+    Kept off ``params``, which the shape passes into the request *body*: a
+    routing header sweept as a body field would be sent somewhere the target
+    never reads, and the axis would produce identical configs while looking
+    like it swept something.
+    """
+
     layer: str = "generic"
 
     def canary_table(self) -> dict[tuple[str, int, str], str]:
@@ -104,6 +113,7 @@ async def execute_config(
     from sweepeval.discovery.auth import apply_auth
 
     headers, params = apply_auth(ladder.auth, key)
+    headers = {**headers, **plan.headers}
     state = store.state_for(plan.config_id)
     canaries = plan.canary_table()
     outcomes: list[UnitOutcome] = []

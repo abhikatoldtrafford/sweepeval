@@ -154,6 +154,7 @@ def plan_sweep(
     sampling: dict[str, SamplingVerdict] | None = None,
     sampling_notes: dict[str, str] | None = None,
     cap: int | None = None,
+    declared_axes: dict[str, list[object]] | None = None,
 ) -> SweepPlan:
     """Enumerate configurations from what discovery proved is variable."""
     limit = cap if cap is not None else CAP_BY_PROFILE[profile]
@@ -195,6 +196,15 @@ def plan_sweep(
         axes["temperature"] = list(TEMPERATURES)
     if top_p_swept:
         axes["top_p"] = [0.1, 0.5, 1.0]
+
+    # Declared axes are added last and overwrite a discovered one of the same
+    # name. A user who wrote the axis down has asserted it matters, so it is
+    # swept whether or not the sampling-effect test would have called it
+    # effective -- and the rejection line for it is removed, because it is no
+    # longer rejected.
+    for name, values in (declared_axes or {}).items():
+        axes[name] = list(values)
+        rejected = [(a, r) for a, r in rejected if a != name]
 
     axes, steps = _shrink(axes, limit)
     configs = _cross_product(axes)

@@ -59,6 +59,7 @@ from sweepeval.execute.authz import (
 from sweepeval.execute.budget import BudgetCap, Estimate, estimate_run
 from sweepeval.execute.cache_detect import CacheVerdict, detect_cache, flag_affected
 from sweepeval.execute.cost import CostAccounting, Pricing, account
+from sweepeval.execute.declared import DeclaredConfig
 from sweepeval.execute.hard_fail import HardFailReport, classify_hard_fails
 from sweepeval.execute.planner import CAP_BY_PROFILE, ConfigSpec, SweepPlan, plan_sweep
 from sweepeval.execute.runner import RunPlan, UnitOutcome, execute_config
@@ -164,6 +165,9 @@ class SweepResult:
     skipped: list[tuple[str, str]] = field(default_factory=list)
     assumptions: list[tuple[str, str, str]] = field(default_factory=list)
     sampling: SamplingReport = field(default_factory=SamplingReport)
+    declared: DeclaredConfig | None = None
+    """The user's overrides, when a config was supplied (§8.6)."""
+
     determinism_scope: dict[str, str] = field(default_factory=dict)
     """Which config each row's ``target_determinism_at_temp0`` was measured on
     (§14.2). A row pointing at itself measured its own; a row pointing
@@ -213,6 +217,7 @@ async def asweep_target(
     pricing: Pricing | None = None,
     resume_run_id: str | None = None,
     config_cap: int | None = None,
+    declared: DeclaredConfig | None = None,
     on_progress: Callable[[str], None] | None = None,
 ) -> SweepResult:
     """Discover, plan, sweep and aggregate. Ranking is the caller's.
@@ -308,7 +313,17 @@ async def asweep_target(
             sampling=sampling.verdicts,
             sampling_notes=sampling.not_tested,
             cap=planned_cap,
+            declared_axes=declared.axes if declared else None,
         )
+
+        # A declared extraction path replaces the inferred one. Applied here,
+        # after discovery has run, because the capability detectors need a
+        # path too and correcting it afterwards would leave them looking at
+        # the wrong field.
+        text_path = discovery.extraction.path
+        if declared is not None and declared.text_path:
+            text_path = declared.text_path
+            say(f"extraction path overridden by config: {text_path}")
         say(
             f"{len(plan.configs)} config(s) over axes "
             f"{', '.join(sorted(plan.axes)) or '(none)'}"
@@ -335,7 +350,7 @@ async def asweep_target(
         not_run_families = sorted({t.family for t in corpus.probes} & skipped_families)
 
         master_seed = f"{run_id}:{seed}"
-        comparability = _comparability(discovery, corpus, profile, runs)
+        comparability = _comparability(discovery, corpus, profile, runs, text_path)
 
         # I4: one canary table for the whole sweep. Built once, here, and
         # handed to every config unchanged.
@@ -395,7 +410,7 @@ async def asweep_target(
                     "target_type": discovery.target_type,
                     "shape": discovery.ladder.shape.name,
                     "path": discovery.ladder.path,
-                    "extraction_path": discovery.extraction.path or "",
+                    "extraction_path": text_path or "",
                     "auth": discovery.ladder.auth.name,
                 },
                 authorization=authorization.to_manifest() if authorization else None,
@@ -423,6 +438,7 @@ async def asweep_target(
             comparability=comparability,
             authorization=authorization,
             estimate=estimate,
+            declared=declared,
             families_not_run=tuple(not_run_families),
             sampling=sampling,
             resume=resume,
@@ -460,7 +476,7 @@ async def asweep_target(
                 runs=runs,
                 master_seed=master_seed,
                 ladder=discovery.ladder,
-                text_path=discovery.extraction.path,
+                text_path=text_path,
                 store=store,
                 key=key,
                 seed=seed,
@@ -548,12 +564,25 @@ async def _run_one(
     pricing: Pricing | None,
 ) -> ConfigResult:
     """Execute one configuration and aggregate it."""
+    # A declared ``headers.x-...`` axis is a header, not a body field.
+    headers = {
+        name[len("headers.") :]: str(value)
+        for name, value in config.params.items()
+        if name.startswith("headers.")
+    }
+    params = {
+        name: value
+        for name, value in config.params.items()
+        if not name.startswith("headers.")
+    }
+
     run_plan = RunPlan(
         config_id=config.config_id,
         units=units,
         runs=runs,
         master_seed=master_seed,
-        params=dict(config.params),
+        params=params,
+        headers=headers,
         system_prompt=config.system_prompt,
     )
     outcomes = await execute_config(
@@ -637,7 +666,11 @@ def _determinism_sharing(plan: SweepPlan) -> dict[str, str]:
 
 
 def _comparability(
-    discovery: DiscoveryOutcome, corpus: Corpus, profile: Profile, runs: int
+    discovery: DiscoveryOutcome,
+    corpus: Corpus,
+    profile: Profile,
+    runs: int,
+    text_path: str | None = None,
 ) -> Comparability:
     scorers = {s.family: s.version for s in scorer_registry().all()}
     return Comparability(
@@ -652,7 +685,7 @@ def _comparability(
             profile=profile,
             pricing_source="none",
             scorer_versions=scorers,
-            extraction_path=discovery.extraction.path or "",
+            extraction_path=(text_path or discovery.extraction.path) or "",
         ),
         soft=SoftKeys(n_runs=runs, concurrency=2, tool_version=TOOL_VERSION),
         local=False,

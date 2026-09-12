@@ -1,0 +1,2103 @@
+{
+  "alpha": 0.05,
+  "clusters": [
+    {
+      "members": [
+        "cfg-00",
+        "cfg-01",
+        "cfg-02",
+        "cfg-03",
+        "cfg-04",
+        "cfg-05"
+      ],
+      "spread": {
+        "context_retention_auc": [
+          1.0,
+          1.0
+        ],
+        "cost_per_probe": [
+          12.0,
+          12.65
+        ],
+        "guardrail_pass_rate": [
+          1.0,
+          1.0
+        ],
+        "latency_p95_ms": [
+          0.6279618055234298,
+          0.9927763888476371
+        ],
+        "security_pass_rate": [
+          1.0,
+          1.0
+        ],
+        "target_determinism_at_temp0": [
+          1.0,
+          1.0
+        ]
+      },
+      "wide": [
+        "latency_p95_ms"
+      ]
+    }
+  ],
+  "comparisons": [
+    {
+      "a": "cfg-00",
+      "b": "cfg-01",
+      "concedes": [
+        "latency_p95_ms"
+      ],
+      "dominates": false,
+      "holm_threshold": 0.0020833333333333333,
+      "p_non_inferior": 0.5135,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2000000000000002,
+          "difference": -0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.06780644444031875,
+          "difference": -0.06950000109403232,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.5135,
+          "p_superior": 0.9865
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-00",
+      "b": "cfg-02",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.002631578947368421,
+      "p_non_inferior": 0.0,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2000000000000002,
+          "difference": -0.0,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.06780644444031875,
+          "difference": 0.09033333299157675,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.0,
+          "p_superior": 0.3465
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": [
+        "latency_p95_ms"
+      ]
+    },
+    {
+      "a": "cfg-00",
+      "b": "cfg-03",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.0033333333333333335,
+      "p_non_inferior": 0.141,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2000000000000002,
+          "difference": -0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.06780644444031875,
+          "difference": 0.0028333324735285714,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.141,
+          "p_superior": 0.905
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-00",
+      "b": "cfg-04",
+      "concedes": [
+        "latency_p95_ms"
+      ],
+      "dominates": false,
+      "holm_threshold": 0.005,
+      "p_non_inferior": 0.598,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2000000000000002,
+          "difference": -0.0,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.06780644444031875,
+          "difference": -0.1365000001290657,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.598,
+          "p_superior": 0.9735
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-00",
+      "b": "cfg-05",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.01,
+      "p_non_inferior": 0.3855,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2000000000000002,
+          "difference": -0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.06780644444031875,
+          "difference": -0.03450000015921728,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.3855,
+          "p_superior": 0.923
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-01",
+      "b": "cfg-00",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.001724137931034483,
+      "p_non_inferior": 0.0135,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2650000000000001,
+          "difference": 0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.06871266666899424,
+          "difference": 0.06950000109403232,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.0135,
+          "p_superior": 0.4865
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": [
+        "latency_p95_ms"
+      ]
+    },
+    {
+      "a": "cfg-01",
+      "b": "cfg-02",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.002777777777777778,
+      "p_non_inferior": 0.0,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2650000000000001,
+          "difference": 0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.06871266666899424,
+          "difference": 0.15983333408560907,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.0,
+          "p_superior": 0.19
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": [
+        "latency_p95_ms"
+      ]
+    },
+    {
+      "a": "cfg-01",
+      "b": "cfg-03",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.0035714285714285718,
+      "p_non_inferior": 0.082,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2650000000000001,
+          "difference": -0.0,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.06871266666899424,
+          "difference": 0.07233333356756089,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.082,
+          "p_superior": 0.6035
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": [
+        "latency_p95_ms"
+      ]
+    },
+    {
+      "a": "cfg-01",
+      "b": "cfg-04",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.005555555555555556,
+      "p_non_inferior": 0.4165,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2650000000000001,
+          "difference": 0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.06871266666899424,
+          "difference": -0.0669999990350334,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.4165,
+          "p_superior": 0.667
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-01",
+      "b": "cfg-05",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.0125,
+      "p_non_inferior": 0.185,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2650000000000001,
+          "difference": -0.0,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.06871266666899424,
+          "difference": 0.035000000934815034,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.185,
+          "p_superior": 0.838
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-02",
+      "b": "cfg-00",
+      "concedes": [
+        "latency_p95_ms"
+      ],
+      "dominates": false,
+      "holm_threshold": 0.0017857142857142859,
+      "p_non_inferior": 0.7185,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2000000000000002,
+          "difference": -0.0,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.06279618055234298,
+          "difference": -0.09033333299157675,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.7185,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-02",
+      "b": "cfg-01",
+      "concedes": [
+        "latency_p95_ms"
+      ],
+      "dominates": false,
+      "holm_threshold": 0.002173913043478261,
+      "p_non_inferior": 0.815,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2000000000000002,
+          "difference": -0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.06279618055234298,
+          "difference": -0.15983333408560907,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.815,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-02",
+      "b": "cfg-03",
+      "concedes": [
+        "latency_p95_ms"
+      ],
+      "dominates": false,
+      "holm_threshold": 0.0038461538461538464,
+      "p_non_inferior": 0.628,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2000000000000002,
+          "difference": -0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.06279618055234298,
+          "difference": -0.08750000051804818,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.628,
+          "p_superior": 0.9995
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-02",
+      "b": "cfg-04",
+      "concedes": [
+        "latency_p95_ms"
+      ],
+      "dominates": false,
+      "holm_threshold": 0.00625,
+      "p_non_inferior": 0.776,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2000000000000002,
+          "difference": -0.0,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.06279618055234298,
+          "difference": -0.22683333312064247,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.776,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-02",
+      "b": "cfg-05",
+      "concedes": [
+        "latency_p95_ms"
+      ],
+      "dominates": false,
+      "holm_threshold": 0.016666666666666666,
+      "p_non_inferior": 0.8695,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2000000000000002,
+          "difference": -0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.06279618055234298,
+          "difference": -0.12483333315079403,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.8695,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-03",
+      "b": "cfg-00",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.001851851851851852,
+      "p_non_inferior": 0.095,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2650000000000001,
+          "difference": 0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.07032093055259894,
+          "difference": -0.0028333324735285714,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.095,
+          "p_superior": 0.859
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-03",
+      "b": "cfg-01",
+      "concedes": [
+        "latency_p95_ms"
+      ],
+      "dominates": false,
+      "holm_threshold": 0.002272727272727273,
+      "p_non_inferior": 0.3965,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2650000000000001,
+          "difference": -0.0,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.07032093055259894,
+          "difference": -0.07233333356756089,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.3965,
+          "p_superior": 0.918
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-03",
+      "b": "cfg-02",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.0029411764705882353,
+      "p_non_inferior": 0.0005,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2650000000000001,
+          "difference": 0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.07032093055259894,
+          "difference": 0.08750000051804818,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.0005,
+          "p_superior": 0.429
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": [
+        "latency_p95_ms"
+      ]
+    },
+    {
+      "a": "cfg-03",
+      "b": "cfg-04",
+      "concedes": [
+        "latency_p95_ms"
+      ],
+      "dominates": false,
+      "holm_threshold": 0.0071428571428571435,
+      "p_non_inferior": 0.574,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2650000000000001,
+          "difference": 0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.07032093055259894,
+          "difference": -0.13933333260259428,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.574,
+          "p_superior": 0.9155
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-03",
+      "b": "cfg-05",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.025,
+      "p_non_inferior": 0.3855,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2650000000000001,
+          "difference": -0.0,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.07032093055259894,
+          "difference": -0.03733333263274585,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.3855,
+          "p_superior": 0.8665
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-04",
+      "b": "cfg-00",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.0019230769230769232,
+      "p_non_inferior": 0.008,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2000000000000002,
+          "difference": -0.0,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.09927763888476371,
+          "difference": 0.1365000001290657,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.008,
+          "p_superior": 0.4035
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": [
+        "latency_p95_ms"
+      ]
+    },
+    {
+      "a": "cfg-04",
+      "b": "cfg-01",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.002380952380952381,
+      "p_non_inferior": 0.199,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2000000000000002,
+          "difference": -0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.09927763888476371,
+          "difference": 0.0669999990350334,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.199,
+          "p_superior": 0.585
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-04",
+      "b": "cfg-02",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.003125,
+      "p_non_inferior": 0.0,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2000000000000002,
+          "difference": -0.0,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.09927763888476371,
+          "difference": 0.22683333312064247,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.0,
+          "p_superior": 0.363
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": [
+        "latency_p95_ms"
+      ]
+    },
+    {
+      "a": "cfg-04",
+      "b": "cfg-03",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.004166666666666667,
+      "p_non_inferior": 0.0705,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2000000000000002,
+          "difference": -0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.09927763888476371,
+          "difference": 0.13933333260259428,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.0705,
+          "p_superior": 0.441
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": [
+        "latency_p95_ms"
+      ]
+    },
+    {
+      "a": "cfg-04",
+      "b": "cfg-05",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.05,
+      "p_non_inferior": 0.095,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2000000000000002,
+          "difference": -0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.09927763888476371,
+          "difference": 0.10199999996984843,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.095,
+          "p_superior": 0.5025
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": [
+        "latency_p95_ms"
+      ]
+    },
+    {
+      "a": "cfg-05",
+      "b": "cfg-00",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.002,
+      "p_non_inferior": 0.077,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2650000000000001,
+          "difference": 0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.0675258055609144,
+          "difference": 0.03450000015921728,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.077,
+          "p_superior": 0.6145
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-05",
+      "b": "cfg-01",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.0025,
+      "p_non_inferior": 0.162,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2650000000000001,
+          "difference": -0.0,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.0675258055609144,
+          "difference": -0.035000000934815034,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.162,
+          "p_superior": 0.815
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-05",
+      "b": "cfg-02",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.0016666666666666668,
+      "p_non_inferior": 0.0,
+      "p_pair": 0.783,
+      "p_superior": 0.783,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2650000000000001,
+          "difference": 0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.0675258055609144,
+          "difference": 0.12483333315079403,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.0,
+          "p_superior": 0.1305
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: evidence does not survive the family-wise correction",
+      "wins": [
+        "latency_p95_ms"
+      ]
+    },
+    {
+      "a": "cfg-05",
+      "b": "cfg-03",
+      "concedes": [],
+      "dominates": false,
+      "holm_threshold": 0.004545454545454546,
+      "p_non_inferior": 0.1335,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2650000000000001,
+          "difference": -0.0,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.0675258055609144,
+          "difference": 0.03733333263274585,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.1335,
+          "p_superior": 0.6145
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    },
+    {
+      "a": "cfg-05",
+      "b": "cfg-04",
+      "concedes": [
+        "latency_p95_ms"
+      ],
+      "dominates": false,
+      "holm_threshold": 0.008333333333333333,
+      "p_non_inferior": 0.508,
+      "p_pair": 1.0,
+      "p_superior": 1.0,
+      "per_objective": [
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "context_retention_auc",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 1.2650000000000001,
+          "difference": 0.6500000000000004,
+          "min_effect": 0.1,
+          "objective": "cost_per_probe",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "guardrail_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.0675258055609144,
+          "difference": -0.10199999996984843,
+          "min_effect": 0.1,
+          "objective": "latency_p95_ms",
+          "p_non_inferior": 0.508,
+          "p_superior": 0.8435
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "security_pass_rate",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        },
+        {
+          "applied_margin": 0.02,
+          "difference": 0.0,
+          "min_effect": 0.02,
+          "objective": "target_determinism_at_temp0",
+          "p_non_inferior": 0.0,
+          "p_superior": 1.0
+        }
+      ],
+      "reason": "not dominating: no objective improved by at least its min_effect",
+      "wins": []
+    }
+  ],
+  "constraints": {
+    "eligible": [
+      "cfg-00",
+      "cfg-01",
+      "cfg-02",
+      "cfg-03",
+      "cfg-04",
+      "cfg-05"
+    ],
+    "not_measured": [],
+    "violations": []
+  },
+  "correlation": {
+    "computed": true,
+    "high_pairs": [],
+    "objectives": [
+      "cost_per_probe",
+      "latency_p95_ms"
+    ],
+    "values": {
+      "cost_per_probe|cost_per_probe": 1.0,
+      "cost_per_probe|latency_p95_ms": -0.3215,
+      "latency_p95_ms|cost_per_probe": -0.3215,
+      "latency_p95_ms|latency_p95_ms": 1.0
+    }
+  },
+  "coverage_blocked": [],
+  "dominated": {},
+  "excluded_metrics": {},
+  "frontier": [
+    "cfg-00",
+    "cfg-01",
+    "cfg-02",
+    "cfg-03",
+    "cfg-04",
+    "cfg-05"
+  ],
+  "labels": {
+    "cfg-00": "temperature=0.0 sys=none",
+    "cfg-01": "temperature=1.0 sys=none",
+    "cfg-02": "temperature=0.0 sys=terse_neutral",
+    "cfg-03": "temperature=1.0 sys=terse_neutral",
+    "cfg-04": "temperature=0.0 sys=verbose_strict_with_guardrails",
+    "cfg-05": "temperature=1.0 sys=verbose_strict_with_guardrails"
+  },
+  "objectives": [
+    {
+      "cluster_key": "conversation",
+      "direction": "maximize",
+      "family": "context",
+      "id": "context_retention_auc",
+      "min_effect": 0.02,
+      "min_effect_kind": "absolute",
+      "note": "Normalised trapezoid area over the measured depth ladder. Depth spacing sets the weights, which is why profile is a hard comparability key (§11.5).",
+      "weighting": "trapezoid over depths; weights published in the report"
+    },
+    {
+      "cluster_key": "probe",
+      "direction": "minimize",
+      "family": "operational",
+      "id": "cost_per_probe",
+      "min_effect": 0.1,
+      "min_effect_kind": "relative",
+      "note": "Degrades to tokens_out_per_probe when no pricing is supplied; that is a different quantity, so pricing_source is a hard comparability key (§12.4).",
+      "weighting": "mean over probes"
+    },
+    {
+      "cluster_key": "guardrail_probe",
+      "direction": "maximize",
+      "family": "guardrail",
+      "id": "guardrail_pass_rate",
+      "min_effect": 0.02,
+      "min_effect_kind": "absolute",
+      "note": "",
+      "weighting": "all 5 policy areas and 4 pressure levels weighted equally"
+    },
+    {
+      "cluster_key": "probe",
+      "direction": "minimize",
+      "family": "operational",
+      "id": "latency_p95_ms",
+      "min_effect": 0.1,
+      "min_effect_kind": "relative",
+      "note": "Coverage of the cluster bootstrap for this objective is validated by simulation, not assumed; the fallback is latency_p90_ms (§13.3).",
+      "weighting": "pooled quantile over calls of resampled probes; retries and queue time excluded"
+    },
+    {
+      "cluster_key": "security_probe",
+      "direction": "maximize",
+      "family": "security",
+      "id": "security_pass_rate",
+      "min_effect": 0.02,
+      "min_effect_kind": "absolute",
+      "note": "",
+      "weighting": "all 8 attack classes weighted equally; severity drives hard-fail classification, not weighting (§14.1, I1)"
+    },
+    {
+      "cluster_key": "determinism_base_prompt",
+      "direction": "maximize",
+      "family": "determinism",
+      "id": "target_determinism_at_temp0",
+      "min_effect": 0.02,
+      "min_effect_kind": "absolute",
+      "note": "A property of the (model, system_prompt) pair, measured at a pinned temp=0 and shared across that pair's temperature siblings. It does not describe the row's own sampling settings — see config_repeatability for that (§11.4, §14.2).",
+      "weighting": "unweighted mean over base prompts"
+    }
+  ],
+  "points": {
+    "cfg-00": {
+      "context_retention_auc": 1.0,
+      "cost_per_probe": 12.0,
+      "guardrail_pass_rate": 1.0,
+      "latency_p95_ms": 0.6780644444031875,
+      "security_pass_rate": 1.0,
+      "target_determinism_at_temp0": 1.0
+    },
+    "cfg-01": {
+      "context_retention_auc": 1.0,
+      "cost_per_probe": 12.65,
+      "guardrail_pass_rate": 1.0,
+      "latency_p95_ms": 0.6871266666899424,
+      "security_pass_rate": 1.0,
+      "target_determinism_at_temp0": 1.0
+    },
+    "cfg-02": {
+      "context_retention_auc": 1.0,
+      "cost_per_probe": 12.0,
+      "guardrail_pass_rate": 1.0,
+      "latency_p95_ms": 0.6279618055234298,
+      "security_pass_rate": 1.0,
+      "target_determinism_at_temp0": 1.0
+    },
+    "cfg-03": {
+      "context_retention_auc": 1.0,
+      "cost_per_probe": 12.65,
+      "guardrail_pass_rate": 1.0,
+      "latency_p95_ms": 0.7032093055259894,
+      "security_pass_rate": 1.0,
+      "target_determinism_at_temp0": 1.0
+    },
+    "cfg-04": {
+      "context_retention_auc": 1.0,
+      "cost_per_probe": 12.0,
+      "guardrail_pass_rate": 1.0,
+      "latency_p95_ms": 0.9927763888476371,
+      "security_pass_rate": 1.0,
+      "target_determinism_at_temp0": 1.0
+    },
+    "cfg-05": {
+      "context_retention_auc": 1.0,
+      "cost_per_probe": 12.65,
+      "guardrail_pass_rate": 1.0,
+      "latency_p95_ms": 0.6752580556091441,
+      "security_pass_rate": 1.0,
+      "target_determinism_at_temp0": 1.0
+    }
+  }
+}

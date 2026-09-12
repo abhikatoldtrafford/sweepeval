@@ -13,6 +13,7 @@
     "discover": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'",
     "evaluate": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'",
     "gate": "def(result: 'Any', *, baseline: 'Path | str', **kwargs: 'Any') -> 'Any'",
+    "rank": "def(result: 'Any', **kwargs: 'Any') -> 'Any'",
     "report": "def(run_id: 'str', *, fmt: 'str' = 'terminal', **kwargs: 'Any') -> 'Any'",
     "run": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'",
     "run_gate": "def(url: 'str', *, baseline: 'Path | str', **kwargs: 'Any') -> 'Any'",

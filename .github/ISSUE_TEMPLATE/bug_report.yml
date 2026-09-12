@@ -1,0 +1,50 @@
+name: Bug report
+description: Something produced a wrong number, a silent pass, or a crash.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not paste API keys, endpoint URLs you would rather keep
+        private, or raw response bodies from a production system. sweepeval
+        redacts credentials from its own artifacts; it cannot redact an issue.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The output you got, and the output you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: >
+        A command, ideally against `sweepeval demo` or a bundled scenario. If
+        it only reproduces against your own endpoint, describe its shape --
+        request format, response format, auth style -- rather than its URL.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`sweepeval version`"
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python and OS
+      placeholder: "3.12 on Ubuntu 24.04"
+    validations:
+      required: true
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Relevant artifacts
+      description: >
+        `manifest.json` and the SKIPPED section of the report are usually
+        enough. Check them for anything sensitive before pasting.
+      render: json

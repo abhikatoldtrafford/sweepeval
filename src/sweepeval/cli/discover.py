@@ -30,6 +30,10 @@ def discover_command(
     root: Path = typer.Option(Path(".sweepeval"), "--root", help="Artifact root."),
     max_posts: int = typer.Option(25, "--max-posts", help="Hard POST budget (§8.3)."),
     force: bool = typer.Option(False, "--force", help="Overwrite a hand-edited config."),
+    out: Path | None = typer.Option(
+        None, "--out", "-o",
+        help="Also write the config here, for editing and `sweep --config`.",
+    ),
     seed: int | None = typer.Option(None, "--seed"),
 ) -> None:
     """Probe an endpoint and emit an annotated, editable config."""
@@ -50,9 +54,16 @@ def discover_command(
     written = emit_config(
         root, url, outcome.payload,
         fingerprint=outcome.payload["target"]["endpoint_fingerprint"],
+        also_copy_to=out,
         force=force,
     )
     _render(outcome, written.path)
+    if written.copied_to is not None:
+        console.print(f"also wrote {written.copied_to}")
+        console.print(
+            "[dim]edit anything marked low confidence, then: "
+            f"sweepeval sweep --config {written.copied_to}[/dim]"
+        )
 
 
 def _render(outcome: DiscoveryOutcome, config_path: Path) -> None:

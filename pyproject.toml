@@ -12,7 +12,7 @@ keywords = [
   "prompt-injection", "regression-testing", "sweep",
 ]
 classifiers = [
-  "Development Status :: 2 - Pre-Alpha",
+  "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
@@ -35,6 +35,9 @@ dependencies = [
 
 [project.optional-dependencies]
 plots = ["matplotlib>=3.8"]
+docs = [
+  "mkdocs-material>=9.5",
+]
 dev = [
   "pytest>=8",
   "pytest-asyncio>=0.23",

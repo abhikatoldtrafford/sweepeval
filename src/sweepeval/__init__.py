@@ -9,6 +9,7 @@ from sweepeval.api import (
     discover,
     evaluate,
     gate,
+    rank,
     report,
     run,
     run_gate,
@@ -17,5 +18,5 @@ from sweepeval.api import (
 
 __all__ = [
     "__version__", "baseline", "compare", "demo", "discover", "evaluate",
-    "gate", "report", "run", "run_gate", "sweep",
+    "gate", "rank", "report", "run", "run_gate", "sweep",
 ]

@@ -1,0 +1,29 @@
+name: Discovery failed against my endpoint
+description: sweepeval could not work out your endpoint's request shape.
+labels: ["discovery"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Discovery prints its full transcript when it aborts: every shape, every
+        mutation, every status and error excerpt. That transcript is the most
+        useful thing you can paste, and it is designed to be safe to share --
+        but please check it for anything specific to your system first.
+  - type: textarea
+    id: transcript
+    attributes:
+      label: The abort transcript
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: shape
+    attributes:
+      label: What the endpoint actually expects
+      description: >
+        A minimal request body that works, and the response it returns, with
+        real values replaced by placeholders. If sweepeval should support this
+        shape out of the box, say so -- adding a shape is a small change.
+      render: json
+    validations:
+      required: true

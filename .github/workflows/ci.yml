@@ -35,3 +35,9 @@ jobs:
         run: lint-imports
       - name: pytest
         run: pytest -q
+      - name: the demo must run without a network
+        # The one end-to-end check a user performs first. It exercises
+        # discovery, capability detection, the sweep, the statistics and the
+        # frontier against the packaged mock, so a break in any of them fails
+        # here rather than in someone's terminal.
+        run: sweepeval demo -n 2

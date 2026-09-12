@@ -12,6 +12,7 @@ import typer
 from sweepeval import __version__
 from sweepeval.cli import mock as mock_cli
 from sweepeval.cli.compare import compare_command
+from sweepeval.cli.demo import demo_command
 from sweepeval.cli.discover import discover_command
 from sweepeval.cli.evaluate import (
     baseline_command,
@@ -55,6 +56,7 @@ app.command(name="gate")(gate_command)
 app.command(name="init")(init_command)
 app.command(name="compare")(compare_command)
 app.command(name="report")(report_command)
+app.command(name="demo")(demo_command)
 app.add_typer(mock_cli.app, name="mock")
 
 

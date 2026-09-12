@@ -15,7 +15,26 @@ from sweepeval.mock.scenario import load_scenario
 
 app = typer.Typer(help="Run the scenario mock endpoint.", no_args_is_help=True)
 
-_BUNDLED = Path(__file__).resolve().parents[3] / "tests" / "scenarios"
+_PACKAGED = Path(__file__).resolve().parent.parent / "mock" / "scenarios"
+_REPO = Path(__file__).resolve().parents[3] / "tests" / "scenarios"
+
+
+def find_scenario(name: str) -> Path | None:
+    """Packaged scenarios first, then the repo's test scenarios.
+
+    An installed user has no ``tests/`` directory, so a bundled scenario has
+    to live inside the package or ``mock serve`` and ``demo`` work only from a
+    git checkout — which is exactly the kind of thing that passes in CI and
+    fails for every user.
+    """
+    direct = Path(name)
+    if direct.exists():
+        return direct
+    for root in (_PACKAGED, _REPO):
+        candidate = root / f"{name}.yaml"
+        if candidate.exists():
+            return candidate
+    return None
 
 
 @app.command()
@@ -25,11 +44,11 @@ def serve(
     host: str = typer.Option("127.0.0.1", "--host"),
 ) -> None:
     """Serve one scenario on a real port."""
-    path = Path(scenario)
-    if not path.exists():
-        path = _BUNDLED / f"{scenario}.yaml"
-    if not path.exists():
-        raise typer.BadParameter(f"no scenario {scenario!r} (looked in {_BUNDLED})")
+    path = find_scenario(scenario)
+    if path is None:
+        raise typer.BadParameter(
+            f"no scenario {scenario!r} (looked in {_PACKAGED} and {_REPO})"
+        )
 
     loaded = load_scenario(path)
     mock = MockApp(loaded)

@@ -25,6 +25,7 @@ from sweepeval.execute.artifacts import write_json
 from sweepeval.execute.budget import BudgetCap, Estimate, render_estimate
 from sweepeval.execute.sweep import SweepResult, SweepStatus, asweep_target
 from sweepeval.pipeline import rank_sweep
+from sweepeval.rank.constraints import DEFAULT_CONSTRAINTS, Constraint
 from sweepeval.report.frontier import render_frontier, render_preference
 from sweepeval.report.frontier_json import frontier_payload
 from sweepeval.report.sweep import render_sweep
@@ -70,7 +71,9 @@ def _cap(max_requests: int | None) -> BudgetCap | None:
 
 
 def sweep_command(
-    url: str = typer.Argument(..., help="The endpoint to sweep."),
+    url: str | None = typer.Argument(
+        None, help="The endpoint to sweep. Optional when --config supplies one."
+    ),
     key: str | None = typer.Option(None, "--key", "-k"),
     profile: str = typer.Option("quick", "--profile", help="quick | standard | deep"),
     runs: int = typer.Option(3, "-n", "--runs"),
@@ -103,8 +106,35 @@ def sweep_command(
     ),
     alpha: float = typer.Option(0.05, "--alpha", help="Family-wise error rate."),
     fmt: str | None = typer.Option(None, "--format", help="html,junit,json"),
+    config: Path | None = typer.Option(
+        None, "--config", "-c",
+        help="A sweepeval.yaml: corrections, declared axes, pricing, constraints.",
+    ),
 ) -> None:
     """Discover, plan and sweep every discoverable configuration."""
+    declared = None
+    if config is not None:
+        from sweepeval.execute.declared import load_declared
+
+        declared = load_declared(config)
+        for warning in declared.warnings:
+            console.print(f"[yellow]{config}: {warning}[/yellow]")
+        url = url or declared.url
+        profile = declared.profile or profile
+        runs = declared.runs or runs
+        objectives = objectives or (
+            ",".join(declared.objectives) if declared.objectives else None
+        )
+        if declared.describe():
+            console.print("[bold]from your config[/bold]")
+            for line in declared.describe():
+                console.print(f"  {line}")
+
+    if not url:
+        raise typer.BadParameter(
+            "give an endpoint URL, or a --config whose target.url names one"
+        )
+
     result = asyncio.run(
         asweep_target(
             url,
@@ -119,11 +149,14 @@ def sweep_command(
             ),
             cap=_cap(max_requests),
             resume_run_id=resume,
+            declared=declared,
+            pricing=declared.pricing if declared else None,
             on_progress=lambda msg: console.print(f"[dim]{msg}[/dim]"),
         )
     )
     _finish(
-        result, objectives=objectives, prefer=prefer, alpha=alpha, seed=seed, fmt=fmt
+        result, objectives=objectives, prefer=prefer, alpha=alpha, seed=seed, fmt=fmt,
+        constraints=declared.constraints if declared and declared.constraints else None,
     )
 
 
@@ -154,6 +187,7 @@ def run_command(
         prefer=prefer,
         alpha=0.05,
         fmt=None,
+        config=None,
     )
 
 
@@ -165,13 +199,15 @@ def _finish(
     alpha: float = 0.05,
     seed: int = 0,
     fmt: str | None = None,
+    constraints: tuple[Constraint, ...] | None = None,
 ) -> None:
     render_sweep(result, console)
 
     frontier = None
     if result.configs:
         frontier = _rank(
-            result, objectives=objectives, prefer=prefer, alpha=alpha, seed=seed
+            result, objectives=objectives, prefer=prefer, alpha=alpha, seed=seed,
+            constraints=constraints,
         )
     if result.store is not None:
         from sweepeval.report.stored import write_aggregates
@@ -194,11 +230,15 @@ def _rank(
     prefer: str | None,
     alpha: float,
     seed: int,
+    constraints: tuple[Constraint, ...] | None = None,
 ):
     """Rank, report and store the frontier (§14, §6.2)."""
     names = [n.strip() for n in (objectives or "").split(",") if n.strip()]
     try:
-        frontier = rank_sweep(result, objectives=names, alpha=alpha, seed=seed)
+        frontier = rank_sweep(
+            result, objectives=names, alpha=alpha, seed=seed,
+            constraints=constraints or DEFAULT_CONSTRAINTS,
+        )
     except ValueError as error:
         console.print(f"[red]{error}[/red]")
         raise typer.Exit(code=2) from error

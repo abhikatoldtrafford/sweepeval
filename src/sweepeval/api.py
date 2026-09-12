@@ -31,20 +31,20 @@ __all__ = [
     "discover",
     "evaluate",
     "gate",
+    "rank",
     "report",
     "run",
     "run_gate",
     "sweep",
 ]
 
-_M = {
-    "discover": "M2",
-    "evaluate": "M6",
-    "baseline": "M6",
-    "gate": "M6",
-    "run_gate": "M6",
-    "demo": "M10",
-}
+_M: dict[str, str] = {}
+"""Verbs a later version adds, and the milestone each lands in.
+
+Empty at 0.1: every documented verb is implemented. A verb that raises
+``NotImplementedError`` from a released package is an API that does not exist,
+and ``tests/golden/test_api_surface.py`` asserts this stays empty at release.
+"""
 
 
 def _pending(name: str) -> NotImplementedError:
@@ -103,6 +103,18 @@ def run_gate(url: str, *, baseline: Path | str, **kwargs: Any) -> Any:
     return asyncio.run(arun_gate(url, baseline=baseline, **kwargs))
 
 
+def rank(result: Any, **kwargs: Any) -> Any:
+    """Compute the frontier over a sweep result (§14). Pure; sends nothing.
+
+    Separate from :func:`sweep` because it is offline and re-runnable: change
+    the objectives or the alpha and rank the same measurements again, which is
+    what makes "narrowing needs no re-run" true (§14.1).
+    """
+    from sweepeval.pipeline import rank_sweep
+
+    return rank_sweep(result, **kwargs)
+
+
 def compare(run_a: str, run_b: str, **kwargs: Any) -> Any:
     """Diff two results, refusing invalid comparisons (§6.5, I6). Pure."""
     from sweepeval.report.compare import compare_runs
@@ -118,8 +130,22 @@ def report(run_id: str, *, fmt: str = "terminal", **kwargs: Any) -> Any:
 
 
 def demo(**kwargs: Any) -> Any:
-    """Run against the bundled scenario mock. No URL, no key, no spend (§4.3)."""
-    raise _pending("demo")
+    """Run against the bundled scenario mock. No URL, no key, no spend (§4.3).
+
+    The result is about a simulated endpoint. Never present it as evidence.
+    """
+    import asyncio
+
+    from sweepeval.cli.demo import _run
+
+    return asyncio.run(
+        _run(
+            kwargs.pop("scenario", "demo"),
+            kwargs.pop("root", None),
+            kwargs.pop("profile", "quick"),
+            kwargs.pop("runs", 2),
+        )
+    )
 
 
 async def adiscover(url: str, *, key: str | None = None, **kwargs: Any) -> Any:

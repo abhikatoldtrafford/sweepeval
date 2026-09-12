@@ -1,6 +1,6 @@
 *.egg-info/
 *.pyc
-.agenteval/
+.sweepeval/
 .import_linter_cache/
 .mypy_cache/
 .pytest_cache/
