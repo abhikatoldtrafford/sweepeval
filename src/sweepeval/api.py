@@ -1,0 +1,136 @@
+"""Tier 1 public API (spec §4.2).
+
+Additive change only during 0.x. Every CLI verb has a function here and the CLI
+calls it, so no logic lives only in the CLI.
+
+``gate`` and ``run_gate`` are separate names because they are separate
+operations: ``gate`` is a pure function over an existing result plus a
+baseline, while ``run_gate`` re-runs the target first. Rev 1 gave both meanings
+to one name.
+
+Milestones fill these in; each raises until its milestone lands, so the surface
+is stable from M0 and ``tests/golden/test_api_surface.py`` can pin it.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+__all__ = [
+    "adiscover",
+    "aevaluate",
+    "agate",
+    "areport",
+    "arun",
+    "arun_gate",
+    "asweep",
+    "baseline",
+    "compare",
+    "demo",
+    "discover",
+    "evaluate",
+    "gate",
+    "report",
+    "run",
+    "run_gate",
+    "sweep",
+]
+
+_M = {
+    "discover": "M2",
+    "evaluate": "M6",
+    "baseline": "M6",
+    "gate": "M6",
+    "run_gate": "M6",
+    "demo": "M6",
+    "sweep": "M8",
+    "run": "M8",
+    "report": "M9",
+    "compare": "M9",
+}
+
+
+def _pending(name: str) -> NotImplementedError:
+    return NotImplementedError(
+        f"sweepeval.api.{name}() lands in milestone {_M[name]}; "
+        "the signature is stable now so the API surface can be pinned"
+    )
+
+
+def discover(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
+    """Phase 0 only: probe the endpoint and emit an annotated config (§8)."""
+    raise _pending("discover")
+
+
+def evaluate(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
+    """Score a single configuration (§12.1 empty-sweep path)."""
+    raise _pending("evaluate")
+
+
+def sweep(config: Path | str | None = None, **kwargs: Any) -> Any:
+    """Sweep declared axes (§12)."""
+    raise _pending("sweep")
+
+
+def run(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
+    """Zero-config: discover, plan, sweep, rank, report (§1)."""
+    raise _pending("run")
+
+
+def baseline(run_id: str, **kwargs: Any) -> Any:
+    """Snapshot a run as a committable baseline (§16)."""
+    raise _pending("baseline")
+
+
+def gate(result: Any, *, baseline: Path | str, **kwargs: Any) -> Any:
+    """Compare an existing result against a baseline. Pure; sends nothing (§16)."""
+    raise _pending("gate")
+
+
+def run_gate(url: str, *, baseline: Path | str, **kwargs: Any) -> Any:
+    """Re-run the target, then gate. Distinct from :func:`gate` (§16)."""
+    raise _pending("run_gate")
+
+
+def compare(run_a: str, run_b: str, **kwargs: Any) -> Any:
+    """Diff two results, refusing invalid comparisons (§6.5, I6)."""
+    raise _pending("compare")
+
+
+def report(run_id: str, *, fmt: str = "terminal", **kwargs: Any) -> Any:
+    """Rebuild a report offline from stored aggregates (§15)."""
+    raise _pending("report")
+
+
+def demo(**kwargs: Any) -> Any:
+    """Run against the bundled scenario mock. No URL, no key, no spend (§4.3)."""
+    raise _pending("demo")
+
+
+async def adiscover(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
+    raise _pending("discover")
+
+
+async def aevaluate(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
+    raise _pending("evaluate")
+
+
+async def asweep(config: Path | str | None = None, **kwargs: Any) -> Any:
+    raise _pending("sweep")
+
+
+async def arun(url: str, *, key: str | None = None, **kwargs: Any) -> Any:
+    raise _pending("run")
+
+
+async def agate(result: Any, *, baseline: Path | str, **kwargs: Any) -> Any:
+    raise _pending("gate")
+
+
+async def arun_gate(url: str, *, baseline: Path | str, **kwargs: Any) -> Any:
+    raise _pending("run_gate")
+
+
+async def areport(run_id: str, *, fmt: str = "terminal", **kwargs: Any) -> Any:
+    raise _pending("report")

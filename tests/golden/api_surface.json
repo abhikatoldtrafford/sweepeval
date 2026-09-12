@@ -1,0 +1,87 @@
+{
+  "sweepeval.api": {
+    "adiscover": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'",
+    "aevaluate": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'",
+    "agate": "def(result: 'Any', *, baseline: 'Path | str', **kwargs: 'Any') -> 'Any'",
+    "areport": "def(run_id: 'str', *, fmt: 'str' = 'terminal', **kwargs: 'Any') -> 'Any'",
+    "arun": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'",
+    "arun_gate": "def(url: 'str', *, baseline: 'Path | str', **kwargs: 'Any') -> 'Any'",
+    "asweep": "def(config: 'Path | str | None' = None, **kwargs: 'Any') -> 'Any'",
+    "baseline": "def(run_id: 'str', **kwargs: 'Any') -> 'Any'",
+    "compare": "def(run_a: 'str', run_b: 'str', **kwargs: 'Any') -> 'Any'",
+    "demo": "def(**kwargs: 'Any') -> 'Any'",
+    "discover": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'",
+    "evaluate": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'",
+    "gate": "def(result: 'Any', *, baseline: 'Path | str', **kwargs: 'Any') -> 'Any'",
+    "report": "def(run_id: 'str', *, fmt: 'str' = 'terminal', **kwargs: 'Any') -> 'Any'",
+    "run": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'",
+    "run_gate": "def(url: 'str', *, baseline: 'Path | str', **kwargs: 'Any') -> 'Any'",
+    "sweep": "def(config: 'Path | str | None' = None, **kwargs: 'Any') -> 'Any'"
+  },
+  "sweepeval.schema.call": {
+    "Call": "class(construct,copy,dict,example,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)",
+    "CallRole": "def(*args, **kwargs)",
+    "ErrorClass": "class(capitalize,casefold,center,count,encode,endswith,expandtabs,find,format,format_map,index,isalnum,isalpha,isascii,isdecimal,isdigit,isidentifier,islower,isnumeric,isprintable,isspace,istitle,isupper,join,ljust,lower,lstrip,maketrans,partition,removeprefix,removesuffix,replace,rfind,rindex,rjust,rpartition,rsplit,rstrip,split,splitlines,startswith,strip,swapcase,title,translate,upper,zfill)",
+    "ExtractionPart": "class(construct,copy,dict,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)",
+    "RefusalPart": "class(construct,copy,dict,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)",
+    "RequestPart": "class(construct,copy,dict,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)",
+    "ResponsePart": "class(construct,copy,dict,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)",
+    "TimingPart": "class(construct,copy,dict,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)",
+    "TokensPart": "class(construct,copy,dict,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)"
+  },
+  "sweepeval.schema.comparability": {
+    "Comparability": "class(construct,copy,dict,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)",
+    "ComparabilityVerdict": "class(construct,copy,dict,explain,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)",
+    "HardKeys": "class(construct,copy,dict,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)",
+    "JudgeKey": "class(construct,copy,dict,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)",
+    "KeyMismatch": "class(construct,copy,dict,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)",
+    "SoftKeys": "class(construct,copy,dict,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)",
+    "compare_keys": "def(a: 'Comparability', b: 'Comparability') -> 'ComparabilityVerdict'"
+  },
+  "sweepeval.schema.metric": {
+    "CIMethod": "class(capitalize,casefold,center,count,encode,endswith,expandtabs,find,format,format_map,index,isalnum,isalpha,isascii,isdecimal,isdigit,isidentifier,islower,isnumeric,isprintable,isspace,istitle,isupper,join,ljust,lower,lstrip,maketrans,partition,removeprefix,removesuffix,replace,rfind,rindex,rjust,rpartition,rsplit,rstrip,split,splitlines,startswith,strip,swapcase,title,translate,upper,zfill)",
+    "Estimand": "class(capitalize,casefold,center,count,encode,endswith,expandtabs,find,format,format_map,index,isalnum,isalpha,isascii,isdecimal,isdigit,isidentifier,islower,isnumeric,isprintable,isspace,istitle,isupper,join,ljust,lower,lstrip,maketrans,partition,removeprefix,removesuffix,replace,rfind,rindex,rjust,rpartition,rsplit,rstrip,split,splitlines,startswith,strip,swapcase,title,translate,upper,zfill)",
+    "Flag": "class(capitalize,casefold,center,count,encode,endswith,expandtabs,find,format,format_map,index,isalnum,isalpha,isascii,isdecimal,isdigit,isidentifier,islower,isnumeric,isprintable,isspace,istitle,isupper,join,ljust,lower,lstrip,maketrans,partition,removeprefix,removesuffix,replace,rfind,rindex,rjust,rpartition,rsplit,rstrip,split,splitlines,startswith,strip,swapcase,title,translate,upper,zfill)",
+    "MetricSpec": "class(construct,copy,dict,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)",
+    "MetricValue": "class(construct,copy,dict,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)"
+  },
+  "sweepeval.schema.objective": {
+    "OBJECTIVE_ENTRY_POINT_GROUP": "str",
+    "Objective": "class(construct,copy,dict,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)",
+    "ObjectiveRegistry": "class(all,defaults,from_entry_points,get,register)",
+    "REGISTRY": "ObjectiveRegistry"
+  },
+  "sweepeval.schema.observation": {
+    "Layer": "def(*args, **kwargs)",
+    "Observation": "class(construct,copy,dict,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)",
+    "ObservationKey": "def(*args, **kwargs)",
+    "Verdict": "class(capitalize,casefold,center,count,encode,endswith,expandtabs,find,format,format_map,index,isalnum,isalpha,isascii,isdecimal,isdigit,isidentifier,islower,isnumeric,isprintable,isspace,istitle,isupper,join,ljust,lower,lstrip,maketrans,partition,removeprefix,removesuffix,replace,rfind,rindex,rjust,rpartition,rsplit,rstrip,split,splitlines,startswith,strip,swapcase,title,translate,upper,zfill)"
+  },
+  "sweepeval.schema.unit": {
+    "Role": "def(*args, **kwargs)",
+    "ScoringContract": "class(construct,copy,dict,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)",
+    "Turn": "class(construct,copy,dict,from_orm,json,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate)",
+    "Unit": "class(construct,copy,dict,from_orm,json,make,model_construct,model_copy,model_dump,model_dump_json,model_json_schema,model_parametrized_name,model_post_init,model_rebuild,model_validate,model_validate_json,model_validate_strings,parse_file,parse_obj,parse_raw,schema,schema_json,update_forward_refs,validate,verify_id)"
+  },
+  "sweepeval.store.blob": {
+    "BlobStore": "class(exists,get,put_bytes,put_text)",
+    "DEFAULT_CAP_BYTES": "int"
+  },
+  "sweepeval.store.jsonl": {
+    "AppendOnlyLog": "class(append,append_many,content_hash,count,read)"
+  },
+  "sweepeval.store.redaction": {
+    "AUTH_PARAM_NAMES": "frozenset",
+    "MASK": "str",
+    "MIN_SECRET_LENGTH": "int",
+    "Redactor": "class(endpoint_fingerprint,mapping,text,url)"
+  },
+  "sweepeval.store.run": {
+    "Store": "class(provenance,report_path,state_for)",
+    "new_run_id": "def() -> 'str'"
+  },
+  "sweepeval.store.state": {
+    "RunState": "class(budget,completed_unit_runs,is_complete,mark_complete,record_budget)",
+    "new_run_id": "def() -> 'str'"
+  }
+}

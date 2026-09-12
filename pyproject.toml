@@ -75,6 +75,9 @@ src = ["src", "tests"]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.mypy]
-python_version = "3.10"
+# python_version is deliberately unpinned: mypy follows the running
+# interpreter, so CI's 3.10 and 3.12 jobs each check their own semantics.
+# Pinning 3.10 makes mypy choke parsing numpy's 3.12-syntax stubs under a
+# 3.12 venv, and lowers coverage rather than raising it.
 strict = true
 warn_unreachable = true

@@ -799,6 +799,12 @@ Single-config intervals come from the same bootstrap without differencing.
 
 **Fewer than 8 clusters never bootstraps.** A percentile bootstrap at n=3 cannot produce an interval wider than the observed range and achieves coverage far below nominal; it is not a conservatively wide interval, it is a narrow wrong one. BCa is worse — it needs n ≳ 20 — and is not used anywhere in v0.1.
 
+**Bounded statistics carry a boundary correction.** Rates, repeatability and the normalised AUC are means of values in [0, 1], and both the percentile bootstrap and the t-interval collapse to *zero width* when every cluster agrees — which is common, not rare: at 24 clusters and a true rate of 0.85, all clusters pass about 2% of the time; at 8 clusters, 27%; at 5, 44%. A zero-width interval at 1.0 never covers.
+
+This was measured during M0, not assumed. Coverage against a nominal 0.95 was **0.90 at 24 clusters, 0.75 at the floor, and 0.57 below it**. Every bounded statistic's interval is therefore widened to the union with an Agresti–Coull interval on the cluster mean, restoring coverage to 0.99, 0.99 and 1.00 respectively. Continuous statistics — latency, cost — are unaffected and take the bootstrap alone.
+
+This restores behaviour that rev 1 got from Wilson intervals for rates and that rev 2 lost when it unified everything on the cluster bootstrap. It is deliberately conservative: over-covering widens intervals, which makes domination harder to assert, which is the safe direction for I2.
+
 Below 8 clusters: a t-interval on the cluster-level values (very wide, `LOW_N` flagged), or `method: none` with `NO_VALID_INTERVAL` where even that is meaningless. Rev 1's "interval plus a `LOW_N` flag" for n=3 bootstraps was the most dangerous line in the statistics section.
 
 This floor is what sizes `quick` (§10.2). Every family must clear 8 clusters with margin, or that family's objective silently leaves the frontier — which is why `quick` is 40 units rather than the 16 an earlier revision specified. `quick` clears the floor but only just, so its intervals are wide and it stays gate-ineligible; gating needs `standard`.
