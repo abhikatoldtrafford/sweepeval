@@ -11,3 +11,11 @@ __pycache__/
 build/
 dist/
 site/
+
+# Scratch run directories. Any directory containing runs/<id>/ is artifacts,
+# never source -- an agent or a manual --root that lands in the repo root
+# should not become a commit.
+out*/
+sweepout/
+redout/
+scratchpad/
