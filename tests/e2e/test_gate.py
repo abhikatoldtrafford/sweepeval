@@ -194,6 +194,9 @@ async def test_the_gate_payload_is_machine_readable(tmp_path: Path) -> None:
     payload = gate_payload(gate(second, snapshot(first), seed=1))
 
     assert set(payload) == {
-        "ok", "exit_code", "regressions", "metrics", "hard_fails", "refusals"
+        "ok", "exit_code", "regressions", "metrics", "hard_fails", "refusals",
+        # What the gate could NOT do. A consumer that cannot see this cannot
+        # tell a run that tested five metrics from one that tested one.
+        "not_gated", "degraded", "incomplete",
     }
     assert isinstance(payload["exit_code"], int)

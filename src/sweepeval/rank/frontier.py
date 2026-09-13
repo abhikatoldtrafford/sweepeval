@@ -39,19 +39,13 @@ from sweepeval.schema.objective import Objective
 from sweepeval.stats.correlation import CorrelationMatrix, correlation_matrix
 from sweepeval.stats.paired import PairedResult, paired_difference, resamples_for
 from sweepeval.stats.resample import N_RESAMPLES
-from sweepeval.stats.retention import auc_statistic
+from sweepeval.stats.statistic import statistic_for
 
 __all__ = [
     "FrontierResult",
     "make_paired",
     "rank_configs",
 ]
-
-_QUANTILE_OBJECTIVES = {"latency_p95_ms": 0.95}
-
-_CURVE_OBJECTIVES = frozenset({"context_retention_auc"})
-"""Objectives whose statistic is a curve over strata, not a mean over
-clusters. Their comparison has to recompute the curve on each replicate."""
 
 COMPANION_METRICS: tuple[str, ...] = ("config_repeatability", "error_rate")
 """Reported beside the frontier without being on it (§14.2)."""
@@ -130,20 +124,14 @@ def make_paired(
         table_b = clusters.get(b, {}).get(metric, {})
         shared = sorted(set(table_a) & set(table_b))
 
-        quantile = _QUANTILE_OBJECTIVES.get(objective.id)
+        # One dispatch, shared with the gate. There were two, and the gate's
+        # took the unweighted mean of everything -- so a 29-point AUC
+        # regression exited 0 while the frontier saw it correctly.
         metric_strata = strata.get(metric) or {}
-
-        if objective.id in _CURVE_OBJECTIVES and metric_strata:
-            # The AUC is a depth-weighted trapezoid, not a mean. Comparing it
-            # as a mean tests a different quantity from the one reported.
-            statistic_a = auc_statistic(table_a, metric_strata)
-            statistic_b = auc_statistic(table_b, metric_strata)
-            quantile = None
-            curve = True
-        else:
-            statistic_a = _statistic(table_a, quantile)
-            statistic_b = _statistic(table_b, quantile)
-            curve = False
+        spec_a = statistic_for(objective, table_a, metric_strata)
+        spec_b = statistic_for(objective, table_b, metric_strata)
+        statistic_a, statistic_b = spec_a.fn, spec_b.fn
+        quantile, curve = spec_a.quantile, spec_a.curve
 
         margin = _margin(objective, table_a, statistic_a)
         bounded = objective.min_effect_kind == "absolute"
@@ -169,25 +157,6 @@ def make_paired(
         )
 
     return paired
-
-
-def _statistic(
-    table: Mapping[str, float], quantile: float | None
-) -> Callable[[Sequence[str]], float]:
-    def statistic(cluster_ids: Sequence[str]) -> float:
-        values = [table[c] for c in cluster_ids if c in table]
-        if not values:
-            return 0.0
-        if quantile is None:
-            return sum(values) / len(values)
-        ordered = sorted(values)
-        # Nearest-rank, computed here rather than with numpy: the layering
-        # contract keeps numpy out of rank, and a quantile of a short list has
-        # no interesting numerics.
-        index = min(len(ordered) - 1, round(quantile * (len(ordered) - 1)))
-        return ordered[index]
-
-    return statistic
 
 
 def _margin(

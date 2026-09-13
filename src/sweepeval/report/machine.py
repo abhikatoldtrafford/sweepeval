@@ -165,6 +165,19 @@ def gate_annotations(payload: dict[str, Any]) -> str:
         lines.append(f"::error title=sweepeval hard fail::{hard}")
     for refusal in payload.get("refusals", []):
         lines.append(f"::error title=sweepeval refused::{refusal}")
+    # Warnings, not errors: a metric going unscorable is a fact about the run,
+    # not a regression. But a green tab that tested one metric of five must
+    # not look like a green tab that tested five.
+    for name in payload.get("not_gated", []):
+        lines.append(
+            f"::warning title=sweepeval not gated::{name} was requested but shares "
+            "no cluster with the baseline, so it was not tested"
+        )
+    for name in payload.get("degraded", []):
+        lines.append(
+            f"::warning title=sweepeval degraded::{name} was gated on the mean, not "
+            "the statistic it is reported with"
+        )
     return "\n".join(lines) + ("\n" if lines else "")
 
 

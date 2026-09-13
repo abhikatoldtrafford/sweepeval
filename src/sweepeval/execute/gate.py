@@ -63,6 +63,7 @@ def snapshot(
         comparability=result.comparability,
         metrics=dict(result.metrics),
         clusters={k: dict(v) for k, v in result.clusters.items()},
+        strata={k: dict(v) for k, v in (getattr(result, 'strata', None) or {}).items()},
         hard_fails=(
             hard_fails
             if hard_fails is not None
@@ -131,6 +132,13 @@ def gate(
         seed=seed,
         min_effect_overrides=min_effect_overrides,
         gate_on=selected,
+        # The baseline's labels, not the current run's: the paired test runs
+        # over clusters both sides scored, and the weights have to be the ones
+        # the committed baseline was computed with or the two points are not
+        # on the same curve.
+        strata=baseline.strata or {
+            k: dict(v) for k, v in (getattr(result, "strata", None) or {}).items()
+        },
     )
 
 
@@ -182,6 +190,12 @@ def gate_payload(verdict: GateVerdict) -> dict[str, Any]:
         ],
         "hard_fails": list(verdict.hard_fails),
         "refusals": list(verdict.refusals),
+        # What the gate could NOT do. Absent from the payload entirely
+        # before, so a CI job parsing gate.json had no way to tell a run
+        # that tested five metrics from one that tested one.
+        "not_gated": list(verdict.not_gated),
+        "degraded": list(verdict.degraded),
+        "incomplete": verdict.incomplete,
     }
 
 

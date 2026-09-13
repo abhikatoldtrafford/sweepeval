@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from sweepeval.schema.comparability import Comparability
 from sweepeval.schema.metric import MetricValue
@@ -40,6 +40,17 @@ class Baseline(BaseModel):
 
     clusters: dict[str, dict[str, float]]
     """Per-cluster values per metric, for the paired test."""
+
+    strata: dict[str, dict[str, str]] = Field(default_factory=dict)
+    """Per-cluster stratum labels per metric -- conversation depth, in
+    practice.
+
+    Without these the gate cannot compute `context_retention_auc`, which is a
+    depth-weighted trapezoid and is gated by default. It fell back to an
+    unweighted mean, so a 29-point AUC regression read as 0.5000 -> 0.5000 and
+    exited 0. Defaulted rather than required: a baseline committed before this
+    field existed must still load, and the gate says when it degraded.
+    """
 
     hard_fails: tuple[str, ...] = ()
 

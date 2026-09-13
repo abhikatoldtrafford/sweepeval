@@ -24,6 +24,11 @@ from enum import Enum
 from sweepeval.schema.objective import Objective
 from sweepeval.stats.multiplicity import holm, holm_thresholds
 from sweepeval.stats.paired import PairedResult, paired_difference
+from sweepeval.stats.statistic import (
+    CURVE_OBJECTIVES,
+    statistic_for,
+    usable_strata,
+)
 
 __all__ = [
     "DEFAULT_GATE_ALPHA",
@@ -74,6 +79,29 @@ class GateVerdict:
     refusals: tuple[str, ...] = ()
     notes: tuple[str, ...] = field(default_factory=tuple)
 
+    not_gated: tuple[str, ...] = ()
+    """Requested objectives that could not be tested at all.
+
+    A PARTIAL miss used to be discarded: `no_data` was read only when *every*
+    metric was missing, so a gate asked for five metrics, able to test one,
+    exited 0 with no annotation, no JSON field and nothing on stdout. Four of
+    five lost to unscorability is routine -- guardrail coverage in the shipped
+    scorecard run ranged 0/20 to 13/20 -- so this is the common case, not the
+    edge one.
+    """
+
+    degraded: tuple[str, ...] = ()
+    """Objectives gated on a weaker statistic than they are reported with.
+
+    In practice: `context_retention_auc` against a baseline written before
+    `Baseline.strata` existed, which carries no depth labels, so the gate
+    compares mean recall and the report prints the depth-weighted area.
+    """
+
+    @property
+    def incomplete(self) -> bool:
+        return bool(self.not_gated or self.degraded)
+
     def explain(self) -> str:
         lines: list[str] = []
         for diff in self.diffs:
@@ -86,6 +114,13 @@ class GateVerdict:
             lines.append(f"HARD FAIL  {hard}")
         for refusal in self.refusals:
             lines.append(f"REFUSED    {refusal}")
+        for name in self.not_gated:
+            lines.append(f"NOT GATED  {name}: no cluster shared with the baseline")
+        for name in self.degraded:
+            lines.append(
+                f"DEGRADED   {name}: gated on the mean, not the statistic it is "
+                "reported with (the baseline carries no strata)"
+            )
         lines.extend(self.notes)
         lines.append(f"exit {self.exit_code.value}")
         return "\n".join(lines)
@@ -101,6 +136,7 @@ def gate_metrics(
     seed: int = 0,
     min_effect_overrides: Mapping[str, float] | None = None,
     gate_on: Sequence[str] | None = None,
+    strata: Mapping[str, Mapping[str, str]] | None = None,
 ) -> GateVerdict:
     """Compare a run against a baseline, per metric.
 
@@ -124,6 +160,7 @@ def gate_metrics(
     raw: dict[str, float] = {}
     detail: dict[str, tuple[Objective, PairedResult, float]] = {}
     no_data: list[str] = []
+    degraded: list[str] = []
 
     for objective in objectives:
         if objective.id not in gated:
@@ -140,21 +177,39 @@ def gate_metrics(
             no_data.append(objective.id)
             continue
 
+        # The statistic the objective is REPORTED with, from the same dispatch
+        # the frontier uses. This was an unweighted mean for every objective,
+        # so the gate compared a different quantity from the one it named:
+        # `context_retention_auc` -- gated by default -- went 0.6458 to 0.3542
+        # as a depth-weighted AUC and 0.5000 to 0.5000 as a mean, and exited 0.
+        metric_strata = (strata or {}).get(metric) or {}
+        spec_current = statistic_for(objective, current, metric_strata)
+        spec_base = statistic_for(objective, base, metric_strata)
+        if objective.id in CURVE_OBJECTIVES and not usable_strata(
+            metric_strata, current
+        ):
+            # Gating on the mean is still better than not gating, but saying
+            # so is not optional: a baseline written before `Baseline.strata`
+            # existed carries no depth labels, and the number the gate then
+            # compares is not the one the report prints.
+            degraded.append(objective.id)
+
         margin = overrides.get(objective.id, objective.min_effect)
         if objective.min_effect_kind == "relative":
-            scale = abs(sum(base[c] for c in shared) / len(shared)) or 1.0
+            scale = abs(spec_base.fn(shared)) or 1.0
             margin *= scale
 
         # b = baseline, a = current, so a positive difference means the
         # BASELINE is ahead — that is, the current run got worse.
         result = paired_difference(
             shared,
-            _stat(current),
-            _stat(base),
+            spec_current.fn,
+            spec_base.fn,
             direction=objective.direction,
             margin=margin,
             alpha=alpha,
             seed=seed,
+            strata=metric_strata or None,
         )
         raw[objective.id] = result.p_superior
         detail[objective.id] = (objective, result, margin)
@@ -170,11 +225,19 @@ def gate_metrics(
         shared = sorted(set(base) & set(current))
         regressed = rejected.get(metric, False)
 
+        # The printed points come from the same statistic as the test. They
+        # were unweighted means, so a gate row could read "0.5 -> 0.5 ok" for
+        # an AUC that had gone 0.65 -> 0.35: not only the wrong verdict but
+        # two numbers that made it look justified.
+        metric_strata = (strata or {}).get(key) or {}
+        point_base = statistic_for(objective, base, metric_strata).fn
+        point_current = statistic_for(objective, current, metric_strata).fn
+
         diffs.append(
             MetricDiff(
                 metric=metric,
-                baseline_point=sum(base[c] for c in shared) / len(shared),
-                current_point=sum(current[c] for c in shared) / len(shared),
+                baseline_point=point_base(shared),
+                current_point=point_current(shared),
                 # Flip so negative always reads as worse.
                 difference=-result.difference,
                 min_effect=margin,
@@ -213,12 +276,20 @@ def gate_metrics(
         )
 
     ok = not regressions and not hard_fails
+    # `not_gated` does not by itself fail the build: a family going unscorable
+    # is a fact about the run, not evidence of a regression, and exiting 1 on
+    # it would teach people to pass --gate-on to silence the gate. It is
+    # reported everywhere instead -- terminal, JSON and a GHA warning -- so a
+    # green build that tested one metric of five cannot look like a green
+    # build that tested five.
     return GateVerdict(
         ok=ok,
         exit_code=ExitCode.PASS if ok else ExitCode.REGRESSION,
         regressions=regressions,
         diffs=tuple(diffs),
         hard_fails=tuple(hard_fails),
+        not_gated=tuple(sorted(no_data)),
+        degraded=tuple(sorted(degraded)),
     )
 
 
