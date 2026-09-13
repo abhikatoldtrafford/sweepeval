@@ -29,19 +29,45 @@ def latency_samples(calls: Sequence[Call]) -> list[float]:
     return [c.timing.total_ms for c in calls if c.counts_toward_latency]
 
 
-def error_rate(calls: Sequence[Call]) -> float:
-    """Terminal and malformed post-retry outcomes over attempted unit-runs.
+#: Outcomes that count against the target once retries are done with.
+FAILED_CLASSES = (ErrorClass.terminal, ErrorClass.malformed, ErrorClass.retryable)
+"""``retryable`` is here because this is the **post-retry** outcome.
 
-    Refusals are excluded: they are not errors (§7, §11.6).
+A call still classed retryable after the governor gave up did not succeed. It
+was excluded before, and combined with counting only first attempts that made
+the metric structurally incapable of reporting a failure: against an endpoint
+returning 429 to all 160 calls, ``error_rate`` was 0.0 with no LOW_COVERAGE
+flag -- a totally unavailable target indistinguishable from a flawless one,
+on a metric that is also a default hard constraint.
+"""
+
+
+def final_attempts(calls: Sequence[Call]) -> list[Call]:
+    """The last attempt at each ``(unit, run, turn)``.
+
+    First attempts are the wrong population: a call that failed twice and
+    succeeded on the third try is a success, and one that failed three times
+    is a failure. Only the last attempt says which.
     """
-    finals = [c for c in calls if c.attempt == 1]
+    latest: dict[tuple[str, int, int], Call] = {}
+    for call in calls:
+        key = (call.unit_id, call.run_idx, call.turn_idx)
+        seen = latest.get(key)
+        if seen is None or call.attempt > seen.attempt:
+            latest[key] = call
+    return [latest[k] for k in sorted(latest)]
+
+
+def error_rate(calls: Sequence[Call]) -> float | None:
+    """Failed post-retry outcomes over the turns that were attempted.
+
+    Refusals are excluded: they are not errors (§7, §11.6). ``None`` means no
+    turn was attempted at all, which is unscorable rather than perfect.
+    """
+    finals = final_attempts(calls)
     if not finals:
-        return 0.0
-    bad = sum(
-        1
-        for c in finals
-        if c.response.error_class in (ErrorClass.terminal, ErrorClass.malformed)
-    )
+        return None
+    bad = sum(1 for c in finals if c.response.error_class in FAILED_CLASSES)
     return bad / len(finals)
 
 
@@ -104,10 +130,15 @@ class OperationalScorer:
                 "latency_ms", None, "no call qualified for the latency population"
             )
         )
+        rate = error_rate(calls)
         return [
             latency,
             make("tokens_out", float(tokens_out)),
-            make("error_rate", error_rate(calls)),
+            (
+                make("error_rate", rate)
+                if rate is not None
+                else make("error_rate", None, "no turn was attempted")
+            ),
         ]
 
 

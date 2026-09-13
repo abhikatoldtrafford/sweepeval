@@ -161,11 +161,48 @@ def test_refusals_are_not_errors() -> None:
 
 
 def test_terminal_and_malformed_are_errors() -> None:
+    # Distinct turns. Two calls at the same (unit, run, turn) are retries of
+    # each other, and only the last of those is the outcome.
     bad = Call.example(
+        turn_idx=0,
         response=ResponsePart(status=400, error_class=ErrorClass.terminal,
-                              streamed=False, bytes=10)
+                              streamed=False, bytes=10),
     )
-    assert error_rate([bad, Call.example()]) == 0.5
+    assert error_rate([bad, Call.example(turn_idx=1)]) == 0.5
+
+
+def test_a_retry_that_never_succeeded_is_an_error() -> None:
+    """The post-retry outcome is the last attempt, not the first.
+
+    Counting only first attempts and excluding the retryable class made this
+    metric structurally incapable of reporting a failure: an endpoint that
+    429'd every one of 160 calls scored 0.0.
+    """
+    attempts = [
+        Call.example(
+            turn_idx=0, attempt=n,
+            response=ResponsePart(status=429, error_class=ErrorClass.retryable,
+                                  streamed=False, bytes=10),
+        )
+        for n in (1, 2, 3)
+    ]
+    assert error_rate(attempts) == 1.0
+
+
+def test_a_retry_that_eventually_succeeded_is_not_an_error() -> None:
+    attempts = [
+        Call.example(
+            turn_idx=0, attempt=1,
+            response=ResponsePart(status=429, error_class=ErrorClass.retryable,
+                                  streamed=False, bytes=10),
+        ),
+        Call.example(turn_idx=0, attempt=2),
+    ]
+    assert error_rate(attempts) == 0.0
+
+
+def test_no_attempted_turn_is_unscorable_not_perfect() -> None:
+    assert error_rate([]) is None
 
 
 def test_operational_emits_one_observation_per_metric() -> None:

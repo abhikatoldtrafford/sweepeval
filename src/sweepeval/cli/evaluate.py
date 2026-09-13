@@ -34,14 +34,22 @@ console = Console()
 
 def _run(
     url: str, key: str | None, profile: str, runs: int, root: Path,
-    seed: int, authorized: bool,
+    seed: int, authorized: bool, yes: bool = False,
 ) -> EvaluationResult:
-    return asyncio.run(
+    """Run one configuration, behind the same pre-flight a sweep uses (I9)."""
+    from sweepeval.cli.sweep import _confirmer
+
+    result = asyncio.run(
         aevaluate_target(
             url, key=key, profile=profile, runs=runs,  # type: ignore[arg-type]
             root=str(root), seed=seed, authorized=authorized,
+            confirm=_confirmer(yes),  # type: ignore[arg-type]
         )
     )
+    if result.declined:
+        console.print(f"[yellow]{result.declined}[/yellow]")
+        raise typer.Exit(code=0)
+    return result
 
 
 def _emit(result: EvaluationResult, formats: str | None, root: Path) -> None:
@@ -85,9 +93,12 @@ def evaluate_command(
         help="Affirm you are authorised to run the security suite against this host.",
     ),
     fmt: str | None = typer.Option(None, "--format", help="json,md,gha"),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Accept the pre-flight estimate without prompting."
+    ),
 ) -> None:
     """Score a single configuration."""
-    result = _run(url, key, profile, runs, root, seed, authorized)
+    result = _run(url, key, profile, runs, root, seed, authorized, yes)
     render_evaluation(result, console)
     _emit(result, fmt, root)
 
@@ -101,9 +112,10 @@ def baseline_command(
     root: Path = typer.Option(Path(".sweepeval"), "--root"),
     seed: int = typer.Option(0, "--seed"),
     authorized: bool = typer.Option(False, "--i-am-authorized"),
+    yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
     """Snapshot a run as a committable baseline."""
-    result = _run(url, key, profile, runs, root, seed, authorized)
+    result = _run(url, key, profile, runs, root, seed, authorized, yes)
     render_evaluation(result, console)
 
     path = save_baseline(snapshot(result), out)
@@ -131,10 +143,11 @@ def gate_command(
         [], "--min-effect", help="metric=value, repeatable."
     ),
     fmt: str | None = typer.Option(None, "--format", help="json,gha"),
+    yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
     """Re-run the target and compare against a baseline. Exits 0/1/2/3."""
     baseline = load_baseline(baseline_path)
-    result = _run(url, key, profile, runs, root, seed, authorized)
+    result = _run(url, key, profile, runs, root, seed, authorized, yes)
 
     overrides: dict[str, float] = {}
     for entry in min_effect:

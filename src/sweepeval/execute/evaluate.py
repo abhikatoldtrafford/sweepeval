@@ -12,7 +12,7 @@ that is the modal outcome, not an edge case.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -34,6 +34,7 @@ from sweepeval.execute.authz import (
     AuthorizationStore,
     require_authorization,
 )
+from sweepeval.execute.budget import BudgetCap, Estimate, estimate_run
 from sweepeval.execute.hard_fail import classify_hard_fails
 from sweepeval.execute.runner import RunPlan, UnitOutcome, execute_config
 from sweepeval.http.client import TransportClient
@@ -71,6 +72,10 @@ class EvaluationResult:
     """Families whose probes were not executed because a capability ruled them
     out. Their calls are not spent and their metrics do not appear."""
 
+    estimate: Estimate | None = None
+    declined: str = ""
+    """Non-empty when the pre-flight was refused. Nothing was sent (I9)."""
+
     hard_fails: tuple[str, ...] = ()
     """Unit ids with a confirmed canary leak on a high-severity class (§11.2).
 
@@ -105,9 +110,51 @@ async def aevaluate_target(
     authorized: bool = False,
     authorization_prompt: bool = True,
     store_text: bool = True,
+    confirm: Callable[[Estimate], bool] | None = None,
+    cap: BudgetCap | None = None,
 ) -> EvaluationResult:
-    """Discover, detect, plan, execute and aggregate one configuration."""
+    """Discover, detect, plan, execute and aggregate one configuration.
+
+    I9 applies here exactly as it does to a sweep. This path had no
+    ``confirm``, no cap and no estimate at all: ``discover_target`` was the
+    first statement, and ``evaluate``, ``baseline`` and ``run_gate`` all share
+    it -- so three verbs spent, measured against 133 billable requests, with
+    nothing shown to the user first.
+    """
     from pathlib import Path
+
+    corpus = load_corpus(profile)
+    budget_cap = cap or BudgetCap()
+    estimate = estimate_run(corpus, configs=1, runs=runs, profile=profile)
+
+    if confirm is not None and not confirm(estimate):
+        return EvaluationResult(
+            run_id="",
+            config_id="default",
+            profile=profile,
+            corpus=corpus,
+            discovery=None,  # type: ignore[arg-type]
+            capabilities=CapabilityReport(),
+            comparability=None,  # type: ignore[arg-type]
+            authorization=None,
+            declined="the estimate was not confirmed; nothing was sent",
+        )
+    if budget_cap.forbids_starting(estimate):
+        return EvaluationResult(
+            run_id="",
+            config_id="default",
+            profile=profile,
+            corpus=corpus,
+            discovery=None,  # type: ignore[arg-type]
+            capabilities=CapabilityReport(),
+            comparability=None,  # type: ignore[arg-type]
+            authorization=None,
+            declined=(
+                f"the {budget_cap.unit} cap of {budget_cap.value} is below the "
+                f"{estimate.unavoidable_requests} request(s) discovery and "
+                f"capability detection need; nothing was sent"
+            ),
+        )
 
     owned = client is None
     http = client or httpx.AsyncClient(timeout=60.0, follow_redirects=True)
@@ -120,8 +167,6 @@ async def aevaluate_target(
             http, discovery.ladder, key, discovery.extraction.path,
             budget=CapabilityBudget(), profile=profile,
         )
-
-        corpus = load_corpus(profile)
 
         authorization = require_authorization(
             url,
