@@ -119,7 +119,13 @@ def make_paired(
     strata = strata or {}
 
     def paired(a: str, b: str, objective: Objective) -> PairedResult:
-        metric = objective.metric
+        # `metric_for`, not `metric`: with user-supplied pricing the run
+        # carries a real `cost_usd` table, and ranking `tokens_out` anyway
+        # made the axis labelled "Cost per probe" prefer the more expensive
+        # configuration. Resolved against what BOTH sides have, so a pair is
+        # never compared on tables of different quantities.
+        available = set(clusters.get(a, {})) & set(clusters.get(b, {}))
+        metric = objective.metric_for(available)
         table_a = clusters.get(a, {}).get(metric, {})
         table_b = clusters.get(b, {}).get(metric, {})
         shared = sorted(set(table_a) & set(table_b))
@@ -283,7 +289,7 @@ def _points(
         row = metrics.get(config_id, {})
         values: dict[str, float] = {}
         for objective in objectives:
-            value = row.get(objective.metric)
+            value = row.get(objective.metric_for(row))
             if value is None or Flag.NO_VALID_INTERVAL in value.flags:
                 continue
             values[objective.id] = value.point
@@ -324,7 +330,7 @@ def _excluded_metrics(
         row = metrics.get(config_id, {})
         dropped: list[str] = []
         for objective in objectives:
-            value = row.get(objective.metric)
+            value = row.get(objective.metric_for(row))
             if value is None or Flag.LOW_COVERAGE in value.flags:
                 dropped.append(objective.id)
                 continue

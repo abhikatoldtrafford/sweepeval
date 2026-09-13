@@ -106,7 +106,18 @@ class OperationalScorer:
         self, unit: Unit, calls: Sequence[Call], context: ScoreContext
     ) -> list[Observation]:
         samples = latency_samples(calls)
-        tokens_out = sum(c.tokens.out or 0 for c in calls)
+        # The same calls `cost.account` bills for: first attempt, not
+        # terminal. Summing every call counted retries and dead requests into
+        # the ranked cost axis while the printed cost block excluded them, so
+        # the two disagreed about the same configuration.
+        billable = [
+            c
+            for c in calls
+            if c.attempt == 1 and c.response.error_class is not ErrorClass.terminal
+        ]
+        tokens_out = sum(c.tokens.out or 0 for c in billable)
+        tokens_in = sum(c.tokens.in_ or 0 for c in billable)
+        reasoning = sum(c.tokens.reasoning or 0 for c in billable)
 
         def make(
             metric: str, value: float | None, reason: str | None = None
@@ -134,6 +145,12 @@ class OperationalScorer:
         return [
             latency,
             make("tokens_out", float(tokens_out)),
+            # Input and reasoning tokens are billed too. Without them the cost
+            # objective could only ever rank output tokens, so a reasoning
+            # model that answers tersely looked cheaper than a plain model
+            # that answers at length -- the opposite of the invoice.
+            make("tokens_in", float(tokens_in)),
+            make("tokens_reasoning", float(reasoning)),
             (
                 make("error_rate", rate)
                 if rate is not None

@@ -48,7 +48,7 @@
   },
   "sweepeval.schema.objective": {
     "OBJECTIVE_ENTRY_POINT_GROUP": "str",
-    "Objective": "model(fields=cluster_key,default,direction,display_label,family,id,metric_key,min_effect,min_effect_kind,note,weighting;methods=)",
+    "Objective": "model(fields=cluster_key,default,direction,display_label,family,id,metric_key,min_effect,min_effect_kind,note,preferred_metric_key,weighting;methods=metric_for)",
     "ObjectiveRegistry": "class(methods=all,defaults,from_entry_points,get,register;props=)",
     "REGISTRY": "ObjectiveRegistry"
   },

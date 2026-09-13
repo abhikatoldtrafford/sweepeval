@@ -13,8 +13,9 @@ indistinguishable from one that passed.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
+from sweepeval.execute.cost import Pricing
 from sweepeval.schema.metric import Estimand, MetricValue
 from sweepeval.schema.observation import Observation
 from sweepeval.stats.aggregate import (
@@ -82,6 +83,7 @@ def aggregate_config(
     config_id: str,
     seed: int = 0,
     indicative: bool = False,
+    pricing: Pricing | None = None,
 ) -> ConfigAggregate:
     """Aggregate one config's observations into intervals."""
     out = ConfigAggregate(config_id=config_id)
@@ -96,7 +98,62 @@ def aggregate_config(
 
     _context(out, observations, seed=seed, indicative=indicative)
     _operational(out, observations, seed=seed, indicative=indicative)
+    _cost(out, observations, seed=seed, indicative=indicative, pricing=pricing)
     return out
+
+
+def _cost(
+    out: ConfigAggregate,
+    observations: Sequence[Observation],
+    *,
+    seed: int,
+    indicative: bool,
+    pricing: Pricing | None,
+) -> None:
+    """Per-probe spend, when the user supplied prices (§12.4, D8).
+
+    Without pricing the cost objective degrades to output tokens, which the
+    registry says and `pricing_source` makes a hard comparability key. WITH
+    pricing it still ranked `tokens_out`: the dollars were computed for the
+    printed cost block and never reached the frontier, so the axis labelled
+    "Cost per probe" preferred a reasoning model at $0.021 over a plain one at
+    $0.006. Input and reasoning tokens were invisible to it entirely.
+    """
+    if pricing is None:
+        return
+
+    tables = {
+        name: build_cluster_table(observations, metric=name, config_id=out.config_id)
+        for name in ("tokens_in", "tokens_out", "tokens_reasoning")
+    }
+    if not tables["tokens_out"].coverage.attempted:
+        return
+
+    # Reasoning tokens bill at the output rate on every provider that reports
+    # them separately, and they are the bulk of a reasoning model's spend --
+    # gpt-5-nano burned 576 of them for a one-line refusal.
+    shared = set(tables["tokens_out"].values)
+    for name in ("tokens_in", "tokens_reasoning"):
+        if tables[name].coverage.attempted:
+            shared &= set(tables[name].values)
+
+    costs = {
+        cluster: pricing.cost(
+            int(tables["tokens_in"].values.get(cluster, 0.0)),
+            int(tables["tokens_out"].values.get(cluster, 0.0))
+            + int(tables["tokens_reasoning"].values.get(cluster, 0.0)),
+        )
+        for cluster in sorted(shared)
+    }
+    if not costs:
+        return
+
+    out.clusters["cost_usd"] = costs
+    out.metrics["cost_usd"] = aggregate_metric(
+        replace(tables["tokens_out"], values=costs),
+        seed=seed,
+        indicative=indicative,
+    )
 
 
 def _context(

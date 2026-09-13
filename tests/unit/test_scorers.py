@@ -207,7 +207,11 @@ def test_no_attempted_turn_is_unscorable_not_perfect() -> None:
 
 def test_operational_emits_one_observation_per_metric() -> None:
     obs = registry().get("operational").score(_unit(), [Call.example()], _ctx("x"))
-    assert {o.metric for o in obs} == {"latency_ms", "tokens_out", "error_rate"}
+    # tokens_in and tokens_reasoning are billed too; without them the cost
+    # objective could only ever rank output tokens.
+    assert {o.metric for o in obs} == {
+        "latency_ms", "tokens_out", "tokens_in", "tokens_reasoning", "error_rate"
+    }
 
 
 def test_no_qualifying_call_makes_latency_unscorable_not_zero() -> None:

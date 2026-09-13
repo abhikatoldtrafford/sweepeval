@@ -638,6 +638,10 @@ async def _run_one(
         config_id=config.config_id,
         seed=seed,
         indicative=profile == "quick",
+        # So the cost objective ranks what the user is actually billed,
+        # instead of output tokens while the cost block beside it prints
+        # dollars.
+        pricing=pricing,
     )
     # §12.7: the flag rides on every metric a cache would corrupt, attached
     # here rather than in the aggregator, which has no view of the calls.

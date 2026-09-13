@@ -22,6 +22,7 @@ impression (§11.4, §14.2).
 
 from __future__ import annotations
 
+from collections.abc import Container
 from importlib.metadata import entry_points
 from typing import Literal
 
@@ -69,10 +70,31 @@ class Objective(BaseModel):
     weighting: str = ""
     """How this metric aggregates within its family, stated for I1."""
 
+    preferred_metric_key: str = ""
+    """A better cluster table to use when the run happens to have one.
+
+    ``cost_per_probe`` is the case: with user-supplied pricing the run carries
+    a real ``cost_usd`` table, and without it the objective degrades to
+    ``tokens_out`` -- which the registry note has always said, and which
+    ``pricing_source`` makes a hard comparability key.
+
+    It was a static ``metric_key`` of ``tokens_out``, so the degraded form was
+    the *only* form. Supplying prices changed the printed cost block and
+    nothing else: the axis labelled "Cost per probe" still ranked output
+    tokens, and preferred a reasoning model at $0.021 a probe over a plain one
+    at $0.006.
+    """
+
     @property
     def metric(self) -> str:
         """The cluster-table key: ``metric_key`` when set, else the id."""
         return self.metric_key or self.id
+
+    def metric_for(self, available: Container[str]) -> str:
+        """The best cluster table this run actually has for the objective."""
+        if self.preferred_metric_key and self.preferred_metric_key in available:
+            return self.preferred_metric_key
+        return self.metric
 
 
 class ObjectiveRegistry:
@@ -210,6 +232,7 @@ for _objective in (
     Objective(
         id="cost_per_probe",
         metric_key="tokens_out",
+        preferred_metric_key="cost_usd",
         display_label="Cost per probe",
         direction="minimize",
         family="operational",

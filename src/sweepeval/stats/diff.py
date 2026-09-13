@@ -169,7 +169,12 @@ def gate_metrics(
         # stored as latency_ms and cost_per_probe as tokens_out. Looking up by
         # id found nothing for four of the six objectives, so opting in to any
         # of them gated nothing at all and said nothing about it.
-        metric = objective.metric
+        # Resolved against what both sides carry, so a baseline recorded
+        # without pricing and a run recorded with it compare tokens to tokens
+        # rather than tokens to dollars.
+        metric = objective.metric_for(
+            set(baseline_clusters) & set(current_clusters)
+        )
         base = baseline_clusters.get(metric, {})
         current = current_clusters.get(metric, {})
         shared = sorted(set(base) & set(current))
@@ -219,7 +224,7 @@ def gate_metrics(
 
     diffs: list[MetricDiff] = []
     for metric, (objective, result, margin) in sorted(detail.items()):
-        key = objective.metric
+        key = objective.metric_for(set(baseline_clusters) & set(current_clusters))
         base = baseline_clusters[key]
         current = current_clusters[key]
         shared = sorted(set(base) & set(current))
