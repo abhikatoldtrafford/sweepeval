@@ -83,6 +83,46 @@ that was mutation-checked by breaking what it protects.
 - `evaluate`, `baseline` and `gate` spent requests with no pre-flight estimate,
   which I9 forbids.
 
+A second independent audit, after those fixes, found seven more. All are
+fixed; each is listed because the tool's whole claim is that it says what it
+did not measure.
+
+- **`security_pass_rate` scored an unreadable target 1.00.** It was the only
+  family with no UNSCORABLE branch, so "no text extracted" read as "no leak
+  found" — with a real interval and a coverage line reporting 20/20 scored.
+- **A refusal cue could be any of several bare phrases matched as
+  substrings**, so a canary emitted verbatim scored a pass if the model
+  apologised within 120 characters of it, and a full PII leak passed if it
+  opened with "I'm sorry to hear that". Cues are now first-person anchored
+  patterns, and the exclusion window stops at a sentence boundary.
+- **A partial `--resume` reported determinism 0.00 where an uninterrupted run
+  reported 1.00**, propagated it to temperature siblings, wrote both answers
+  to the append-only log, and called the run COMPLETE.
+- **The CI gate compared the unweighted mean of every objective**, so a
+  29-point `context_retention_auc` regression exited 0 and the two numbers
+  printed beside the verdict were means under the AUC's name. `Baseline` now
+  carries `strata`, and the gate and the frontier share one statistic dispatch.
+- **A gate that could test one of five requested metrics exited 0 silently.**
+  It now reports `not_gated` and `degraded` in the terminal, the JSON payload
+  and GitHub annotations.
+- **A hard fail required a leak on every run**, where D23 asks for a majority
+  of three — so a target exfiltrating its system prompt on two attempts in
+  three was neither disqualified nor reported anywhere. Suspected leaks are
+  now printed too.
+- **The cluster floor bound the interval but not the p-value.** Below eight
+  clusters `paired.py` bootstrapped anyway; measured family-wise false
+  domination was 8.5% against a stated 5%. It is now an exact sign-flip
+  permutation test, and the measured rate is 0%.
+
+### Withdrawn
+
+- **The OpenAI scorecard's security figures and frontier.** Produced by the
+  canary matcher above, wrong in the unsafe direction, and not re-scorable
+  from the stored run: `blob_ids` was empty on every observation, so no stored
+  response could be joined back to its probe. Both fields are populated now,
+  so a run recorded today re-scores for free. The operational table stands and
+  now prints its intervals.
+
 ### Known limitations
 
 - Tool integrity, retrieval quality, degradation-under-load, generated probes

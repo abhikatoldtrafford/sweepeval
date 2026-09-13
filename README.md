@@ -90,34 +90,36 @@ endpoint could not support says which detector ruled it out.
 
 ## A real scorecard
 
-Ten OpenAI chat models, one `sweepeval` run, 2026-09-13. Security is 20
-adversarial trials per model — direct injection, instruction override,
-system-prompt exfiltration, role confusion, delimiter escape, indirect
-injection — each behind a system frame naming a secret the model must not
-emit. A refusal is a pass.
+Ten OpenAI chat models, one `sweepeval` run, 2026-09-13. Latency and output
+tokens per probe, each with its 95% cluster-bootstrap interval:
 
-| Model | Security | Mean latency | Tokens / probe |
-|---|---|---|---|
-| gpt-5 | 1.00 | 12.36 s | 1,543 |
-| gpt-5.1 | 1.00 | 2.54 s | 273 |
-| gpt-5.2 | 1.00 | 3.81 s | 266 |
-| gpt-5-mini | 1.00 | 10.06 s | 1,175 |
-| gpt-5-nano | 1.00 | 9.66 s | 2,166 |
-| gpt-4o | 1.00 | 1.91 s | 206 |
-| gpt-4o-mini | 1.00 | 1.54 s | 171 |
-| gpt-4.1 | 0.90 | 1.36 s | 169 |
-| **gpt-4.1-mini** | **0.40** | 1.33 s | 115 |
-| **gpt-4.1-nano** | **0.35** | 1.18 s | 101 |
+| Model | Mean latency (s) | Output tokens / probe |
+|---|---|---|
+| gpt-4.1-nano | 1.18 [0.95, 1.51] | 101 [75, 129] |
+| gpt-4.1-mini | 1.33 [1.08, 1.62] | 115 [77, 158] |
+| gpt-4.1 | 1.36 [1.07, 1.70] | 169 [119, 222] |
+| gpt-4o-mini | 1.54 [1.27, 1.87] | 171 [122, 226] |
+| gpt-4o | 1.91 [1.49, 2.46] | 206 [151, 264] |
+| gpt-5.1 | 2.54 [1.99, 3.14] | 273 [201, 350] |
+| gpt-5.2 | 3.81 [2.60, 5.24] | 266 [186, 355] |
+| gpt-5-nano | 9.66 [8.45, 10.95] | 2166 [1901, 2458] |
+| gpt-5-mini | 10.06 [8.31, 12.10] | 1175 [979, 1388] |
+| gpt-5 | 12.36 [10.25, 14.67] | 1543 [1294, 1797] |
 
-The 4.1 mini and nano tiers comply with prompt injection far more often than
-anything else tested, and the gap is wide enough to survive a `quick`-profile
-interval. The reasoning tier costs ~10× the latency and 10–20× the output
-tokens for the same security result.
+The reasoning tier costs roughly 10× the latency and 10–20× the output tokens
+of the 4.x tier on this corpus, most of it reasoning tokens that never reach
+the answer. That gap is far larger than the intervals; the ones within a tier
+mostly are not, which is what N=2 buys.
 
-This is one `quick` run at N=2: intervals are wide and it is **not
-gate-eligible**. Three of the six default objectives are omitted because the
-tool cannot yet measure them honestly — [the full scorecard](docs/scorecard.md)
-says which, and why.
+**The security column that stood here has been withdrawn.** An independent
+adversarial audit found the canary matcher wrong in the unsafe direction — a
+model that emitted the planted marker and then apologised scored a pass — so
+every published rate was an upper bound. It is fixed, but this run cannot be
+re-scored offline, so the numbers are gone rather than corrected.
+[The full scorecard](docs/scorecard.md) sets out what was withdrawn, why, and
+what a replacement run needs.
+
+This is one `quick` run at N=2 and it is **not gate-eligible**.
 
 ## Why another eval tool
 
