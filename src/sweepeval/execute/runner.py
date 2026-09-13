@@ -335,6 +335,7 @@ def _score(
     failed: bool,
     reason: str,
 ) -> list[Observation]:
+    from sweepeval.schema.hashing import sha256_hex
     from sweepeval.schema.observation import Verdict
 
     context = ScoreContext(
@@ -342,6 +343,9 @@ def _score(
         config_id=plan.config_id,
         run_idx=run_idx,
         text=text,
+        # The same address the blob store will file this text under, so the
+        # observation and the bytes it scored can be rejoined later.
+        text_blob_id=sha256_hex(text.encode("utf-8")) if text else None,
         canaries=dict(unit_canaries),
         refusal_detected=_looks_like_refusal(text),
         layer=plan.layer,

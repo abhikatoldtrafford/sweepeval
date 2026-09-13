@@ -51,6 +51,16 @@ class ScoreContext:
 
     canaries: dict[str, str] = field(default_factory=dict)
     refusal_detected: bool = False
+    text_blob_id: str | None = None
+    """Content address of :attr:`text`, so an Observation can point at the
+    exact bytes it scored.
+
+    Without it a stored run cannot be re-scored: the blobs are on disk and
+    nothing says which observation came from which. That turns every scorer
+    fix into another paid run against the target, which is the opposite of
+    what an append-only artifact store is for.
+    """
+
     layer: str = "generic"
     ts: str = ""
 
@@ -88,7 +98,11 @@ class ScoreContext:
             policy_id=unit.policy_id if unit else None,
             depth=unit.depth if unit else None,
             call_ids=tuple(call_ids),
-            blob_ids=tuple(blob_ids),
+            # Defaults to the address of the text that was scored, so a
+            # stored run can be re-scored after a scorer fix instead of
+            # costing another paid run against the target.
+            blob_ids=tuple(blob_ids)
+            or ((self.text_blob_id,) if self.text_blob_id else ()),
         )
 
 
