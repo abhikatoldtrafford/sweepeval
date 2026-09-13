@@ -236,7 +236,13 @@ async def asweep_target(
     corpus = load_corpus(profile)
     # The cap the estimate is built from is the one the planner will use, so
     # the figure shown is an upper bound the run cannot exceed.
-    planned_cap = min(config_cap or CAP_BY_PROFILE[profile], CAP_BY_PROFILE[profile])
+    # An explicit config_cap overrides the profile default in BOTH directions.
+    # Lowering it is a cheaper run; raising it is a deliberate, larger one --
+    # comparing eight models needs eight configs, and the profile cap of six
+    # would silently truncate two of them out of the scorecard. The estimate
+    # below is computed from whatever this ends up being, so the user still
+    # consents to the real figure.
+    planned_cap = config_cap or CAP_BY_PROFILE[profile]
     estimate = estimate_run(
         corpus,
         configs=planned_cap,

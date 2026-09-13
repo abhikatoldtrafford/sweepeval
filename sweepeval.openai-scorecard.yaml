@@ -1,0 +1,36 @@
+# The OpenAI model scorecard.
+#
+# Ten chat models across three generations. Deliberately NOT "every model the
+# account lists": that is 134 entries including embeddings, TTS, transcription,
+# image and search variants, none of which serve a chat completion, plus `pro`
+# and `codex` tiers whose cost is an order of magnitude higher for no extra
+# signal on this corpus.
+#
+# Model is the ONLY axis. That is the point of a scorecard -- every other
+# dimension held fixed so the models are what differs. It is also necessary:
+# gpt-5, gpt-5-mini and gpt-5-nano are reasoning models that reject a
+# `temperature` parameter outright (verified: HTTP 400), so a temperature axis
+# would 400 on every probe for three of the ten.
+#
+# No pricing block, so the cost objective reports output tokens per probe
+# rather than money. Adding real prices from your invoice turns it into
+# currency -- see docs/concepts/profiles.md.
+
+target:
+  url: https://api.openai.com/v1/chat/completions
+
+axes:
+  model:
+    - gpt-5
+    - gpt-5.1
+    - gpt-5.2
+    - gpt-5-mini
+    - gpt-5-nano
+    - gpt-4.1
+    - gpt-4.1-mini
+    - gpt-4.1-nano
+    - gpt-4o
+    - gpt-4o-mini
+
+profile: quick
+runs: 2

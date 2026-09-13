@@ -106,6 +106,10 @@ def sweep_command(
     ),
     alpha: float = typer.Option(0.05, "--alpha", help="Family-wise error rate."),
     fmt: str | None = typer.Option(None, "--format", help="html,junit,json"),
+    max_configs: int | None = typer.Option(
+        None, "--max-configs",
+        help="Override the profile's config cap, up or down. The estimate follows it.",
+    ),
     config: Path | None = typer.Option(
         None, "--config", "-c",
         help="A sweepeval.yaml: corrections, declared axes, pricing, constraints.",
@@ -149,6 +153,7 @@ def sweep_command(
             ),
             cap=_cap(max_requests),
             resume_run_id=resume,
+            config_cap=max_configs,
             declared=declared,
             pricing=declared.pricing if declared else None,
             on_progress=lambda msg: console.print(f"[dim]{msg}[/dim]"),
@@ -183,6 +188,7 @@ def run_command(
         yes=yes,
         max_requests=None,
         resume=None,
+        max_configs=None,
         objectives=None,
         prefer=prefer,
         alpha=0.05,
