@@ -769,6 +769,20 @@ def _collect_skips(result: SweepResult) -> None:
         ):
             result.skipped.append((scorer.family, f"{DEFERRED_REASON}: {scorer.brief}"))
 
+    # Same reporting as the evaluate path: an entry point that raises on
+    # import is indistinguishable from one that was never installed, and the
+    # user is the only person who can fix either.
+    from sweepeval.schema.objective import REGISTRY as _OBJECTIVES
+
+    for name, error in scorer_registry().plugin_errors:
+        result.skipped.append(
+            (f"plugin:{name}", f"scorer plugin failed to load: {error}")
+        )
+    for name, error in _OBJECTIVES.plugin_errors:
+        result.skipped.append(
+            (f"plugin:{name}", f"objective plugin failed to load: {error}")
+        )
+
 
 def _collect_assumptions(result: SweepResult) -> None:
     """Low-confidence inferences the user can correct (§8.6)."""

@@ -158,6 +158,11 @@ class CrossRunScorer(Protocol):
 class ScorerRegistry:
     def __init__(self) -> None:
         self._scorers: dict[str, Scorer] = {}
+        self._loaded_plugins = False
+        self.plugin_errors: list[tuple[str, str]] = []
+        """Plugins that failed to load, as (name, reason). Reported, never
+        swallowed: an entry point that raises on import is exactly the case
+        a user needs told about."""
 
     def register(self, scorer: Scorer) -> Scorer:
         if scorer.family in self._scorers:
@@ -198,20 +203,45 @@ class ScorerRegistry:
         return tuple(out)
 
     def from_entry_points(self) -> None:
+        """Load third-party scorers declared under ``sweepeval.scorers``.
+
+        Idempotent, and called for you: :func:`registry` runs it once on first
+        use. It had **no callers at all** -- not in the package, not in the
+        tests -- so an installed plugin was never loaded, and I10's claim that
+        "adding a scorer touches no runner code" held only because adding one
+        did nothing. A unit from an unregistered family was then dropped by
+        the runner with no row of any kind.
+
+        A plugin that fails to import is reported and skipped rather than
+        killing the run: a broken third-party package should not make the
+        tool unusable, and silence would repeat the defect this fixes.
+        """
+        if self._loaded_plugins:
+            return
+        self._loaded_plugins = True
         for entry in entry_points(group=SCORER_ENTRY_POINT_GROUP):
-            loaded = entry.load()
-            scorer = (
-                loaded()
-                if callable(loaded) and not hasattr(loaded, "family")
-                else loaded
-            )
-            self.register(scorer)
+            try:
+                loaded = entry.load()
+                scorer = (
+                    loaded()
+                    if callable(loaded) and not hasattr(loaded, "family")
+                    else loaded
+                )
+                self.register(scorer)
+            except Exception as error:
+                # A plugin is arbitrary third-party code; a broken one must
+                # not make the tool unusable.
+                self.plugin_errors.append(
+                    (entry.name, f"{type(error).__name__}: {error}")
+                )
 
 
 _REGISTRY = ScorerRegistry()
 
 
 def registry() -> ScorerRegistry:
+    """The scorer registry, with third-party plugins loaded."""
+    _REGISTRY.from_entry_points()
     return _REGISTRY
 
 

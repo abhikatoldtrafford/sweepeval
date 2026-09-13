@@ -498,6 +498,26 @@ def _score(
     try:
         scorer = registry.get(unit.family)
     except KeyError:
+        # I5: never silently. This returned an empty list, so a unit whose
+        # family had no registered scorer -- the exact situation a plugin that
+        # failed to load produces -- was executed, paid for, and then vanished:
+        # no observation, no coverage row, nothing in the report to distinguish
+        # it from a family that was never in the corpus.
+        observations.append(
+            context.observation(
+                scorer=unit.family,
+                version=0,
+                metric=f"{unit.family}_pass_rate",
+                family=unit.family,
+                verdict=Verdict.SKIPPED,
+                reason=(
+                    f"no scorer is registered for family {unit.family!r}; "
+                    "the probe ran and its response was stored, but nothing "
+                    "scored it"
+                ),
+                unit=unit,
+            )
+        )
         return observations
     observations.extend(scorer.score(unit, list(calls), context))
     return observations

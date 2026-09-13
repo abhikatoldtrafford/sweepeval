@@ -102,6 +102,8 @@ class ObjectiveRegistry:
 
     def __init__(self) -> None:
         self._objectives: dict[str, Objective] = {}
+        self._loaded_plugins = False
+        self.plugin_errors: list[tuple[str, str]] = []
 
     def register(self, objective: Objective) -> None:
         if objective.id in self._objectives:
@@ -112,6 +114,7 @@ class ObjectiveRegistry:
         self._objectives[objective.id] = objective
 
     def get(self, objective_id: str) -> Objective:
+        self.from_entry_points()
         try:
             return self._objectives[objective_id]
         except KeyError:
@@ -119,17 +122,34 @@ class ObjectiveRegistry:
             raise KeyError(f"unknown objective {objective_id!r}; known: {known}") from None
 
     def all(self) -> tuple[Objective, ...]:
+        self.from_entry_points()
         return tuple(self._objectives[k] for k in sorted(self._objectives))
 
     def defaults(self) -> tuple[Objective, ...]:
         return tuple(o for o in self.all() if o.default)
 
     def from_entry_points(self) -> None:
-        """Load third-party objectives (I10)."""
+        """Load third-party objectives declared under ``sweepeval.objectives``.
+
+        Idempotent, and called by :meth:`all` and :meth:`defaults` so a plugin
+        is loaded before anything reads the registry. It had no callers, so an
+        installed objective was never registered and I10's claim held only
+        because adding one did nothing.
+        """
+        if self._loaded_plugins:
+            return
+        self._loaded_plugins = True
         for entry in entry_points(group=OBJECTIVE_ENTRY_POINT_GROUP):
-            loaded = entry.load()
-            for objective in loaded() if callable(loaded) else loaded:
-                self.register(objective)
+            try:
+                loaded = entry.load()
+                for objective in loaded() if callable(loaded) else loaded:
+                    self.register(objective)
+            except Exception as error:
+                # Arbitrary third-party code. Recorded rather than raised, and
+                # surfaced by the CLI -- silence is the defect being fixed.
+                self.plugin_errors.append(
+                    (entry.name, f"{type(error).__name__}: {error}")
+                )
 
 
 REGISTRY = ObjectiveRegistry()
