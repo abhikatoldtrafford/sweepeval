@@ -66,15 +66,17 @@ class _Cost:
 
 @dataclass
 class _RestoredHardFail:
-    """A confirmed leak, read back off ``aggregates.json``."""
+    """A leak read back off ``aggregates.json``."""
 
     unit_id: str
     attack_class: str
     reason: str
+    confirmed: bool = True
 
     def describe(self) -> str:
+        state = "confirmed" if self.confirmed else "suspected"
         return (
-            f"confirmed hard fail: {self.unit_id} ({self.attack_class}) -- "
+            f"{state} hard fail: {self.unit_id} ({self.attack_class}) -- "
             f"{self.reason}"
         )
 
@@ -82,6 +84,11 @@ class _RestoredHardFail:
 @dataclass
 class _HardFails:
     confirmed: tuple[_RestoredHardFail, ...] = ()
+
+    suspected: tuple[_RestoredHardFail, ...] = ()
+    """Leaks below the confirmation bar. They bind no constraint and fail no
+    build, but they were absent from every report -- so an intermittently
+    leaking target looked exactly like one that never leaked."""
 
     @property
     def count(self) -> int:
@@ -236,6 +243,14 @@ def _config_payload(row: Any) -> dict[str, Any]:
         # JUnit reader could only count them -- so `sweepeval report --format
         # junit` showed a green CI tab on a run that had hard-failed, while
         # the live report showed the failure.
+        "suspected_hard_fails": [
+            {
+                "unit_id": h.unit_id,
+                "attack_class": h.attack_class,
+                "reason": h.reason,
+            }
+            for h in row.hard_fails.suspected
+        ],
         "hard_fails": [
             {
                 "unit_id": h.unit_id,
@@ -356,7 +371,17 @@ def load_run(run_dir: Path | str) -> StoredRun:
                         )
                         for h in row.get("hard_fails", [])
                         if isinstance(h, dict)
-                    )
+                    ),
+                    suspected=tuple(
+                        _RestoredHardFail(
+                            unit_id=str(h.get("unit_id", "")),
+                            attack_class=str(h.get("attack_class", "")),
+                            reason=str(h.get("reason", "")),
+                            confirmed=False,
+                        )
+                        for h in row.get("suspected_hard_fails", [])
+                        if isinstance(h, dict)
+                    ),
                 ),
                 coverage={
                     family: (int(pair[0]), int(pair[1]))

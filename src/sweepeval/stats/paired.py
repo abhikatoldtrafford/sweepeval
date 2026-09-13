@@ -196,6 +196,22 @@ def paired_difference(
             evidence={"reason": "fewer than 3 clusters"},
         )
 
+    if n < CLUSTER_FLOOR:
+        # §13.4: "Fewer than 8 clusters never bootstraps." `resample.py`
+        # honours that and falls back to a t-interval; this function did not.
+        # It bootstrapped anyway, widened the *interval* with an Agresti-Coull
+        # pad, and left `p_superior` computed from the forbidden bootstrap --
+        # which is what Holm consumes. At 3 clusters the replicate
+        # distribution is degenerate about 10% of the time, so p floored at
+        # 1/(B+1) while the interval printed beside it straddled zero, and an
+        # audit measured the family-wise false-domination rate at 8.5%
+        # [6.2, 11.6] against a stated 5%.
+        return _exact_paired(
+            list(cluster_ids), statistic_a, statistic_b, sign,
+            observed=observed, margin=margin, alpha=alpha,
+            values_a=values_a, values_b=values_b, bounded=bounded,
+        )
+
     rng = np.random.default_rng(seed)
 
     if values_a is not None and values_b is not None:
@@ -256,5 +272,93 @@ def paired_difference(
             "resamples": n_resamples,
             "stratified": strata is not None,
             "margin": margin,
+        },
+    )
+
+
+def _exact_paired(
+    cluster_ids: list[str],
+    statistic_a: Statistic,
+    statistic_b: Statistic,
+    sign: float,
+    *,
+    observed: float,
+    margin: float,
+    alpha: float,
+    values_a: Mapping[str, float] | None,
+    values_b: Mapping[str, float] | None,
+    bounded: bool,
+) -> PairedResult:
+    """Below the cluster floor: an exact sign-flip permutation test.
+
+    With at most seven paired clusters the null distribution can be
+    enumerated -- 2**n sign assignments, 128 at the largest -- so there is no
+    reason to approximate it with a bootstrap the spec forbids at this size.
+
+    It is also self-limiting in the right way. The smallest p-value the test
+    can produce is ``1/2**n``: 0.125 at three clusters, 0.031 at five. So at
+    three clusters no arrangement of the data reaches alpha=0.05 and no
+    domination can be asserted -- not by refusal, but because three paired
+    observations genuinely do not contain that much evidence. That is the
+    honest version of the p=1 the sub-three branch returns.
+
+    A statistic that is not separable per cluster -- the retention curve --
+    has no per-cluster difference to flip, so it declines instead.
+    """
+    if values_a is None or values_b is None:
+        return PairedResult(
+            difference=observed, lo=observed, hi=observed, n_clusters=len(cluster_ids),
+            p_superior=1.0, p_non_inferior=1.0, method=CIMethod.none, margin=margin,
+            flags=(Flag.NO_VALID_INTERVAL, Flag.LOW_N),
+            evidence={
+                "reason": (
+                    f"{len(cluster_ids)} clusters is below the floor of "
+                    f"{CLUSTER_FLOOR}, and this statistic has no per-cluster "
+                    "difference to permute"
+                )
+            },
+        )
+
+    diffs = np.array(
+        [sign * (values_b[c] - values_a[c]) for c in cluster_ids], dtype=float
+    )
+    n = len(diffs)
+
+    # Every assignment of +/- to the n paired differences, as a (2**n, n)
+    # matrix of signs. Exhaustive, so the result does not depend on a seed.
+    grid = ((np.arange(2**n)[:, None] >> np.arange(n)) & 1) * 2 - 1
+    means = (grid * diffs).mean(axis=1)
+
+    # H0 for superiority: the true difference is at most +margin. Shift the
+    # observed effect by the margin and ask how much of the null mass sits at
+    # or above it. `>=` and not `>`: the observed assignment is one of the
+    # 2**n, and excluding it is the p=0 the bootstrap was corrected for.
+    p_superior = float(np.mean(means >= observed - margin))
+    p_non_inferior = float(np.mean(means >= observed + margin))
+
+    # The interval is the same enumeration's quantiles, so the decision and
+    # the printed bounds cannot disagree -- which was the concrete symptom.
+    lo = float(np.quantile(means, alpha / 2)) + observed - float(means.mean())
+    hi = float(np.quantile(means, 1 - alpha / 2)) + observed - float(means.mean())
+    lo, hi = min(lo, observed), max(hi, observed)
+    if bounded:
+        lo, hi = max(-1.0, lo), min(1.0, hi)
+
+    return PairedResult(
+        difference=observed,
+        lo=lo,
+        hi=hi,
+        n_clusters=n,
+        p_superior=p_superior,
+        p_non_inferior=p_non_inferior,
+        method=CIMethod.permutation,
+        margin=margin,
+        flags=(Flag.LOW_N,),
+        evidence={
+            "reason": (
+                f"{n} clusters is below the floor of {CLUSTER_FLOOR}; exact "
+                f"sign-flip test over {2**n} assignments"
+            ),
+            "smallest_possible_p": 1.0 / 2**n,
         },
     )

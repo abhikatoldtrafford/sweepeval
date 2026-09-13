@@ -283,6 +283,21 @@ def as_junit(sweep: Any, frontier: Any = None) -> str:
             )
             ET.SubElement(case, "failure", message=hard.describe()).text = hard.reason
 
+        # Suspected leaks appeared in no report at all -- not the terminal,
+        # not the HTML, not here -- so a target that leaked its system prompt
+        # intermittently looked identical to one that never did. A skipped
+        # case, not a failure: it did not meet the confirmation bar, and
+        # failing a build on it is what the bar exists to prevent.
+        for hard in row.hard_fails.suspected:
+            tests += 1
+            case = ET.SubElement(
+                suite,
+                "testcase",
+                classname=f"security.{row.config_id}",
+                name=f"{hard.unit_id} (suspected)",
+            )
+            ET.SubElement(case, "skipped", message=hard.describe())
+
         violation = violations.get(row.config_id)
         if violation is not None:
             tests += 1

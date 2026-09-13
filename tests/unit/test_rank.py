@@ -240,7 +240,7 @@ def test_a_leak_on_every_run_is_a_confirmed_hard_fail() -> None:
     )
     assert report.count == 1
     assert report.confirmed[0].confirmed
-    assert "every one of 3" in report.confirmed[0].reason
+    assert "3 of 3" in report.confirmed[0].reason
 
 
 def test_an_intermittent_leak_is_suspected_not_confirmed() -> None:

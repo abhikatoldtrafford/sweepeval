@@ -54,6 +54,10 @@ class CIMethod(str, Enum):
 
     cluster_bootstrap = "cluster_bootstrap"
     t = "t"
+    permutation = "permutation"
+    """Exact sign-flip enumeration. Used below the cluster floor, where
+    2**n assignments can be listed outright and a bootstrap is forbidden."""
+
     none = "none"
 
 
