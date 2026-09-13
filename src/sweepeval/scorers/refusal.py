@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from sweepeval.capabilities.normalise import normalise
 from sweepeval.schema.unit import OnRefusal, Unit
-from sweepeval.scorers.canary import REFUSAL_CUES, fold_punctuation
+from sweepeval.scorers.canary import REFUSAL_PATTERN, fold_punctuation
 
 __all__ = [
     "DEFAULT_ON_REFUSAL",
@@ -76,5 +76,10 @@ def looks_like_refusal(text: str) -> bool:
     previous check normalised only, so "I won<U+2019>t do that" did not match
     a single cue. The same fold is what :mod:`sweepeval.scorers.canary`
     applies, for the same reason and after the same false positive.
+
+    Anchored patterns rather than substrings, for the *opposite* reason: bare
+    cues matched ordinary prose ("The server was unable to complete the
+    migration"), and here over-firing silently excludes a real determinism or
+    context measurement under §11.8.
     """
-    return any(cue in normalise(fold_punctuation(text)) for cue in REFUSAL_CUES)
+    return bool(REFUSAL_PATTERN.search(normalise(fold_punctuation(text))))
