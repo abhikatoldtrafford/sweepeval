@@ -77,21 +77,57 @@ Taken together with the security table, `gpt-4o-mini` and `gpt-5.1` are the
 interesting positions: full marks on security at 1.5–2.5 s and under 300
 tokens a probe.
 
+## The frontier
+
+Re-ranked offline from the stored run after the ranking fixes, at alpha 0.05
+family-wise:
+
+**Excluded before any comparison** — a confirmed security hard fail
+disqualifies a configuration under §14.1's constraint: `gpt-5-nano`,
+`gpt-4.1-mini`, `gpt-4.1-nano`.
+
+**Dominated:**
+
+| Model | Dominated by | Why |
+|---|---|---|
+| `gpt-5` | `gpt-5.2` | Same security, ~3× faster, ~6× fewer output tokens |
+| `gpt-5-mini` | `gpt-5.1` | Same security, ~4× faster, ~4× fewer output tokens |
+
+**Frontier — five configurations, one tied cluster:** `gpt-5.1`, `gpt-5.2`,
+`gpt-4.1`, `gpt-4o`, `gpt-4o-mini`.
+
+The five are not separable at this profile, and the report says why rather
+than implying they are interchangeable — e.g. `gpt-4o-mini` versus `gpt-5`:
+
+```
+not dominating: tied on context_retention_auc, but not tightly enough to
+call it non-inferior -- raise --runs or --profile standard
+```
+
+That is a power statement, not a finding about the models. Ten conversations
+at N=2 cannot establish non-inferiority within a 0.02 margin.
+
 ## What is deliberately not in this scorecard
 
-An independent adversarial audit of the tool (2026-09-13) found these three
-default objectives are not currently measured well enough to publish. They are
-omitted rather than printed with a caveat, because a number in a table gets
-quoted and a caveat does not.
+An independent adversarial audit of the tool (2026-09-13) found two of the six
+default objectives not measured well enough to publish **in this run**. They
+are omitted rather than printed with a caveat, because a number in a table
+gets quoted and a caveat does not.
 
-| Objective | Why it is omitted |
+| Objective | Why it is omitted here |
 |---|---|
-| `guardrail_pass_rate` | The deterministic scorer recognises compliance only by procedural phrases ("step 1", "here's how"). A model that simply states the withheld fact matches none, so it is UNSCORABLE. Coverage in this run ranged from **0/20 to 13/20** — for four models the metric had no valid interval at all. The LLM-judge escalation that would resolve the ambiguous band is deferred to 0.2. |
-| `target_determinism_at_temp0` | This was a model-only sweep, so no configuration pinned `temperature=0`, and three of the ten models reject a temperature parameter outright. The metric was therefore measured at each model's default temperature while being named for temperature 0. |
-| `latency_p95_ms` | The value stored and reported under this name is the arithmetic **mean** of per-probe call latencies, not a p95. Only the paired comparison uses a real quantile. The mean is what is printed above, under its own name. |
+| `guardrail_pass_rate` | The scorer recognised compliance only by procedural phrases ("step 1", "here's how"), so a model that simply *stated* the withheld fact matched none and came back UNSCORABLE. Coverage in this run ranged from **0/20 to 13/20**; for four models the metric had no valid interval at all. Since fixed — a substantive non-refusal now counts as compliance — but these numbers predate the fix. |
+| `target_determinism_at_temp0` | This was a model-only sweep, so no configuration pinned `temperature=0`, and three of the ten models reject a temperature parameter outright. The metric was measured at each model's default temperature while being named for temperature 0. Still open. |
 
-`context_retention_auc` is measured correctly as a point but its interval is
-borrowed from a different statistic, so only the points are worth quoting:
+The latency objective was also wrong when this ran — the value stored as
+`latency_p95_ms` was an arithmetic mean. That is fixed: the default is now
+`latency_mean_ms`, reported under its own name, and the p95 is computed
+separately and promotable. The Operational table above is the mean, correctly
+labelled.
+
+`context_retention_auc`'s interval was borrowed from a different statistic
+when this run was scored — since fixed, so a fresh run carries a real one.
+For this run only the points are worth quoting:
 1.00 for six models, 0.90 for gpt-5 and gpt-4o-mini, 0.85 for gpt-5-nano,
 0.70 for gpt-4o.
 

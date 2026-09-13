@@ -176,3 +176,74 @@ def test_a_p_value_is_never_reported_as_exactly_zero() -> None:
     )
     assert result.p_superior > 0.0
     assert result.p_superior <= 1 / 2001 + 1e-12
+
+
+# --- an unmeasurable objective must not veto the pair ---------------------
+
+
+def test_an_objective_with_no_shared_clusters_is_excluded_not_failed() -> None:
+    """Found on real data. Two models' guardrail probes were unscorable in
+    different places, so they shared no cluster; the IUT takes the maximum
+    p-value, that objective returned 1.0, and one unmeasurable dimension
+    vetoed every domination in a ten-model sweep.
+
+    §14.5 already excludes a metric for coverage divergence. No shared
+    clusters at all is the limiting case.
+    """
+    rng = random.Random(3)
+    clusters, metrics = {}, {}
+    for name, rate in (("good", 1.0), ("bad", 0.0)):
+        c, m = _config(rng, rate)
+        clusters[name], metrics[name] = c, m
+
+    # A guardrail objective whose clusters do not overlap at all.
+    clusters["good"]["guardrail_pass_rate"] = {"g1": 1.0, "g2": 1.0}
+    clusters["bad"]["guardrail_pass_rate"] = {"g8": 1.0, "g9": 1.0}
+    for name in ("good", "bad"):
+        metrics[name]["guardrail_pass_rate"] = _mv(1.0)
+
+    objectives = [*OBJECTIVES, REGISTRY.get("guardrail_pass_rate")]
+    result = rank_configs(
+        ["good", "bad"], metrics, clusters, objectives, constraints=(), seed=3
+    )
+    verdict = result.domination.verdicts[("bad", "good")]
+    assert "guardrail_pass_rate" in verdict.incomparable
+    assert "bad" in result.dominated, verdict.reason
+
+
+def test_a_pair_sharing_nothing_at_all_does_not_dominate() -> None:
+    """Excluding objectives must not become excluding all of them."""
+    rng = random.Random(5)
+    clusters, metrics = {}, {}
+    for name, prefix in (("good", "x"), ("bad", "y")):
+        c, m = _config(rng, 1.0 if name == "good" else 0.0)
+        clusters[name] = {
+            metric: {f"{prefix}{k}": v for k, v in table.items()}
+            for metric, table in c.items()
+        }
+        metrics[name] = m
+    result = rank_configs(
+        ["good", "bad"], metrics, clusters, OBJECTIVES, constraints=(), seed=5
+    )
+    assert not result.dominated
+
+
+def test_a_tie_without_power_is_not_reported_as_being_worse() -> None:
+    """"worse on at least one objective" when the objectives were exactly tied
+    is the absence-of-evidence conflation the spec refuses elsewhere."""
+    rng = random.Random(9)
+    clusters, metrics = {}, {}
+    for name in ("a", "b"):
+        c, m = _config(rng, 0.8)
+        clusters[name], metrics[name] = c, m
+    result = rank_configs(
+        ["a", "b"], metrics, clusters, OBJECTIVES, constraints=(), seed=9
+    )
+    for verdict in result.domination.verdicts.values():
+        if verdict.dominates:
+            continue
+        if not any(
+            c.comparable and c.difference <= -c.applied_margin
+            for c in verdict.per_objective
+        ):
+            assert "worse on" not in verdict.reason, verdict.reason

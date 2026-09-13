@@ -71,6 +71,7 @@ def comparisons_for_pair(
                 difference=result.difference,
                 min_effect=objective.min_effect,
                 applied_margin=result.margin,
+                comparable=result.n_clusters > 0,
                 p_superior=result.p_superior,
                 p_non_inferior=result.p_non_inferior,
             )
@@ -106,13 +107,18 @@ def compare_all(
                 per_objective=tuple(comparisons),
                 # Against the margin actually applied, so a relative
                 # min_effect is compared in the metric's own units.
+                incomparable=tuple(
+                    c.objective for c in comparisons if not c.comparable
+                ),
                 wins=tuple(
-                    c.objective for c in comparisons if c.difference >= c.applied_margin
+                    c.objective
+                    for c in comparisons
+                    if c.comparable and c.difference >= c.applied_margin
                 ),
                 concedes=tuple(
                     c.objective
                     for c in comparisons
-                    if c.difference <= -c.applied_margin
+                    if c.comparable and c.difference <= -c.applied_margin
                 ),
             )
 
@@ -134,8 +140,39 @@ def compare_all(
 
 
 def _why_not(verdict: PairVerdict) -> str:
-    if verdict.p_non_inferior > verdict.p_superior:
-        return "not dominating: worse on at least one objective"
+    """Say which of three quite different things happened.
+
+    Reporting "worse on at least one objective" when the objectives were
+    exactly tied and the test merely lacked power is the absence-of-evidence
+    conflation §9.1 and §13.5 spend their length refusing.
+    """
+    worse = [
+        c for c in verdict.per_objective
+        if c.comparable and c.difference <= -c.applied_margin
+    ]
+    if worse:
+        return (
+            "not dominating: worse on "
+            + ", ".join(c.objective for c in worse)
+        )
+
+    underpowered = [
+        c for c in verdict.per_objective
+        if c.comparable and c.p_non_inferior > 0.05
+    ]
+    if underpowered:
+        return (
+            "not dominating: tied on "
+            + ", ".join(c.objective for c in underpowered)
+            + ", but not tightly enough to call it non-inferior -- raise --runs "
+            "or --profile standard"
+        )
+
+    if verdict.incomparable:
+        return (
+            "not dominating: no shared clusters on "
+            + ", ".join(verdict.incomparable)
+        )
     if verdict.p_superior >= 1.0:
         return "not dominating: no objective improved by at least its min_effect"
     return "not dominating: evidence does not survive the family-wise correction"

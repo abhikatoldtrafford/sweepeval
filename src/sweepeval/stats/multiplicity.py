@@ -50,6 +50,19 @@ class ObjectiveComparison:
     p_non_inferior: float
     """P(b is worse than a by more than the applied margin)."""
 
+    comparable: bool = True
+    """False when the two configs share no cluster for this objective.
+
+    An objective that cannot be compared must be excluded from the pair, not
+    scored as a failure to establish non-inferiority. The intersection-union
+    test takes the maximum p-value across objectives, so one unmeasurable
+    dimension returning 1.0 vetoes the pair -- and on real data it did:
+    guardrail had zero shared clusters between two models (their unscorable
+    sets differed) and blocked every domination in a ten-model sweep. §14.5
+    already excludes a metric from an objective for coverage divergence; no
+    shared clusters at all is the limiting case of that rule.
+    """
+
     applied_margin: float = 0.0
     """What ``min_effect`` became in the metric's own units, after scaling.
 
@@ -69,6 +82,9 @@ class PairVerdict:
     adjusted_threshold: float | None = None
     per_objective: tuple[ObjectiveComparison, ...] = ()
     reason: str = ""
+    incomparable: tuple[str, ...] = field(default_factory=tuple)
+    """Objectives excluded from this pair for want of shared clusters."""
+
     wins: tuple[str, ...] = field(default_factory=tuple)
     concedes: tuple[str, ...] = field(default_factory=tuple)
 
@@ -86,11 +102,14 @@ def pair_p_value(comparisons: Sequence[ObjectiveComparison]) -> tuple[float, flo
       p-value is Bonferroni-corrected by the number of objectives.
     * The pair's p-value is the max of the two halves, because both must hold.
     """
-    if not comparisons:
+    # Objectives the pair shares no data on are excluded, not failed. The
+    # Bonferroni factor follows the objectives actually tested.
+    usable = [c for c in comparisons if c.comparable]
+    if not usable:
         return 1.0, 1.0, 1.0
 
-    p_non_inferior = max(c.p_non_inferior for c in comparisons)
-    p_superior = min(1.0, len(comparisons) * min(c.p_superior for c in comparisons))
+    p_non_inferior = max(c.p_non_inferior for c in usable)
+    p_superior = min(1.0, len(usable) * min(c.p_superior for c in usable))
     return max(p_non_inferior, p_superior), p_non_inferior, p_superior
 
 
