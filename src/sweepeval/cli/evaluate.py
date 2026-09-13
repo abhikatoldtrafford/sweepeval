@@ -49,6 +49,15 @@ def _run(
     if result.declined:
         console.print(f"[yellow]{result.declined}[/yellow]")
         raise typer.Exit(code=0)
+
+    # I7: a run that cannot be re-reported from its own directory is not
+    # stored, it is merely logged. `evaluate` wrote no aggregates.json at all,
+    # so `sweepeval report` on it raised "a run can only be re-reported if it
+    # was stored" -- for the single-config case, which is the modal outcome
+    # for a target with no sweepable axis.
+    from sweepeval.report.stored import write_evaluation
+
+    write_evaluation(result)
     return result
 
 

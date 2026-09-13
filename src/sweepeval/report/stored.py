@@ -33,6 +33,7 @@ __all__ = [
     "aggregates_payload",
     "load_run",
     "write_aggregates",
+    "write_evaluation",
 ]
 
 
@@ -175,6 +176,148 @@ class StoredRun:
     @property
     def config_ids(self) -> tuple[str, ...]:
         return tuple(c.config_id for c in self.configs)
+
+
+@dataclass
+class _AsSweep:
+    """One evaluation, shaped like a one-configuration sweep.
+
+    `sweepeval evaluate` wrote no `aggregates.json` and no `manifest.json` at
+    all, so `sweepeval report` on its run directory raised "a run can only be
+    re-reported if it was stored" -- I7's regenerability half was simply false
+    for every single-config run, which is the modal case for a custom agent
+    system with no sweepable axis.
+
+    An adapter rather than a second payload writer: two writers of the same
+    schema is how the gate and the frontier came to disagree about which
+    statistic `context_retention_auc` uses.
+    """
+
+    result: Any
+
+    @property
+    def run_id(self) -> str:
+        return self.result.run_id
+
+    @property
+    def profile(self) -> str:
+        return self.result.profile
+
+    @property
+    def runs(self) -> int:
+        return self.result.comparability.soft.n_runs
+
+    @property
+    def status(self) -> Any:
+        return _Status("DECLINED" if self.result.declined else "COMPLETE")
+
+    @property
+    def stop_reason(self) -> str:
+        return self.result.declined
+
+    @property
+    def corpus(self) -> Any:
+        return self.result.corpus
+
+    @property
+    def discovery(self) -> Any:
+        return self.result.discovery
+
+    @property
+    def plan(self) -> Any:
+        return _Plan(configs=(self._spec,), cap=1)
+
+    @property
+    def configs(self) -> list[Any]:
+        return [_EvaluatedConfig(self.result, self._spec)]
+
+    @property
+    def _spec(self) -> _Spec:
+        return _Spec(
+            config_id=self.result.config_id,
+            params={},
+            system_prompt_variant="none",
+            _label=self.result.config_id,
+        )
+
+    @property
+    def not_run(self) -> list[str]:
+        return []
+
+    @property
+    def skipped(self) -> list[tuple[str, str]]:
+        return list(self.result.skipped)
+
+    @property
+    def assumptions(self) -> list[tuple[str, str, str]]:
+        return list(self.result.assumptions)
+
+    @property
+    def families_not_run(self) -> tuple[str, ...]:
+        return self.result.families_not_run
+
+    @property
+    def determinism_scope(self) -> dict[str, str]:
+        return {}
+
+
+@dataclass
+class _EvaluatedConfig:
+    """The single row `_config_payload` reads."""
+
+    result: Any
+    config: _Spec
+
+    @property
+    def config_id(self) -> str:
+        return self.result.config_id
+
+    @property
+    def requests(self) -> int:
+        return sum(len(o.calls) for o in self.result.outcomes)
+
+    @property
+    def metrics(self) -> dict[str, Any]:
+        return self.result.metrics
+
+    @property
+    def clusters(self) -> dict[str, dict[str, float]]:
+        return self.result.clusters
+
+    @property
+    def strata(self) -> dict[str, dict[str, str]]:
+        return getattr(self.result, "strata", {}) or {}
+
+    @property
+    def cache(self) -> Any:
+        return _Cache()
+
+    @property
+    def cost(self) -> Any:
+        return None
+
+    @property
+    def hard_fails(self) -> Any:
+        # Carried on the result, not recomputed here: reclassifying would make
+        # `report` import `execute`, and the request layer rides in behind it.
+        # The layering contract caught exactly that.
+        return self.result.hard_fail_report or _HardFails()
+
+    @property
+    def coverage(self) -> dict[str, tuple[int, int]]:
+        return getattr(self.result, "coverage", {}) or {}
+
+
+def write_evaluation(result: Any) -> Path | None:
+    """Store a single-config evaluation so `report` can read it back."""
+    if result.store is None:
+        return None
+    path = result.store.aggregates_path
+    write_derived(
+        path, aggregates_payload(_AsSweep(result)),
+        derived_from=result.store.provenance(),
+    )
+    return path
 
 
 def aggregates_payload(sweep: Any) -> dict[str, Any]:

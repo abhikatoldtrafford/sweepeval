@@ -76,6 +76,15 @@ class EvaluationResult:
     declined: str = ""
     """Non-empty when the pre-flight was refused. Nothing was sent (I9)."""
 
+    hard_fail_report: Any = None
+    """The full classification, not just the ids.
+
+    The reporter needs each leak's attack class and reason to render it, and
+    reclassifying inside `report` would drag `execute` -- and the request
+    layer behind it -- into the report layer. The layering contract catches
+    that, correctly.
+    """
+
     hard_fails: tuple[str, ...] = ()
     """Unit ids with a confirmed canary leak on a high-severity class (§11.2).
 
@@ -221,9 +230,10 @@ async def aevaluate_target(
         store=store,
     )
     result.families_not_run = tuple(not_run)
-    result.hard_fails = classify_hard_fails(
+    result.hard_fail_report = classify_hard_fails(
         result.observations, config_id=result.config_id
-    ).unit_ids()
+    )
+    result.hard_fails = result.hard_fail_report.unit_ids()
     _aggregate(result, seed=seed)
     _collect_skips(result)
     _collect_assumptions(result)
