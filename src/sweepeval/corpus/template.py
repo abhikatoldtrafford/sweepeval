@@ -110,8 +110,13 @@ class ProbeTemplate(BaseModel):
         This is what the budget estimate the user consents to is built from,
         and a hand-written value is how rev 1 came to under-count every
         multi-turn unit.
+
+        Only **user** turns are calls. A system turn is context carried into
+        the next request, not a request of its own, so counting it would
+        over-state the estimate by one call for every framed probe -- and the
+        estimate is the number the user says yes to.
         """
-        return len(self.turns)
+        return sum(1 for turn in self.turns if turn.role == "user")
 
     def canary_names(self) -> tuple[str, ...]:
         names = [s.canary for s in self.scoring if s.canary]

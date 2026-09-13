@@ -68,20 +68,20 @@ def test_the_quick_profile_shape() -> None:
     """
     corpus = load_corpus("quick")
     assert corpus.unit_count == 40
-    assert corpus.calls_per_run == 62
+    assert corpus.calls_per_run == 60
 
 
 def test_the_standard_profile_call_count() -> None:
     corpus = load_corpus("standard")
     assert corpus.unit_count == 80
-    assert corpus.calls_per_run == 191
+    assert corpus.calls_per_run == 188
 
 
 def test_the_budget_estimate_sums_calls_not_units() -> None:
     """§12.3: `configs x units x runs` is wrong for every multi-turn unit."""
     corpus = load_corpus("standard")
     estimate = corpus.estimate(configs=12, runs=3)
-    assert estimate["total_calls"] == 191 * 3 * 12
+    assert estimate["total_calls"] == 188 * 3 * 12
     assert estimate["total_calls"] > corpus.unit_count * 3 * 12
 
 

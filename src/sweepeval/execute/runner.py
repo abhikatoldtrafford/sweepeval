@@ -273,6 +273,14 @@ async def _play_conversation(
         rendered = _render(turn.text, unit_canaries)
         history.append((turn.role, rendered))
 
+        # A system turn is context, not a request. Posting after one sends a
+        # conversation with no user message in it, spends a call, and then
+        # appends the model's reply to that non-question as an assistant turn
+        # -- so the probe the unit actually wanted to send arrives with a
+        # fabricated exchange already in front of it.
+        if turn.role != "user":
+            continue
+
         body = body_for_turns(ladder, list(history), **plan.params)
         results = await client.call(
             ladder.path, body,
