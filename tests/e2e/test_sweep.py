@@ -9,7 +9,7 @@ from rich.console import Console
 from tests.conftest import make_app, make_client
 
 from sweepeval.execute.artifacts import read_json
-from sweepeval.execute.budget import BudgetCap
+from sweepeval.execute.budget import BudgetCap, estimate_run
 from sweepeval.execute.sweep import SweepStatus, asweep_target
 from sweepeval.report.sweep import render_sweep
 
@@ -177,17 +177,31 @@ async def test_the_cap_stops_between_configs_and_names_what_never_ran(
         config_cap=3,
         cap=BudgetCap(value=100_000, unit="requests"),
     )
-    # The cap above is generous; re-run with one that binds after config 1.
+    # A cap that affords discovery, capability detection and two of the three
+    # configurations. Built from the same estimate the cap is projected
+    # against: a cap derived from one config's *actual* spend no longer buys a
+    # config at all, because the earlier phases are now counted too -- which
+    # is the fix, not a regression, and `test_budget_caps.py` asserts it
+    # directly.
+    estimate = estimate_run(result.corpus, configs=3, runs=2, profile="quick")
     binding = await _sweep(
         "openai_clean",
         tmp_path / "b",
         config_cap=3,
-        cap=BudgetCap(value=result.configs[0].requests + 50, unit="requests"),
+        cap=BudgetCap(
+            value=estimate.unavoidable_requests + 2 * estimate.per_config_requests,
+            unit="requests",
+        ),
     )
     assert binding.status is SweepStatus.INCOMPLETE
     assert binding.not_run
     assert len(binding.configs) < len(binding.plan.configs)
-    assert "stopped at the requests cap" in binding.stop_reason
+    # The cap is projected, not reactive, so the reason names the config that
+    # was about to run and the spend so far -- both of which the previous
+    # "stopped at the requests cap" wording left the reader to guess.
+    assert "requests cap" in binding.stop_reason
+    assert "config 3 of 3" in binding.stop_reason
+    assert len(binding.configs) == 2
 
     console = Console(record=True, width=200)
     render_sweep(binding, console)
@@ -201,13 +215,31 @@ async def test_the_cap_stops_between_configs_and_names_what_never_ran(
 
 async def test_resuming_an_unchanged_run_refuses_nothing(tmp_path: Path) -> None:
     first = await _sweep("openai_clean", tmp_path, config_cap=2)
-    again = await _sweep(
-        "openai_clean", tmp_path, config_cap=2, resume_run_id=first.run_id
-    )
+
+    # Count what actually reaches the mock during the resume. Asserting
+    # `requests == 0` used to stand in for this, and it passed for the wrong
+    # reason: the resume reported zero because it had discarded the run's
+    # measurements, not because it sent nothing.
+    app = make_app("openai_clean")
+    client = make_client(app)
+    before = app.request_count
+    try:
+        again = await asweep_target(
+            "https://mock.test" + app.scenario.paths[0],
+            key="test-key-abcdefgh", client=client, root=str(tmp_path), runs=2,
+            profile="quick", authorized=True, authorization_prompt=False,
+            seed=7, config_cap=2, resume_run_id=first.run_id,
+        )
+    finally:
+        await client.aclose()
+
     assert again.status is SweepStatus.COMPLETE
     assert again.resume is not None and again.resume.ok
-    # Every unit-run was already checkpointed, so the resume sends nothing new.
-    assert sum(row.requests for row in again.configs) == 0
+    # Discovery and capability detection run again; no scoring probe does.
+    scoring = app.request_count - before
+    assert scoring < first.corpus.calls_per_run, scoring
+    # And the measurements come back rather than vanishing.
+    assert all(row.metrics["security_pass_rate"].n_clusters > 0 for row in again.configs)
 
 
 async def test_resuming_with_a_changed_sweep_refuses(tmp_path: Path) -> None:

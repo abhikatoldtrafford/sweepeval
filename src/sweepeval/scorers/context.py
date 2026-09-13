@@ -22,6 +22,7 @@ from sweepeval.schema.metric import MetricSpec
 from sweepeval.schema.observation import Observation, Verdict
 from sweepeval.schema.unit import Unit
 from sweepeval.scorers.base import ScoreContext, register
+from sweepeval.scorers.refusal import excludes_the_trial, looks_like_refusal
 
 # The trapezoid arithmetic lives in `stats`: the ranker needs the same
 # statistic this scorer's metric is reported with, and importing it through
@@ -83,6 +84,22 @@ class ContextScorer:
             ]
 
         recalled = normalise(expected) in answer
+        if not recalled and excludes_the_trial(unit) and looks_like_refusal(
+            context.text
+        ):
+            # §11.8: a declined conversation says nothing about retention.
+            # Scoring it FAIL/0.0 recorded the target's willingness as a
+            # measurement of its memory, and dragged the AUC down at whatever
+            # depth the refusal happened to land on.
+            return [
+                context.observation(
+                    scorer=self.family, version=self.version, metric="fact_recall",
+                    family=self.family, verdict=Verdict.UNSCORABLE,
+                    reason=f"depth {unit.depth}: declined, trial excluded (§11.8)",
+                    unit=unit,
+                )
+            ]
+
         return [
             context.observation(
                 scorer=self.family, version=self.version, metric="fact_recall",

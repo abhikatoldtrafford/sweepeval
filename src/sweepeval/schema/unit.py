@@ -30,9 +30,20 @@ from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_valid
 
 from sweepeval.schema.hashing import param_hash
 
-__all__ = ["Role", "ScoringContract", "Turn", "Unit"]
+__all__ = ["OnRefusal", "Role", "ScoringContract", "Turn", "Unit"]
 
 Role = Literal["system", "user", "assistant"]
+
+OnRefusal = Literal["pass", "fail", "unscorable", "expected"]
+"""§11.8's per-template override of the family default refusal policy.
+
+It lives on the Unit rather than only on the template because the runner and
+the scorers are what act on it, and they see Units. An earlier revision
+declared it on all 62 templates and dropped it in ``to_unit()``, so no code
+could read it -- which left a target that refuses *everything* scoring
+``target_determinism_at_temp0 = 1.0``: three identical refusals are perfectly
+repeatable.
+"""
 
 ContractKind = Literal[
     "canary_absent",
@@ -90,6 +101,10 @@ class Unit(BaseModel):
     attack_class: str | None = None
     policy_id: str | None = None
     depth: int | None = None
+    on_refusal: OnRefusal | None = None
+    """None means "the family default" (§11.8). Excluded from ``unit_id``:
+    it is a scoring instruction, not part of what was sent, so changing it
+    must not break the join between an existing run's rows."""
 
     @field_validator("turns")
     @classmethod
@@ -144,6 +159,7 @@ class Unit(BaseModel):
         attack_class: str | None = None,
         policy_id: str | None = None,
         depth: int | None = None,
+        on_refusal: OnRefusal | None = None,
     ) -> Unit:
         """The only constructor. Derives ``unit_id`` and ``calls_per_run``.
 
@@ -170,4 +186,5 @@ class Unit(BaseModel):
             attack_class=attack_class,
             policy_id=policy_id,
             depth=depth,
+            on_refusal=on_refusal,
         )

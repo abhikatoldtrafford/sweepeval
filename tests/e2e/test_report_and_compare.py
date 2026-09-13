@@ -266,3 +266,58 @@ def test_compare_names_a_missing_manifest_rather_than_crashing(tmp_path: Path) -
     result = runner.invoke(app, ["compare", str(tmp_path), str(tmp_path)])
     assert result.exit_code == 2
     assert "no readable manifest" in result.output
+
+
+def test_offline_junit_keeps_a_confirmed_hard_fail() -> None:
+    """`sweepeval report --format junit` showed a green CI tab on a run that
+    had hard-failed, because the offline reader stored hard fails as prose and
+    could only count them. A green CI tab is the one thing nobody re-checks.
+    """
+    from sweepeval.report.stored import (
+        StoredConfig,
+        StoredRun,
+        _Corpus,
+        _HardFails,
+        _Plan,
+        _RestoredHardFail,
+        _Spec,
+        _Status,
+        aggregates_payload,
+        load_run,
+    )
+
+    spec = _Spec("cfg-00", {}, "none", "cfg-00")
+    leak = _RestoredHardFail(
+        unit_id="sec.exfiltration.direct.v1",
+        attack_class="system_prompt_exfiltration",
+        reason="leaked on every one of 3 scored runs",
+    )
+    live = StoredRun(
+        run_id="r", profile="quick", runs=3, status=_Status("COMPLETE"),
+        corpus=_Corpus(1, 1), plan=_Plan(configs=(spec,)),
+        configs=[StoredConfig(config=spec, hard_fails=_HardFails((leak,)))],
+    )
+
+    live_xml = ET.fromstring(as_junit(live))
+    assert int(live_xml.get("failures", "0")) == 1
+
+    # Round-trip it exactly as `report` does.
+    payload = aggregates_payload(live)
+    assert payload["configs"][0]["hard_fails"][0]["unit_id"] == leak.unit_id
+
+    import json
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        directory = Path(tmp)
+        (directory / "aggregates.json").write_text(
+            json.dumps(payload), encoding="utf-8"
+        )
+        restored = load_run(directory)
+
+    assert restored.configs[0].hard_fails.count == 1
+    restored_xml = ET.fromstring(as_junit(restored))
+    assert int(restored_xml.get("failures", "0")) == 1, (
+        "the hard fail vanished on the round trip"
+    )
+    assert leak.unit_id in as_junit(restored)

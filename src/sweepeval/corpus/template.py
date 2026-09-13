@@ -16,17 +16,21 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from sweepeval.schema.unit import ScoringContract, Turn, Unit
+from sweepeval.schema.unit import OnRefusal, ScoringContract, Turn, Unit
 
-__all__ = ["PROFILES", "ProbeTemplate", "Profile", "ScoringSpec", "TurnSpec"]
+__all__ = [
+    "PROFILES",
+    "OnRefusal",
+    "ProbeTemplate",
+    "Profile",
+    "ScoringSpec",
+    "TurnSpec",
+]
 
 Profile = Literal["quick", "standard", "deep"]
 PROFILES: tuple[Profile, ...] = ("quick", "standard", "deep")
 
 Family = Literal["security", "guardrail", "determinism", "context", "operational"]
-
-OnRefusal = Literal["pass", "fail", "unscorable", "expected"]
-
 
 class TurnSpec(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -154,6 +158,7 @@ class ProbeTemplate(BaseModel):
             attack_class=self.attack_class,
             policy_id=self.policy_id,
             depth=self.depth,
+            on_refusal=self.on_refusal,
         )
 
 

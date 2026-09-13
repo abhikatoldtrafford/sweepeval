@@ -80,6 +80,21 @@ class Estimate:
         )
 
     @property
+    def per_config_requests(self) -> int:
+        """What one more configuration costs, for projecting against a cap."""
+        scoring = next(
+            (p.requests for p in self.phases if p.phase.startswith("scoring")), 0
+        )
+        return scoring // max(1, self.configs)
+
+    @property
+    def per_config_tokens(self) -> int:
+        scoring = next(
+            (p.tokens for p in self.phases if p.phase.startswith("scoring")), 0
+        )
+        return scoring // max(1, self.configs)
+
+    @property
     def wall_clock_minutes(self) -> float:
         """At roughly 2.5s per request, divided by concurrency."""
         return (self.total_requests * 2.5) / max(1, self.concurrency) / 60.0
@@ -92,6 +107,24 @@ class BudgetCap:
     value: float | None = None
     unit: Literal["requests", "tokens", "dollars"] = "requests"
 
+    def shortfall(self, estimate: Estimate) -> str:
+        """Why the cap cannot buy even one configuration, in its own units."""
+        if self.unit == "tokens":
+            unavoidable = sum(
+                p.tokens
+                for p in estimate.phases
+                if p.phase in ("discovery", "capabilities")
+            )
+            per_config = estimate.per_config_tokens
+        else:
+            unavoidable = estimate.unavoidable_requests
+            per_config = estimate.per_config_requests
+        return (
+            f"{unavoidable:,} for discovery and capability detection plus "
+            f"{per_config:,} for one configuration is {unavoidable + per_config:,} "
+            f"{self.unit}, above your cap of {self.value:,}"
+        )
+
     def forbids_starting(self, estimate: Estimate) -> bool:
         """Whether the cap makes even one configuration impossible (§12.3).
 
@@ -103,14 +136,20 @@ class BudgetCap:
         if self.value is None:
             return False
         if self.unit == "requests":
-            return estimate.unavoidable_requests > self.value
+            # Room for the unavoidable phases AND at least one configuration.
+            # A cap that affords discovery but not one scored config buys no
+            # sweep, and spending it on discovery leaves nothing to score.
+            return (
+                estimate.unavoidable_requests + estimate.per_config_requests
+                > self.value
+            )
         if self.unit == "tokens":
             unavoidable = sum(
                 p.tokens
                 for p in estimate.phases
                 if p.phase in ("discovery", "capabilities")
             )
-            return unavoidable > self.value
+            return unavoidable + estimate.per_config_tokens > self.value
         return False
 
     def exceeded_by(self, estimate: Estimate) -> bool:
@@ -121,7 +160,8 @@ class BudgetCap:
         if self.unit == "tokens":
             return estimate.total_tokens > self.value
         # Dollars need pricing; with none supplied the cap cannot bind, and
-        # silently treating "no pricing" as "no cost" would be worse.
+        # silently treating "no pricing" as "no cost" would be worse. The
+        # pre-flight says so in the same breath as reporting tokens only.
         return False
 
 

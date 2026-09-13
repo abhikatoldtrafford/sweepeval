@@ -21,7 +21,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sweepeval.capabilities.detect import CapabilityReport
-from sweepeval.capabilities.normalise import normalise
 from sweepeval.discovery.extract import extract_at
 from sweepeval.discovery.ladder import LadderResult, body_for_turns
 from sweepeval.http.client import TransportClient
@@ -29,7 +28,8 @@ from sweepeval.schema.call import Call, ErrorClass
 from sweepeval.schema.observation import Observation
 from sweepeval.schema.unit import Unit
 from sweepeval.scorers import RunEvidence, ScoreContext, ScorerRegistry
-from sweepeval.scorers.canary import REFUSAL_CUES, canary_for
+from sweepeval.scorers.canary import canary_for
+from sweepeval.scorers.refusal import excludes_the_trial, looks_like_refusal
 from sweepeval.store.run import Store
 
 __all__ = ["MAX_CONVERSATION_RESTARTS", "RunPlan", "UnitOutcome", "execute_config"]
@@ -118,11 +118,24 @@ async def execute_config(
     canaries = plan.canary_table()
     outcomes: list[UnitOutcome] = []
 
+    # A resumed config's completed unit-runs are read back off the log rather
+    # than skipped into nothing. Skipping them returned no outcomes at all, so
+    # aggregation -- which reads only in-memory outcomes -- saw an empty run:
+    # every metric came back NO_VALID_INTERVAL, coverage 0/0, the frontier
+    # degenerated, and the status was still COMPLETE. The measurements were
+    # sitting in observations.jsonl the whole time, already paid for.
+    restored, restored_cross_run = _restore(store, plan) if resume else ({}, [])
+    executed = False
+
     for unit in plan.units:
         for run_idx in range(plan.runs):
             if resume and state.is_complete(plan.config_id, unit.unit_id, run_idx):
+                previous = restored.get((unit.unit_id, run_idx))
+                if previous is not None:
+                    outcomes.append(previous)
                 continue
 
+            executed = True
             outcome = await _run_unit(
                 client, plan, ladder, unit, run_idx, canaries,
                 headers=headers, params=params, text_path=text_path,
@@ -144,6 +157,21 @@ async def execute_config(
             )
             outcomes.append(outcome)
 
+    # Cross-run scorers need the response TEXT, which a restored outcome does
+    # not carry -- re-running them over restored rows would score determinism
+    # on empty strings and append a second, wrong set of rows to the log.
+    # When nothing was executed the previous run's cross-run observations are
+    # the answer, and they are already stored.
+    if not executed and restored_cross_run:
+        outcomes.append(
+            UnitOutcome(
+                unit=plan.units[0], run_idx=-1, calls=[],
+                observations=restored_cross_run, text="",
+                reason="cross-run observations restored from the log",
+            )
+        )
+        return outcomes
+
     finalized = _finalize_cross_run(plan, outcomes, registry)
     if finalized:
         store.observations.append_many(finalized)
@@ -156,6 +184,58 @@ async def execute_config(
         )
 
     return outcomes
+
+
+def _restore(
+    store: Store, plan: RunPlan
+) -> tuple[dict[tuple[str, int], UnitOutcome], list[Observation]]:
+    """Rebuild outcomes for unit-runs a previous invocation already stored.
+
+    Calls and observations both, because the operational metrics and the cache
+    detector read calls while every other family reads observations. Nothing
+    is re-sent: this is the log, not the target.
+    """
+    units = {unit.unit_id: unit for unit in plan.units}
+    calls: dict[tuple[str, int], list[Call]] = {}
+    observations: dict[tuple[str, int], list[Observation]] = {}
+    cross_run: list[Observation] = []
+
+    for call in store.calls.read():
+        if call.config_id != plan.config_id or call.unit_id not in units:
+            continue
+        calls.setdefault((call.unit_id, call.run_idx), []).append(call)
+
+    # A cross-run scorer's rows describe the SET of runs, so they belong to no
+    # single unit-run and are restored as a group.
+    cross_run_metrics = {
+        "config_repeatability",
+        "target_determinism_at_temp0",
+        "semantic_stability",
+        "invariance",
+    }
+    for observation in store.observations.read():
+        if observation.config_id != plan.config_id:
+            continue
+        if observation.metric in cross_run_metrics:
+            cross_run.append(observation)
+            continue
+        if observation.unit_id not in units:
+            continue
+        observations.setdefault(
+            (observation.unit_id, observation.run_idx), []
+        ).append(observation)
+
+    return {
+        key: UnitOutcome(
+            unit=units[key[0]],
+            run_idx=key[1],
+            calls=calls.get(key, []),
+            observations=rows,
+            text="",
+            reason="restored from the log by --resume",
+        )
+        for key, rows in observations.items()
+    }, cross_run
 
 
 def _finalize_cross_run(
@@ -177,7 +257,12 @@ def _finalize_cross_run(
             continue
         units[outcome.unit.unit_id] = outcome.unit
         by_unit.setdefault(outcome.unit.unit_id, {})[outcome.run_idx] = outcome.text
-        if outcome.failed or not outcome.text:
+        # §11.8: a refusal on a determinism unit excludes the trial. Without
+        # this the metric is a statement about how consistently the target
+        # declines -- three identical refusals score 1.0, so the objective is
+        # maximised by a target that answers nothing.
+        refused = excludes_the_trial(outcome.unit) and looks_like_refusal(outcome.text)
+        if outcome.failed or not outcome.text or refused:
             unscorable.setdefault(outcome.unit.unit_id, set()).add(outcome.run_idx)
 
     evidence = [
@@ -347,7 +432,7 @@ def _score(
         # observation and the bytes it scored can be rejoined later.
         text_blob_id=sha256_hex(text.encode("utf-8")) if text else None,
         canaries=dict(unit_canaries),
-        refusal_detected=_looks_like_refusal(text),
+        refusal_detected=looks_like_refusal(text),
         layer=plan.layer,
         ts=datetime.now(timezone.utc).isoformat(),
     )
@@ -401,6 +486,3 @@ def _operational(
     return list(scorer.score(unit, list(calls), context))
 
 
-def _looks_like_refusal(text: str) -> bool:
-    lowered = normalise(text)
-    return any(cue in lowered for cue in REFUSAL_CUES)

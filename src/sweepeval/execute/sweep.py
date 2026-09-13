@@ -131,6 +131,14 @@ class ConfigResult:
         return dict(self.aggregate.clusters) if self.aggregate else {}
 
     @property
+    def tokens_out(self) -> int:
+        return sum(c.tokens.out or 0 for c in self.calls)
+
+    @property
+    def tokens_in(self) -> int:
+        return sum(c.tokens.in_ or 0 for c in self.calls)
+
+    @property
     def strata(self) -> dict[str, dict[str, str]]:
         return dict(self.aggregate.strata) if self.aggregate else {}
 
@@ -459,18 +467,33 @@ async def asweep_target(
             shape=discovery.ladder.shape.name,
         )
 
-        spent = _already_spent(store, plan)
+        # Discovery and capability detection are billable and they went first.
+        # Seeding the counter from per-config state alone under-counted the
+        # cap by that whole phase: a 100-request cap let 157 requests through.
+        spent = _already_spent(store, plan) + discovery.budget.posts
+        spent += capability_budget.posts
+        tokens_spent = discovery.budget.tokens + capability_budget.tokens
         for index, config in enumerate(plan.configs):
             # The cap is checked between configs, never mid-config: stopping
             # inside one leaves a config with partial coverage, and a partially
             # covered config is worse than an absent one — it can be compared
             # against, and the comparison is wrong (§14.5).
-            if _cap_reached(budget_cap, spent, estimate):
+            # Projected, not reached: a hard cap that only notices after the
+            # fact is not a cap. Checked between configs because stopping
+            # inside one leaves partial coverage, which is worse than an
+            # absent config -- it can still be compared against (§14.5).
+            if _cap_reached(
+                budget_cap,
+                spent + estimate.per_config_requests,
+                tokens_spent + estimate.per_config_tokens,
+                pricing,
+            ):
                 result.status = SweepStatus.INCOMPLETE
                 result.not_run = [c.config_id for c in plan.configs[index:]]
                 result.stop_reason = (
-                    f"stopped at the {budget_cap.unit} cap of {budget_cap.value} "
-                    f"after {index} of {len(plan.configs)} configs"
+                    f"stopped before config {index + 1} of {len(plan.configs)}: "
+                    f"another one would cross the {budget_cap.unit} cap of "
+                    f"{budget_cap.value} (spent {spent} requests so far)"
                 )
                 break
 
@@ -490,6 +513,7 @@ async def asweep_target(
                 pricing=pricing,
             )
             spent += row.requests
+            tokens_spent += row.tokens_out + row.tokens_in
             result.configs.append(row)
 
         _share_determinism(result, _determinism_sharing(plan))
@@ -622,17 +646,29 @@ async def _run_one(
     return row
 
 
-def _cap_reached(cap: BudgetCap, spent: int, estimate: Estimate) -> bool:
+def _cap_reached(
+    cap: BudgetCap, spent: int, tokens: int, pricing: Pricing | None
+) -> bool:
+    """Whether the cap is reached, in whichever unit it was set.
+
+    All three units bind. The token cap was never checked against a real
+    count, and the dollar cap returned False unconditionally -- a
+    ``BudgetCap(0.01, "dollars")`` completed a 757-request run, and a test
+    enshrined that as intended.
+    """
     if cap.value is None:
         return False
     if cap.unit == "requests":
         return spent >= cap.value
     if cap.unit == "tokens":
-        # Tokens are not counted per config as they arrive, so the cap binds
-        # on the estimate's own token-per-request ratio rather than pretending
-        # to a precision the counter does not have.
-        per_request = estimate.total_tokens / max(1, estimate.total_requests)
-        return spent * per_request >= cap.value
+        return tokens >= cap.value
+    if cap.unit == "dollars":
+        # Without pricing there is no dollar figure to compare, and inventing
+        # one is what D8 forbids. The cap cannot bind; the caller was told so
+        # by the pre-flight, which says the cost objective is in tokens.
+        if pricing is None:
+            return False
+        return pricing.cost(0, tokens) >= cap.value
     return False
 
 

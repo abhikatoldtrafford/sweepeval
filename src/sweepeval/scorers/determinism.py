@@ -101,13 +101,26 @@ class DeterminismScorer:
         if len(texts) < 2:
             # §11.8: a refused or failed run leaves the metric, and one
             # surviving run cannot say anything about repeatability.
+            #
+            # target_determinism_at_temp0 is in this list because it was not,
+            # and an excluded trial then produced no row for it at all --
+            # missing data where UNSCORABLE was meant, which I5 forbids and
+            # which the coverage check cannot see.
+            metrics = ["config_repeatability", "semantic_stability"]
+            if not self.temperature_is_swept:
+                metrics.append("target_determinism_at_temp0")
+            excluded = len(item.unscorable)
             return [
                 context.observation(
                     scorer=self.family, version=self.version, metric=metric,
                     family=self.family, verdict=Verdict.UNSCORABLE,
-                    reason="fewer than two scorable runs", unit=item.unit,
+                    reason=(
+                        f"fewer than two scorable runs "
+                        f"({excluded} excluded under §11.8)"
+                    ),
+                    unit=item.unit,
                 )
-                for metric in ("config_repeatability", "semantic_stability")
+                for metric in metrics
             ]
 
         exact = _exact_match_rate(texts)

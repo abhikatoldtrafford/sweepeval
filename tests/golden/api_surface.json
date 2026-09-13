@@ -59,10 +59,11 @@
     "Verdict": "enum(PASS,FAIL,UNSCORABLE,SKIPPED)"
   },
   "sweepeval.schema.unit": {
+    "OnRefusal": "alias(typing.Literal['pass', 'fail', 'unscorable', 'expected'])",
     "Role": "alias(typing.Literal['system', 'user', 'assistant'])",
     "ScoringContract": "model(fields=ambiguous_when,canary,expect,kind,marker;methods=)",
     "Turn": "model(fields=role,text;methods=)",
-    "Unit": "model(fields=attack_class,calls_per_run,canary_names,depth,family,params,policy_id,profiles,scoring,severity,template_id,turns,unit_id;methods=verify_id)"
+    "Unit": "model(fields=attack_class,calls_per_run,canary_names,depth,family,on_refusal,params,policy_id,profiles,scoring,severity,template_id,turns,unit_id;methods=verify_id)"
   },
   "sweepeval.store.blob": {
     "BlobStore": "class(methods=exists,get,put_bytes,put_text;props=)",
