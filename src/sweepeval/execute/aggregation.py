@@ -17,7 +17,12 @@ from dataclasses import dataclass, field
 
 from sweepeval.schema.metric import Estimand, MetricValue
 from sweepeval.schema.observation import Observation
-from sweepeval.stats.aggregate import aggregate_metric, build_cluster_table
+from sweepeval.stats.aggregate import (
+    aggregate_metric,
+    build_cluster_table,
+    quantile_statistic,
+)
+from sweepeval.stats.retention import auc_statistic
 
 __all__ = ["RATE_METRICS", "ConfigAggregate", "aggregate_config"]
 
@@ -29,6 +34,16 @@ RATE_METRICS: tuple[str, ...] = (
     "semantic_stability",
     "invariance",
 )
+
+LATENCY_OBJECTIVE = "latency_p95_ms"
+LATENCY_QUANTILE = 0.95
+"""§14.1's latency objective: the 95th percentile of per-probe mean latency.
+
+The resampling unit is the probe, so the cluster value is that probe's mean
+call latency and the statistic is a quantile *across* probes. Stating the
+composition matters -- it is not a quantile over raw calls, and §13.3's
+fallback to p90 exists because the p95 of a short cluster list is noisy.
+"""
 
 _OPERATIONAL: tuple[tuple[str, bool], ...] = (
     ("latency_ms", False),
@@ -92,7 +107,11 @@ def _context(
     indicative: bool,
 ) -> None:
     """Recall per conversation, plus the depth-weighted AUC (§11.5)."""
-    from sweepeval.scorers.context import depth_at_floor, retention_auc, retention_curve
+    from sweepeval.stats.retention import (
+        depth_at_floor,
+        retention_auc,
+        retention_curve,
+    )
 
     table = build_cluster_table(
         observations,
@@ -112,18 +131,23 @@ def _context(
     )
 
     curve = retention_curve(observations)
-    auc, weights = retention_auc(curve)
+    _auc, weights = retention_auc(curve)
     out.retention_curve = curve
     out.retention_weights = weights
     out.retention_depth_at_floor = depth_at_floor(curve)
 
-    # The AUC resamples conversations, so it reuses fact_recall's clusters and
-    # reports the depth-weighted quantity.
+    # The AUC resamples conversations and recomputes the weighted curve on
+    # each replicate, so the interval belongs to the AUC rather than to mean
+    # recall. Stratified by depth: an unstratified resample can empty a depth
+    # and the trapezoid is undefined there (§13.3).
     out.clusters["context_retention_auc"] = dict(table.values)
     out.strata["context_retention_auc"] = dict(table.strata)
     out.metrics["context_retention_auc"] = aggregate_metric(
-        table, seed=seed, indicative=indicative
-    ).model_copy(update={"point": auc})
+        table,
+        seed=seed,
+        indicative=indicative,
+        statistic=auc_statistic(table.values, table.strata),
+    )
 
 
 def _operational(
@@ -143,3 +167,18 @@ def _operational(
         out.metrics[metric] = aggregate_metric(
             table, seed=seed, bounded=bounded, indicative=indicative
         )
+
+        # §14.1's latency objective is a quantile, not a mean. It was reported
+        # as the mean of per-probe latencies under the name latency_p95_ms
+        # while the paired test compared a p95 -- the point, the interval and
+        # the tested statistic were three different quantities sharing a name.
+        # Emitted here as its own metric so all three agree.
+        if metric == "latency_ms":
+            out.clusters[LATENCY_OBJECTIVE] = dict(table.values)
+            out.metrics[LATENCY_OBJECTIVE] = aggregate_metric(
+                table,
+                seed=seed,
+                bounded=False,
+                indicative=indicative,
+                statistic=quantile_statistic(table, LATENCY_QUANTILE),
+            )

@@ -81,7 +81,9 @@ Changing any of these requires updating this section. Decisions superseded in re
 | D13 | Default objectives | All six shipped family metrics; the determinism objective is `target_determinism_at_temp0`, with `config_repeatability` reported alongside (§11.4, §14.2) |
 | D43 | Comparison construction | Non-inferiority IUT across objectives + Bonferroni superiority union, then Holm across pairs (§13.5). Not a single max-p statistic |
 | D44 | Primary estimand | **Generalization** (probe-cluster resampling), matching the method actually used; conditional reported as secondary (§13.2) |
-| D45 | Coverage validation | Monte Carlo simulation gates M6; validates domination α, gate false-fire rate, and `latency_p95_ms` bootstrap coverage (§13.5) |
+| D45 | Coverage validation | Monte Carlo simulation gates M6; validates domination α, gate false-fire rate, and the latency objective's bootstrap coverage (§13.5) |
+| D46 | Latency objective | **Superseded D45's p95.** The default latency objective is the MEAN of per-probe latency at a 50% relative margin, not the p95 at 10%. Measured: p95 bootstrap coverage is 0.88 against a nominal 0.95, and non-inferiority on two *identical* distributions is establishable only 8% of the time at 10% and 55% at 50%. Because domination is an intersection-union test it needs non-inferiority on **every** objective, so a latency objective that cannot establish it blocks the entire frontier — a config failing every security probe measurably stayed non-dominated. The mean at 50% reaches 88% and never falsely clears a config that is genuinely 2× slower. `latency_p95_ms` remains registered, reported and promotable with `--objectives` (§14.1, §13.3) |
+| D47 | Bootstrap resolution | `N_RESAMPLES` scales with the size of the Holm family: `B ≥ 2·|hypotheses|/α`, capped at 40,000, and p-values use the `(r+1)/(B+1)` estimator. At 2000 replicates the resolution (5e-4) was coarser than the tightest threshold at the 12-config cap (0.05/132 = 3.8e-4), so Holm rejected nothing at all unless a p-value came out exactly zero. The bootstrap is vectorised so the larger B costs milliseconds (§13.3, §13.5) |
 | D14 | Multi-turn transport | Detect both; prefer stateless replay; scripted turns only; fresh session per run |
 | D15 | Empty sweep | Full single-configuration evaluation with a banner naming each rejected axis and why |
 | D16 | Runtime | Python 3.10+; httpx, pydantic v2, typer, rich, pyyaml, numpy, jinja2 |
@@ -877,7 +879,7 @@ Six, one per shipped family except operational, which contributes latency and co
 | `guardrail_pass_rate` | maximize | guardrail probe | 0.02 |
 | `target_determinism_at_temp0` | maximize | determinism base prompt | 0.02 |
 | `context_retention_auc` | maximize | conversation | 0.02 |
-| `latency_p95_ms` | minimize | probe | 10% rel |
+| `latency_mean_ms` | minimize | probe | 50% rel |
 | `cost_per_probe` | minimize | probe | 10% rel |
 
 Within-family aggregation weights are published in the report, per I1: `security_pass_rate` weights all 8 attack classes equally despite differing declared `severity`, and that choice is stated rather than implied. Severity drives hard-fail classification (§11.2), not weighting.

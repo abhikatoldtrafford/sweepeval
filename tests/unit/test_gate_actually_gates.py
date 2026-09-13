@@ -74,7 +74,7 @@ def test_the_error_lists_what_is_available() -> None:
 
 @pytest.mark.parametrize(
     ("objective_id", "cluster_key"),
-    [("latency_p95_ms", "latency_ms"), ("cost_per_probe", "tokens_out")],
+    [("latency_mean_ms", "latency_ms"), ("cost_per_probe", "tokens_out")],
 )
 def test_opting_in_to_a_remapped_objective_actually_gates_it(
     objective_id: str, cluster_key: str
@@ -122,13 +122,13 @@ def test_the_default_gate_covers_five_of_the_six_objectives() -> None:
     them never failed a default gate. The test that was here asserted only
     that latency was absent, which stayed green while four others were too."""
     defaults = {o.id for o in REGISTRY.defaults()}
-    assert set(DEFAULT_GATE_ON) == defaults - {"latency_p95_ms"}
+    assert set(DEFAULT_GATE_ON) == defaults - {"latency_mean_ms"}
 
 
 def test_latency_stays_out_of_the_default_gate() -> None:
     """Between-session variance is 20-50%; gating it flaps for reasons that
     have nothing to do with the code under test."""
-    assert "latency_p95_ms" not in DEFAULT_GATE_ON
+    assert "latency_mean_ms" not in DEFAULT_GATE_ON
 
 
 # --- a real regression still fires ----------------------------------------

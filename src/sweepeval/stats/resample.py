@@ -26,6 +26,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import TypeVar
 
 import numpy as np
+import numpy.typing as npt
 
 from sweepeval.schema.metric import CIMethod, Estimand, Flag, MetricValue
 
@@ -70,6 +71,47 @@ def _t_critical(df: int, alpha: float) -> float:
             "Add a table entry rather than interpolating."
         )
     return _T_CRITICAL_95.get(df, 1.96)
+
+
+MAX_RESAMPLES = 40_000
+"""Ceiling on the adaptive resample count.
+
+Beyond this the bootstrap costs more than the sweep that produced the data,
+and a family needing it is one where the sweep is too large for the evidence
+rather than one that needs more replicates.
+"""
+
+
+def resample_index_matrix(
+    n: int,
+    n_resamples: int,
+    rng: np.random.Generator,
+    strata_codes: npt.NDArray[np.int64] | None = None,
+) -> npt.NDArray[np.int64]:
+    """``(n_resamples, n)`` matrix of cluster indices, drawn with replacement.
+
+    The vectorised twin of :func:`resample_indices`. The per-replicate Python
+    loop cost roughly a millisecond a replicate, which capped the achievable
+    number of resamples at 2000 -- and 2000 gives a p-value resolution of
+    5e-4, coarser than the tightest Holm threshold at the 12-config cap
+    (0.05/132 = 3.8e-4). At that point nothing could be rejected unless its
+    p-value came out exactly zero, so a single replicate on the wrong side of
+    the margin took the frontier from eleven dominations to none.
+
+    With ``strata_codes`` the draw is stratified: each replicate takes, from
+    each stratum, exactly as many members as that stratum has, so no stratum
+    can come back empty and the trapezoid stays defined (§13.3).
+    """
+    if strata_codes is None:
+        return rng.integers(0, n, size=(n_resamples, n))
+
+    columns: list[npt.NDArray[np.int64]] = []
+    for code in np.unique(strata_codes):
+        members = np.flatnonzero(strata_codes == code)
+        columns.append(
+            members[rng.integers(0, members.size, size=(n_resamples, members.size))]
+        )
+    return np.concatenate(columns, axis=1)
 
 
 def resample_indices(

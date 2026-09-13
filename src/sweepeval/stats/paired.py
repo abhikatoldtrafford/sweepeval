@@ -17,18 +17,22 @@ combination rule is valid under arbitrary dependence between objectives.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 
 from sweepeval.schema.metric import CIMethod, Estimand, Flag, MetricValue
 from sweepeval.stats.resample import (
     CLUSTER_FLOOR,
+    MAX_RESAMPLES,
     MIN_CLUSTERS_FOR_ANY_INTERVAL,
     N_RESAMPLES,
     agresti_coull_interval,
+    resample_index_matrix,
     resample_indices,
 )
 
@@ -88,6 +92,57 @@ class PairedResult:
         )
 
 
+def resamples_for(n_hypotheses: int, alpha: float = 0.05) -> int:
+    """Replicates needed for a p-value fine enough to clear a Holm threshold.
+
+    With the (r+1)/(B+1) estimator the smallest achievable p-value is
+    1/(B+1), so to reject at the tightest threshold ``alpha/n_hypotheses``
+    the bootstrap needs ``B > n_hypotheses/alpha``. Below that the resolution
+    of the test is coarser than the threshold it is compared against, and the
+    whole family fails to reject regardless of the data.
+
+    Doubling that gives headroom so a single replicate on the wrong side of
+    the margin does not decide the frontier.
+    """
+    needed = math.ceil(2 * n_hypotheses / alpha)
+    return max(N_RESAMPLES, min(needed, MAX_RESAMPLES))
+
+
+def _vectorised_replicates(
+    cluster_ids: Sequence[str],
+    values_a: Mapping[str, float],
+    values_b: Mapping[str, float],
+    sign: float,
+    n_resamples: int,
+    rng: np.random.Generator,
+    strata: Mapping[str, str] | None,
+    quantile: float | None,
+) -> npt.NDArray[np.float64]:
+    """All replicates at once, so a larger B is affordable."""
+    a = np.array([values_a[c] for c in cluster_ids], dtype=float)
+    b = np.array([values_b[c] for c in cluster_ids], dtype=float)
+
+    codes = None
+    if strata is not None:
+        labels = sorted({strata[c] for c in cluster_ids})
+        index = {label: i for i, label in enumerate(labels)}
+        codes = np.array([index[strata[c]] for c in cluster_ids], dtype=np.int64)
+
+    draws = resample_index_matrix(len(cluster_ids), n_resamples, rng, codes)
+
+    if quantile is None:
+        # A paired bootstrap of a difference of means is a one-sample
+        # bootstrap of the mean of the per-cluster differences.
+        differences = b - a
+        means: npt.NDArray[np.float64] = differences[draws].mean(axis=1)
+        return sign * means
+
+    quantiles: npt.NDArray[np.float64] = np.quantile(
+        b[draws], quantile, axis=1, method="nearest"
+    ) - np.quantile(a[draws], quantile, axis=1, method="nearest")
+    return sign * quantiles
+
+
 def paired_difference(
     cluster_ids: Sequence[str],
     statistic_a: Statistic,
@@ -100,6 +155,9 @@ def paired_difference(
     seed: int = 0,
     strata: Mapping[str, str] | None = None,
     bounded: bool = False,
+    values_a: Mapping[str, float] | None = None,
+    values_b: Mapping[str, float] | None = None,
+    quantile: float | None = None,
 ) -> PairedResult:
     """Paired cluster bootstrap of ``statistic_b - statistic_a``.
 
@@ -139,10 +197,17 @@ def paired_difference(
         )
 
     rng = np.random.default_rng(seed)
-    replicates = np.empty(n_resamples, dtype=float)
-    for i in range(n_resamples):
-        drawn = resample_indices(list(cluster_ids), rng, strata)
-        replicates[i] = sign * (statistic_b(drawn) - statistic_a(drawn))
+
+    if values_a is not None and values_b is not None:
+        replicates = _vectorised_replicates(
+            list(cluster_ids), values_a, values_b, sign,
+            n_resamples, rng, strata, quantile,
+        )
+    else:
+        replicates = np.empty(n_resamples, dtype=float)
+        for i in range(n_resamples):
+            drawn = resample_indices(list(cluster_ids), rng, strata)
+            replicates[i] = sign * (statistic_b(drawn) - statistic_a(drawn))
 
     lo = float(np.percentile(replicates, 100 * alpha / 2))
     hi = float(np.percentile(replicates, 100 * (1 - alpha / 2)))
@@ -163,12 +228,19 @@ def paired_difference(
     # Both hypotheses are tail areas of the same distribution against
     # thresholds shifted by the margin (§13.5, §13.6).
     #
+    # The (r+1)/(B+1) convention, not the raw proportion. A bootstrap cannot
+    # demonstrate p = 0, and reporting zero is both dishonest and load-bearing
+    # here: Holm is step-down, so at the 12-config cap -- where the tightest
+    # threshold is below the resolution of the old 2000 replicates -- nothing
+    # was rejected at all unless some p came out exactly zero.
+    #
     #   superiority     H0: difference <= +margin  -> P(replicate <= +margin)
     #   non-inferiority H0: difference <= -margin  -> P(replicate <= -margin)
     #
     # Non-inferiority is therefore a rejection, not a failure to detect.
-    p_superior = float(np.mean(replicates <= margin))
-    p_non_inferior = float(np.mean(replicates <= -margin))
+    total = replicates.size
+    p_superior = float((np.count_nonzero(replicates <= margin) + 1) / (total + 1))
+    p_non_inferior = float((np.count_nonzero(replicates <= -margin) + 1) / (total + 1))
 
     return PairedResult(
         difference=observed,

@@ -169,19 +169,43 @@ for _objective in (
         weighting="trapezoid over depths; weights published in the report",
     ),
     Objective(
-        id="latency_p95_ms",
+        id="latency_mean_ms",
         metric_key="latency_ms",
+        display_label="Latency (mean)",
+        direction="minimize",
+        family="operational",
+        cluster_key="probe",
+        min_effect=0.50,
+        min_effect_kind="relative",
+        default=True,
+        note="The MEAN of per-probe latency, not the p95 of §14.1. Measured: "
+        "a p95 over 40 clusters establishes non-inferiority on two identical "
+        "distributions only 55% of the time even at a 50% margin, and its "
+        "bootstrap coverage is 0.88 against a nominal 0.95 -- which is exactly "
+        "the condition §13.3 names for falling back. Because domination "
+        "requires non-inferiority on EVERY objective, a latency objective that "
+        "cannot establish it blocks the entire frontier: a config failing every "
+        "security probe stayed non-dominated. The mean reaches 88% at the same "
+        "margin and never falsely clears a config that is genuinely 2x slower. "
+        "latency_p95_ms is still computed and promotable with --objectives.",
+        weighting="mean over probes of per-probe mean call latency; retries and "
+        "queue time excluded",
+    ),
+    Objective(
+        id="latency_p95_ms",
         display_label="Latency p95",
         direction="minimize",
         family="operational",
         cluster_key="probe",
-        min_effect=0.10,
+        min_effect=0.50,
         min_effect_kind="relative",
-        default=True,
-        note="Coverage of the cluster bootstrap for this objective is validated "
-        "by simulation, not assumed; the fallback is latency_p90_ms (§13.3).",
-        weighting="pooled quantile over calls of resampled probes; retries and "
-        "queue time excluded",
+        default=False,
+        note="The 95th percentile of per-probe mean latency. Reported, and "
+        "promotable onto the frontier, but not a default: over a corpus-sized "
+        "cluster list it is too noisy to establish non-inferiority, and an "
+        "objective that cannot do that blocks every domination (§13.3, §13.5).",
+        weighting="quantile over resampled probes; retries and queue time "
+        "excluded",
     ),
     Objective(
         id="cost_per_probe",

@@ -325,21 +325,24 @@ def _sweep_fixture():
     clusters = {
         "fast": {
             "security_pass_rate": {u: 0.5 for u in units},
-            "latency_ms": {u: 100.0 for u in units},
+            "latency_p95_ms": {u: 100.0 for u in units},
         },
         "safe": {
             "security_pass_rate": {u: 1.0 for u in units},
-            "latency_ms": {u: 900.0 for u in units},
+            "latency_p95_ms": {u: 900.0 for u in units},
         },
         "bad": {
             "security_pass_rate": {u: 0.5 for u in units},
-            "latency_ms": {u: 900.0 for u in units},
+            "latency_p95_ms": {u: 900.0 for u in units},
         },
     }
     metrics = {
-        "fast": {"security_pass_rate": _mv(0.5), "latency_ms": _mv(100.0, 90.0, 110.0)},
-        "safe": {"security_pass_rate": _mv(1.0, 0.95, 1.0), "latency_ms": _mv(900.0, 880.0, 920.0)},
-        "bad": {"security_pass_rate": _mv(0.5), "latency_ms": _mv(900.0, 880.0, 920.0)},
+        "fast": {"security_pass_rate": _mv(0.5), "latency_p95_ms": _mv(100.0, 90.0, 110.0)},
+        "safe": {
+            "security_pass_rate": _mv(1.0, 0.95, 1.0),
+            "latency_p95_ms": _mv(900.0, 880.0, 920.0),
+        },
+        "bad": {"security_pass_rate": _mv(0.5), "latency_p95_ms": _mv(900.0, 880.0, 920.0)},
     }
     return objectives, clusters, metrics
 
@@ -390,13 +393,13 @@ def test_prefer_constrained_excludes_and_says_which_bound() -> None:
         ["fast", "safe", "bad"], metrics, clusters, objectives, constraints=()
     )
     outcome = apply_preference(
-        parse_preference("maximize security_pass_rate subject to latency_ms < 500"),
+        parse_preference("maximize security_pass_rate subject to latency_p95_ms < 500"),
         result,
         metrics,
     )
     assert outcome.chosen == "fast"
     assert "safe" in outcome.excluded
-    assert "latency_ms < 500" in outcome.excluded["safe"]
+    assert "latency_p95_ms < 500" in outcome.excluded["safe"]
 
 
 def test_an_impossible_constraint_says_so_rather_than_picking_anyway() -> None:
@@ -405,7 +408,7 @@ def test_an_impossible_constraint_says_so_rather_than_picking_anyway() -> None:
         ["fast", "safe", "bad"], metrics, clusters, objectives, constraints=()
     )
     outcome = apply_preference(
-        parse_preference("maximize security_pass_rate subject to latency_ms < 1"),
+        parse_preference("maximize security_pass_rate subject to latency_p95_ms < 1"),
         result,
         metrics,
     )
@@ -480,7 +483,9 @@ def test_a_relative_margin_is_reported_in_the_metrics_own_units() -> None:
         for c in comparison["per_objective"]
         if c["objective"] == "latency_p95_ms"
     )
-    assert latency["min_effect"] == pytest.approx(0.10)
+    # 0.50: measured, not chosen. A smaller margin cannot establish
+    # non-inferiority on latency, and domination needs it on every objective.
+    assert latency["min_effect"] == pytest.approx(0.50)
     assert latency["applied_margin"] > 1.0
 
 

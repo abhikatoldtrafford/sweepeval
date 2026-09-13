@@ -134,6 +134,25 @@ def build_cluster_table(
     )
 
 
+def quantile_statistic(
+    table: ClusterTable, q: float
+) -> Callable[[Sequence[str]], float]:
+    """Nearest-rank quantile over the resampled clusters.
+
+    The same function the paired test uses, so a metric's point, its interval
+    and the statistic it is compared on are one quantity rather than three.
+    """
+
+    def statistic(drawn: Sequence[str]) -> float:
+        values = sorted(table.values[c] for c in drawn if c in table.values)
+        if not values:
+            return 0.0
+        index = min(len(values) - 1, round(q * (len(values) - 1)))
+        return values[index]
+
+    return statistic
+
+
 def aggregate_metric(
     table: ClusterTable,
     *,
@@ -142,6 +161,7 @@ def aggregate_metric(
     seed: int = 0,
     bounded: bool = True,
     indicative: bool = False,
+    statistic: Callable[[Sequence[str]], float] | None = None,
 ) -> MetricValue:
     """One config's value for one metric, with its interval.
 
@@ -166,7 +186,7 @@ def aggregate_metric(
 
     return cluster_bootstrap(
         ids,
-        table.statistic(),
+        statistic or table.statistic(),
         estimand=estimand,
         alpha=alpha,
         seed=seed,
