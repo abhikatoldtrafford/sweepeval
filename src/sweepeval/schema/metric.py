@@ -54,6 +54,10 @@ class CIMethod(str, Enum):
 
     cluster_bootstrap = "cluster_bootstrap"
     t = "t"
+    order_statistic = "order_statistic"
+    """Distribution-free interval between two order statistics. Exact for
+    a quantile at any n, where the bootstrap percentile badly under-covers."""
+
     permutation = "permutation"
     """Exact sign-flip enumeration. Used below the cluster floor, where
     2**n assignments can be listed outright and a bootstrap is forbidden."""

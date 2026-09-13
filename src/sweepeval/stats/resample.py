@@ -37,6 +37,7 @@ __all__ = [
     "agresti_coull_interval",
     "cluster_bootstrap",
     "no_valid_interval",
+    "order_statistic_interval",
     "resample_indices",
     "t_interval",
 ]
@@ -303,3 +304,98 @@ def no_valid_interval(
         estimand=estimand,
         flags=tuple(sorted(flags, key=lambda f: f.value)),
     )
+
+
+def order_statistic_interval(
+    values: Sequence[float],
+    quantile: float,
+    *,
+    alpha: float = 0.05,
+    estimand: Estimand = Estimand.generalization,
+    extra_flags: Sequence[Flag] = (),
+) -> MetricValue:
+    """A distribution-free interval for a quantile (§13.3).
+
+    The bootstrap percentile interval under-covers badly for a quantile: at
+    the corpus sizes this tool actually uses, the p95's measured coverage was
+    **0.713 at 24 clusters and 0.883 at 69**, against a nominal 0.95 printed
+    beside it. §13.3 says an objective missing nominal by more than three
+    points falls back; D46 applied that to the default set only, and
+    `latency_p95_ms` is promotable with `--objectives`, so it was emitted as
+    an ordinary MetricValue at alpha=0.05 with no flag.
+
+    The order-statistic interval is exact instead of approximate. If B is
+    Binomial(n, q), then the qth quantile lies between the l-th and u-th order
+    statistics with probability P(l <= B <= u-1), so choosing l and u from the
+    binomial tails gives coverage of **at least** 1 - alpha for any continuous
+    distribution, at any n. It is conservative rather than optimistic, which
+    is the direction an interval should err.
+
+    The cost is width, and below the sample size where an upper bound exists
+    at all this declines an interval outright rather than clamping to the
+    sample maximum. A p95 needs 72 clusters; a p90 needs 36. Saying so is the
+    point -- §13.3's documented fallback to p90 exists for exactly this, and
+    was never wired up.
+    """
+    ordered = sorted(values)
+    n = len(ordered)
+    if n < MIN_CLUSTERS_FOR_ANY_INTERVAL:
+        point = ordered[-1] if ordered else 0.0
+        return no_valid_interval(
+            point, n, alpha, estimand, extra_flags=(Flag.LOW_N, *extra_flags)
+        )
+
+    index = min(n - 1, round(quantile * (n - 1)))
+    point = ordered[index]
+
+    lower = _binomial_quantile(n, quantile, alpha / 2)
+    upper = _binomial_quantile(n, quantile, 1 - alpha / 2) + 1
+
+    if upper > n:
+        # No upper bound exists at this sample size, and clamping to the
+        # maximum would invent one. For the p95 the true value lies above
+        # every observed probe with probability 0.95**n -- 29% at 24 clusters,
+        # 54% at 12 -- so an interval ending at the sample maximum cannot
+        # cover it that often, whatever method produced it. That is the 0.713
+        # measured coverage, and it is a property of the question, not of the
+        # estimator.
+        return no_valid_interval(
+            point,
+            n,
+            alpha,
+            estimand,
+            extra_flags=(Flag.LOW_N, *extra_flags),
+        )
+
+    lo = ordered[max(0, min(n - 1, lower - 1))]
+    hi = ordered[upper - 1]
+    lo, hi = min(lo, point), max(hi, point)
+
+    flags = list(extra_flags)
+    if n < CLUSTER_FLOOR:
+        flags.append(Flag.LOW_N)
+
+    return MetricValue(
+        point=point,
+        lo=lo,
+        hi=hi,
+        method=CIMethod.order_statistic,
+        n_clusters=n,
+        alpha=alpha,
+        estimand=estimand,
+        flags=tuple(flags),
+    )
+
+
+def _binomial_quantile(n: int, p: float, target: float) -> int:
+    """Smallest k with P(Binomial(n, p) <= k) >= ``target``.
+
+    Computed directly rather than pulled from scipy: the tool ships numpy and
+    nothing else numeric, and n here is a corpus-sized cluster count.
+    """
+    cumulative = 0.0
+    for k in range(n + 1):
+        cumulative += math.comb(n, k) * (p**k) * ((1 - p) ** (n - k))
+        if cumulative >= target:
+            return k
+    return n

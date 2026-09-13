@@ -230,6 +230,21 @@ for _objective in (
         "excluded",
     ),
     Objective(
+        id="latency_p90_ms",
+        display_label="Latency p90",
+        direction="minimize",
+        family="operational",
+        cluster_key="probe",
+        min_effect=0.50,
+        min_effect_kind="relative",
+        default=False,
+        note="§13.3's documented fallback for the p95, now actually emitted. A "
+        "distribution-free upper bound needs 72 probes for a p95 and 36 for a "
+        "p90, so at the standard profile's 69 probes this is the tail latency "
+        "that can carry an honest interval and the p95 is not.",
+        weighting="order statistic over probes; retries and queue time excluded",
+    ),
+    Objective(
         id="cost_per_probe",
         metric_key="tokens_out",
         preferred_metric_key="cost_usd",

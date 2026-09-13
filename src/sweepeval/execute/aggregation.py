@@ -16,13 +16,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
 from sweepeval.execute.cost import Pricing
-from sweepeval.schema.metric import Estimand, MetricValue
+from sweepeval.schema.metric import Estimand, Flag, MetricValue
 from sweepeval.schema.observation import Observation
 from sweepeval.stats.aggregate import (
+    ClusterTable,
     aggregate_metric,
     build_cluster_table,
-    quantile_statistic,
 )
+from sweepeval.stats.resample import order_statistic_interval
 from sweepeval.stats.retention import auc_statistic
 
 __all__ = ["RATE_METRICS", "ConfigAggregate", "aggregate_config"]
@@ -38,6 +39,14 @@ RATE_METRICS: tuple[str, ...] = (
 
 LATENCY_OBJECTIVE = "latency_p95_ms"
 LATENCY_QUANTILE = 0.95
+
+LATENCY_FALLBACK_OBJECTIVE = "latency_p90_ms"
+LATENCY_FALLBACK_QUANTILE = 0.90
+"""§13.3's documented fallback, finally emitted.
+
+A distribution-free upper bound for a p95 needs 72 probes; a p90 needs 36. At
+`standard` (69 probes) the p95 cannot carry an honest interval and the p90
+can, which is precisely the case the spec wrote the fallback for."""
 """§14.1's latency objective: the 95th percentile of per-probe mean latency.
 
 The resampling unit is the probe, so the cluster value is that probe's mean
@@ -100,6 +109,36 @@ def aggregate_config(
     _operational(out, observations, seed=seed, indicative=indicative)
     _cost(out, observations, seed=seed, indicative=indicative, pricing=pricing)
     return out
+
+
+def _latency_quantiles(
+    out: ConfigAggregate, table: ClusterTable, *, indicative: bool
+) -> None:
+    """Tail latency, at whatever quantile this many probes can actually bound.
+
+    A bootstrap percentile interval under-covers badly for a quantile: the
+    p95's measured coverage was 0.713 at 24 clusters and 0.883 at 69, printed
+    beside a nominal 0.95. `order_statistic_interval` is exact, and declines
+    when no upper bound exists at the sample size -- which for a p95 is
+    anything below 72 clusters.
+
+    So the p95 is emitted whenever the corpus can carry it and declines an
+    interval otherwise (I3, never a bare point), and §13.3's documented
+    fallback to p90 -- which needs 36 -- is emitted alongside it whenever
+    *that* is estimable. Under its own name: reporting a p90 as
+    `latency_p95_ms` is the class of defect this whole change is about.
+    """
+    values = list(table.values.values())
+    extra = (Flag.INDICATIVE,) if indicative else ()
+
+    for objective, quantile in (
+        (LATENCY_OBJECTIVE, LATENCY_QUANTILE),
+        (LATENCY_FALLBACK_OBJECTIVE, LATENCY_FALLBACK_QUANTILE),
+    ):
+        out.clusters[objective] = dict(table.values)
+        out.metrics[objective] = order_statistic_interval(
+            values, quantile, extra_flags=extra
+        )
 
 
 def _cost(
@@ -231,11 +270,4 @@ def _operational(
         # the tested statistic were three different quantities sharing a name.
         # Emitted here as its own metric so all three agree.
         if metric == "latency_ms":
-            out.clusters[LATENCY_OBJECTIVE] = dict(table.values)
-            out.metrics[LATENCY_OBJECTIVE] = aggregate_metric(
-                table,
-                seed=seed,
-                bounded=False,
-                indicative=indicative,
-                statistic=quantile_statistic(table, LATENCY_QUANTILE),
-            )
+            _latency_quantiles(out, table, indicative=indicative)

@@ -40,7 +40,7 @@
     "compare_keys": "def(a: 'Comparability', b: 'Comparability') -> 'ComparabilityVerdict'"
   },
   "sweepeval.schema.metric": {
-    "CIMethod": "enum(cluster_bootstrap,t,permutation,none)",
+    "CIMethod": "enum(cluster_bootstrap,t,order_statistic,permutation,none)",
     "Estimand": "enum(conditional,generalization)",
     "Flag": "enum(LOW_N,INDICATIVE,CACHE_SUSPECTED,LOW_COVERAGE,NO_VALID_INTERVAL,TTFT_REASONING_ADJUSTED)",
     "MetricSpec": "model(fields=cluster_key,direction,family,metric,unit;methods=)",
