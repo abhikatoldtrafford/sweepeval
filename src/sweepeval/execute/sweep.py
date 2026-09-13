@@ -269,7 +269,7 @@ async def asweep_target(
             estimate=estimate,
             stop_reason="the estimate was not confirmed; nothing was sent",
         )
-    if budget_cap.forbids_starting(estimate):
+    if budget_cap.forbids_starting(estimate, pricing):
         return SweepResult(
             run_id="",
             profile=profile,
@@ -472,7 +472,14 @@ async def asweep_target(
         # cap by that whole phase: a 100-request cap let 157 requests through.
         spent = _already_spent(store, plan) + discovery.budget.posts
         spent += capability_budget.posts
-        tokens_spent = discovery.budget.tokens + capability_budget.tokens
+        # Kept apart, because they are priced apart. Collapsing them into
+        # one figure and passing it to `pricing.cost(0, tokens)` billed
+        # every input token at the OUTPUT rate -- a 10x overstatement at
+        # typical prices, in the direction that stops a run early.
+        # Discovery and capability probes are inert and short; their spend
+        # is counted as input, which is where nearly all of it is.
+        tokens_in = discovery.budget.tokens + capability_budget.tokens
+        tokens_out = 0
         for index, config in enumerate(plan.configs):
             # The cap is checked between configs, never mid-config: stopping
             # inside one leaves a config with partial coverage, and a partially
@@ -485,8 +492,9 @@ async def asweep_target(
             if _cap_reached(
                 budget_cap,
                 spent + estimate.per_config_requests,
-                tokens_spent + estimate.per_config_tokens,
-                pricing,
+                tokens_in=tokens_in + estimate.per_config_tokens,
+                tokens_out=tokens_out,
+                pricing=pricing,
             ):
                 result.status = SweepStatus.INCOMPLETE
                 result.not_run = [c.config_id for c in plan.configs[index:]]
@@ -513,7 +521,8 @@ async def asweep_target(
                 pricing=pricing,
             )
             spent += row.requests
-            tokens_spent += row.tokens_out + row.tokens_in
+            tokens_in += row.tokens_in
+            tokens_out += row.tokens_out
             result.configs.append(row)
 
         _share_determinism(result, _determinism_sharing(plan))
@@ -651,7 +660,12 @@ async def _run_one(
 
 
 def _cap_reached(
-    cap: BudgetCap, spent: int, tokens: int, pricing: Pricing | None
+    cap: BudgetCap,
+    spent: int,
+    *,
+    tokens_in: int,
+    tokens_out: int,
+    pricing: Pricing | None,
 ) -> bool:
     """Whether the cap is reached, in whichever unit it was set.
 
@@ -659,20 +673,25 @@ def _cap_reached(
     count, and the dollar cap returned False unconditionally -- a
     ``BudgetCap(0.01, "dollars")`` completed a 757-request run, and a test
     enshrined that as intended.
+
+    Input and output tokens arrive separately because they are priced
+    separately. Passing their sum as the output count billed input at the
+    output rate, overstating projected spend by the price ratio -- 10x at
+    typical rates, in the direction that stops a run that had budget left.
     """
     if cap.value is None:
         return False
     if cap.unit == "requests":
         return spent >= cap.value
     if cap.unit == "tokens":
-        return tokens >= cap.value
+        return tokens_in + tokens_out >= cap.value
     if cap.unit == "dollars":
         # Without pricing there is no dollar figure to compare, and inventing
         # one is what D8 forbids. The cap cannot bind; the caller was told so
         # by the pre-flight, which says the cost objective is in tokens.
         if pricing is None:
             return False
-        return pricing.cost(0, tokens) >= cap.value
+        return pricing.cost(tokens_in, tokens_out) >= cap.value
     return False
 
 

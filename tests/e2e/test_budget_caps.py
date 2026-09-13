@@ -75,10 +75,36 @@ async def test_the_cap_counts_discovery_and_capability_detection(tmp_path) -> No
     )
 
 
-async def test_a_token_cap_binds(tmp_path) -> None:
+async def test_a_token_cap_buys_a_partial_sweep(tmp_path) -> None:
+    """This asserted DECLINED at 30,000 tokens, which encoded the bug as the
+    intent. There was NO cap value that produced a partial sweep: capability
+    detection reserved a flat 200,000 tokens -- 3,333 per request, against 58
+    for the entire scoring phase -- so `forbids_starting` demanded 219,000
+    while a whole sweep measured about 11,000. Below the threshold it declined
+    outright; above it, the cap never bound."""
     result, sent = await _sweep(tmp_path, BudgetCap(value=30_000, unit="tokens"))
+    assert result.status is SweepStatus.INCOMPLETE
+    assert result.configs, "the cap should still buy some configurations"
+    assert result.not_run
+    assert sent > 0
+
+
+async def test_a_token_cap_below_one_configuration_still_declines(tmp_path) -> None:
+    """The floor has to remain a floor."""
+    result, sent = await _sweep(tmp_path, BudgetCap(value=20_000, unit="tokens"))
     assert result.status is SweepStatus.DECLINED
     assert sent == 0
+
+
+@pytest.mark.parametrize("cap", [25_000, 32_000])
+async def test_the_token_cap_has_no_dead_zone(tmp_path, cap: int) -> None:
+    """Two values either side of one configuration's cost, both of which have
+    to land on a real partial sweep rather than on all-or-nothing."""
+    result, _sent = await _sweep(
+        tmp_path / str(cap), BudgetCap(value=cap, unit="tokens")
+    )
+    assert result.status is SweepStatus.INCOMPLETE
+    assert 0 < len(result.configs) < len(result.plan.configs)
 
 
 async def test_a_dollar_cap_binds_when_pricing_is_supplied(tmp_path) -> None:
@@ -88,9 +114,41 @@ async def test_a_dollar_cap_binds_when_pricing_is_supplied(tmp_path) -> None:
     result, sent = await _sweep(
         tmp_path, BudgetCap(value=0.00005, unit="dollars"), pricing
     )
-    assert result.status is not SweepStatus.COMPLETE
+    assert result.status is SweepStatus.DECLINED
     assert not result.configs
-    assert sent < 100, sent
+    assert sent == 0, "a cap that cannot buy one config must send nothing"
+
+
+async def test_a_dollar_cap_buys_a_partial_sweep(tmp_path) -> None:
+    pricing = Pricing(input_per_mtok=1.0, output_per_mtok=10.0, source="test")
+    result, _sent = await _sweep(
+        tmp_path, BudgetCap(value=0.05, unit="dollars"), pricing
+    )
+    assert result.status is SweepStatus.INCOMPLETE
+    assert 0 < len(result.configs) < len(result.plan.configs)
+
+
+async def test_input_tokens_are_not_billed_at_the_output_rate(tmp_path) -> None:
+    """`pricing.cost(0, tokens)` passed the combined count as the OUTPUT
+    count, overstating projected spend by the price ratio -- 10x here -- in
+    the direction that stops a run with budget left. The two rates differ by
+    10x, so a cap set between the true and the overstated figure separates
+    them."""
+    from sweepeval.execute.sweep import _cap_reached
+
+    pricing = Pricing(input_per_mtok=1.0, output_per_mtok=10.0, source="test")
+    cap = BudgetCap(value=0.005, unit="dollars")
+
+    # 1M input tokens, none out: $1.00 at the input rate, $10.00 at output.
+    assert pricing.cost(1_000_000, 0) == pytest.approx(1.0)
+    assert pricing.cost(0, 1_000_000) == pytest.approx(10.0)
+
+    # 4,000 input tokens is $0.004 -- under the cap. Billed as output it is
+    # $0.04, over it.
+    assert not _cap_reached(
+        cap, 0, tokens_in=4_000, tokens_out=0, pricing=pricing
+    )
+    assert _cap_reached(cap, 0, tokens_in=0, tokens_out=4_000, pricing=pricing)
 
 
 async def test_a_dollar_cap_without_pricing_cannot_bind(tmp_path) -> None:

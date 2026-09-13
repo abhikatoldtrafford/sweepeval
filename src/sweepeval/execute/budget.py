@@ -16,9 +16,13 @@ asked the user to consent to.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from sweepeval.corpus.loader import Corpus
+
+if TYPE_CHECKING:  # `cost` imports CHARS_PER_TOKEN from here, so the
+    # runtime import would be circular. Only the annotation is needed.
+    from sweepeval.execute.cost import Pricing
 
 __all__ = [
     "CHARS_PER_TOKEN",
@@ -34,9 +38,28 @@ CHARS_PER_TOKEN = 4
 presented as a measurement is worse than no estimate."""
 
 _DISCOVERY_POSTS = 25
-_DISCOVERY_TOKENS = 12_000
 _CAPABILITY_POSTS = 60
-_CAPABILITY_TOKENS = 200_000
+_PROBE_TOKENS = 200
+"""Ceiling per inert discovery or capability probe.
+
+Both phases send short, fixed prompts. Measured against the mock, discovery
+spends 47 tokens across 2 posts; 200 apiece is still an order of magnitude of
+headroom, which is what a pre-flight estimate should carry.
+
+It used to be a flat 12,000 for discovery and 200,000 for capabilities -- the
+latter 3,333 tokens per request, against 58 per request for the entire scoring
+phase. That reservation existed to cover the context-ceiling search, which
+runs only under ``--profile deep``, and it made the token cap unusable at
+every other profile: `forbids_starting` demanded at least 219,000 tokens, and
+a whole sweep then measured about 11,000, so no cap value produced a partial
+run. Either it declined the sweep outright or it never bound.
+"""
+
+_CONTEXT_CEILING_TOKENS = 200_000
+"""The deep-only context-ceiling search, which deliberately sends long inputs
+to find where the target truncates. Reserved only for the profile that runs
+it (`capabilities/detect.py` skips it otherwise)."""
+
 _HARD_FAIL_CONFIRMATIONS = 3
 
 
@@ -88,6 +111,19 @@ class Estimate:
         return scoring // max(1, self.configs)
 
     @property
+    def unavoidable_tokens(self) -> int:
+        """Discovery and capability detection, in tokens.
+
+        The request-side twin of :attr:`unavoidable_requests`, which existed
+        while this was recomputed inline in two places that could drift.
+        """
+        return sum(
+            p.tokens
+            for p in self.phases
+            if p.phase in ("discovery", "capabilities")
+        )
+
+    @property
     def per_config_tokens(self) -> int:
         scoring = next(
             (p.tokens for p in self.phases if p.phase.startswith("scoring")), 0
@@ -110,11 +146,7 @@ class BudgetCap:
     def shortfall(self, estimate: Estimate) -> str:
         """Why the cap cannot buy even one configuration, in its own units."""
         if self.unit == "tokens":
-            unavoidable = sum(
-                p.tokens
-                for p in estimate.phases
-                if p.phase in ("discovery", "capabilities")
-            )
+            unavoidable = estimate.unavoidable_tokens
             per_config = estimate.per_config_tokens
         else:
             unavoidable = estimate.unavoidable_requests
@@ -125,7 +157,9 @@ class BudgetCap:
             f"{self.unit}, above your cap of {self.value:,}"
         )
 
-    def forbids_starting(self, estimate: Estimate) -> bool:
+    def forbids_starting(
+        self, estimate: Estimate, pricing: Pricing | None = None
+    ) -> bool:
         """Whether the cap makes even one configuration impossible (§12.3).
 
         Distinct from :meth:`exceeded_by`. A cap below the *estimate* is a
@@ -144,12 +178,23 @@ class BudgetCap:
                 > self.value
             )
         if self.unit == "tokens":
-            unavoidable = sum(
-                p.tokens
-                for p in estimate.phases
-                if p.phase in ("discovery", "capabilities")
+            return (
+                estimate.unavoidable_tokens + estimate.per_config_tokens > self.value
             )
-            return unavoidable + estimate.per_config_tokens > self.value
+        if self.unit == "dollars":
+            # A dollar cap below the cost of discovery plus one config buys no
+            # sweep either -- and returning False here let `BudgetCap(0.01,
+            # "dollars")` send 37 requests before coming back with no configs
+            # at all. Only decidable with pricing; without it the cap is inert
+            # by D8 and the pre-flight has already said so.
+            if pricing is None:
+                return False
+            return (
+                pricing.cost(
+                    estimate.unavoidable_tokens + estimate.per_config_tokens, 0
+                )
+                > self.value
+            )
         return False
 
     def exceeded_by(self, estimate: Estimate) -> bool:
@@ -180,11 +225,21 @@ def estimate_run(
     scoring_requests = corpus.calls_per_run * runs * configs
     scoring_tokens = _tokens_for(corpus, runs, configs)
 
+    ceiling_search = _CONTEXT_CEILING_TOKENS if profile == "deep" else 0
     phases = [
-        PhaseEstimate("discovery", _DISCOVERY_POSTS, _DISCOVERY_TOKENS, "hard cap"),
         PhaseEstimate(
-            "capabilities", _CAPABILITY_POSTS, _CAPABILITY_TOKENS,
-            "hard cap; context-ceiling search runs only under --profile deep",
+            "discovery", _DISCOVERY_POSTS, _DISCOVERY_POSTS * _PROBE_TOKENS, "hard cap"
+        ),
+        PhaseEstimate(
+            "capabilities",
+            _CAPABILITY_POSTS,
+            _CAPABILITY_POSTS * _PROBE_TOKENS + ceiling_search,
+            "hard cap"
+            + (
+                "; includes the context-ceiling search"
+                if ceiling_search
+                else "; context-ceiling search runs only under --profile deep"
+            ),
         ),
         PhaseEstimate(
             f"scoring ({profile})", scoring_requests, scoring_tokens,
