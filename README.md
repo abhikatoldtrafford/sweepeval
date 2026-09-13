@@ -213,7 +213,7 @@ itself needs, nothing is sent at all.
       --baseline .sweepeval/baseline.json
 ```
 
-`gate` exits `0` unchanged, `1` regressed, `2` incomparable, `3` inconclusive.
+`gate` exits `0` unchanged, `1` regressed or hard-failed, `2` incomparable, `3` usage error.
 It compares against a committed `baseline.json` using the same paired test,
 so it does not flap.
 

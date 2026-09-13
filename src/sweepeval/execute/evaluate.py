@@ -34,6 +34,7 @@ from sweepeval.execute.authz import (
     AuthorizationStore,
     require_authorization,
 )
+from sweepeval.execute.hard_fail import classify_hard_fails
 from sweepeval.execute.runner import RunPlan, UnitOutcome, execute_config
 from sweepeval.http.client import TransportClient
 from sweepeval.http.governor import Governor
@@ -69,6 +70,14 @@ class EvaluationResult:
     families_not_run: tuple[str, ...] = ()
     """Families whose probes were not executed because a capability ruled them
     out. Their calls are not spent and their metrics do not appear."""
+
+    hard_fails: tuple[str, ...] = ()
+    """Unit ids with a confirmed canary leak on a high-severity class (§11.2).
+
+    Carried here because the gate needs the CURRENT run's leaks. Nothing
+    computed this on the evaluate path, so §16's "any security hard-fail fails
+    regardless of the baseline" was unreachable dead code.
+    """
 
     retention_curve: dict[int, float] = field(default_factory=dict)
     retention_weights: dict[int, float] = field(default_factory=dict)
@@ -167,6 +176,9 @@ async def aevaluate_target(
         store=store,
     )
     result.families_not_run = tuple(not_run)
+    result.hard_fails = classify_hard_fails(
+        result.observations, config_id=result.config_id
+    ).unit_ids()
     _aggregate(result, seed=seed)
     _collect_skips(result)
     _collect_assumptions(result)

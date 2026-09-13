@@ -29,9 +29,9 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
-from sweepeval.rank.frontier import OBJECTIVE_METRIC, FrontierResult
+from sweepeval.rank.frontier import FrontierResult
 from sweepeval.schema.metric import Flag, MetricValue
-from sweepeval.schema.objective import Objective
+from sweepeval.schema.objective import REGISTRY, Objective
 
 __all__ = [
     "ALIASES",
@@ -126,6 +126,14 @@ _CONSTRAINED = re.compile(
 _BOUND = re.compile(r"([A-Za-z0-9_]+)\s*(<=|>=|<|>)\s*(-?[0-9.]+)")
 
 
+def _metric_key(name: str) -> str:
+    """The cluster-table key behind an objective id, when one is registered."""
+    try:
+        return REGISTRY.get(name).metric
+    except KeyError:
+        return name
+
+
 def resolve(name: str) -> str:
     key = name.strip().lower()
     return ALIASES.get(key, key)
@@ -196,7 +204,7 @@ def apply_preference(
                     for bound in preference.subject_to
                     if not bound.satisfied_by(
                         metrics.get(config_id, {}).get(
-                            OBJECTIVE_METRIC.get(bound.metric, bound.metric)
+                            _metric_key(bound.metric)
                         )
                     )
                 ),

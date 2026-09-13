@@ -28,18 +28,34 @@ __all__ = ["DEFAULT_GATE_ON", "gate", "load_baseline", "save_baseline", "snapsho
 DEFAULT_GATE_ON = (
     "security_pass_rate",
     "guardrail_pass_rate",
+    "target_determinism_at_temp0",
+    "context_retention_auc",
+    "cost_per_probe",
 )
-"""§16's default. Latency is deliberately excluded.
+"""§16's default: the six objectives minus latency.
 
-Between-session network and server variance is 20-50%, far above what the
-measurement can attribute to the target, so gating it flaps for reasons that
-have nothing to do with the code under test. ``--gate-on latency_p95_ms`` opts
-in.
+Latency is deliberately excluded. Between-session network and server variance
+is 20-50%, far above what the measurement can attribute to the target, so
+gating it flaps for reasons that have nothing to do with the code under test.
+``--gate-on latency_p95_ms`` opts in.
+
+Determinism, retention and cost were missing from this tuple, so a regression
+in any of the three never failed a default gate -- and the one test covering
+it asserted only that latency was absent, which stayed green while four other
+required metrics were too.
 """
 
 
-def snapshot(result: EvaluationResult, *, hard_fails: tuple[str, ...] = ()) -> Baseline:
-    """Turn a result into a committable baseline."""
+def snapshot(
+    result: EvaluationResult, *, hard_fails: tuple[str, ...] | None = None
+) -> Baseline:
+    """Turn a result into a committable baseline.
+
+    ``hard_fails`` defaults to the ones the result itself recorded. It used to
+    default to ``()`` and no caller ever passed anything, so §16's "any
+    security hard-fail fails the gate regardless of the baseline" was
+    unreachable.
+    """
     return Baseline(
         run_id=result.run_id,
         created_at=datetime.now(timezone.utc).isoformat(),
@@ -47,7 +63,11 @@ def snapshot(result: EvaluationResult, *, hard_fails: tuple[str, ...] = ()) -> B
         comparability=result.comparability,
         metrics=dict(result.metrics),
         clusters={k: dict(v) for k, v in result.clusters.items()},
-        hard_fails=hard_fails,
+        hard_fails=(
+            hard_fails
+            if hard_fails is not None
+            else getattr(result, "hard_fails", None) or ()
+        ),
     )
 
 
@@ -103,7 +123,10 @@ def gate(
         objectives,
         baseline.clusters,
         result.clusters,
-        hard_fails=baseline.hard_fails,
+        # The CURRENT run's leaks, not the baseline's. Passing the baseline's
+        # inverted the check: a run that started leaking passed, and one whose
+        # baseline had leaked failed forever after it was fixed.
+        hard_fails=tuple(getattr(result, "hard_fails", None) or ()),
         alpha=alpha,
         seed=seed,
         min_effect_overrides=min_effect_overrides,

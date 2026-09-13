@@ -40,36 +40,10 @@ from sweepeval.stats.correlation import CorrelationMatrix, correlation_matrix
 from sweepeval.stats.paired import PairedResult, paired_difference
 
 __all__ = [
-    "OBJECTIVE_METRIC",
     "FrontierResult",
     "make_paired",
     "rank_configs",
 ]
-
-OBJECTIVE_METRIC: dict[str, str] = {
-    "security_pass_rate": "security_pass_rate",
-    "guardrail_pass_rate": "guardrail_pass_rate",
-    "target_determinism_at_temp0": "target_determinism_at_temp0",
-    "config_repeatability": "config_repeatability",
-    "context_retention_auc": "context_retention_auc",
-    "latency_p95_ms": "latency_ms",
-    "cost_per_probe": "tokens_out",
-}
-"""Which cluster table each objective resamples.
-
-Two are not identities and both are deliberate:
-
-``latency_p95_ms`` resamples the per-probe latency clusters and takes the p95
-*of the resampled cluster values*. §14.1 defines it as a pooled quantile over
-the calls of resampled probes; with one aggregated value per probe this is the
-same quantity for single-turn probes and a per-probe-mean approximation for
-multi-turn ones. Stated rather than silently substituted.
-
-``cost_per_probe`` resamples output tokens, which is what the objective *is*
-when no pricing is supplied — that is the documented degradation of §12.4, and
-``pricing_source`` is a hard comparability key precisely so the two are never
-mistaken for each other.
-"""
 
 _QUANTILE_OBJECTIVES = {"latency_p95_ms": 0.95}
 
@@ -144,7 +118,7 @@ def make_paired(
     strata = strata or {}
 
     def paired(a: str, b: str, objective: Objective) -> PairedResult:
-        metric = OBJECTIVE_METRIC.get(objective.id, objective.id)
+        metric = objective.metric
         table_a = clusters.get(a, {}).get(metric, {})
         table_b = clusters.get(b, {}).get(metric, {})
         shared = sorted(set(table_a) & set(table_b))
@@ -303,7 +277,7 @@ def _points(
         row = metrics.get(config_id, {})
         values: dict[str, float] = {}
         for objective in objectives:
-            value = row.get(OBJECTIVE_METRIC.get(objective.id, objective.id))
+            value = row.get(objective.metric)
             if value is None or Flag.NO_VALID_INTERVAL in value.flags:
                 continue
             values[objective.id] = value.point
@@ -344,7 +318,7 @@ def _excluded_metrics(
         row = metrics.get(config_id, {})
         dropped: list[str] = []
         for objective in objectives:
-            value = row.get(OBJECTIVE_METRIC.get(objective.id, objective.id))
+            value = row.get(objective.metric)
             if value is None or Flag.LOW_COVERAGE in value.flags:
                 dropped.append(objective.id)
                 continue

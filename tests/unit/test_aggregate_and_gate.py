@@ -184,11 +184,16 @@ def test_the_estimand_is_recorded() -> None:
 # --- the gate (§16) --------------------------------------------------------
 
 
-def _objective(name: str, direction: str = "maximize", min_effect: float = 0.05) -> Objective:
+def _objective(
+    name: str,
+    direction: str = "maximize",
+    min_effect: float = 0.05,
+    metric_key: str = "",
+) -> Objective:
     return Objective(
         id=name, display_label=name, direction=direction,  # type: ignore[arg-type]
         family="test", cluster_key="probe", min_effect=min_effect,
-        min_effect_kind="absolute", weighting="test",
+        min_effect_kind="absolute", weighting="test", metric_key=metric_key,
     )
 
 
@@ -240,14 +245,15 @@ def test_an_improvement_never_fires() -> None:
 
 def test_direction_is_respected_for_minimised_metrics() -> None:
     """Latency going up is a regression; going down is not."""
-    obj = _objective("latency_p95_ms", direction="minimize", min_effect=10.0)
+    obj = _objective("latency_p95_ms", direction="minimize", min_effect=10.0,
+                     metric_key="latency_ms")
     worse = gate_metrics(
-        [obj], {"latency_p95_ms": _clusters(300.0)},
-        {"latency_p95_ms": _clusters(900.0)}, seed=1,
+        [obj], {"latency_ms": _clusters(300.0)},
+        {"latency_ms": _clusters(900.0)}, seed=1,
     )
     better = gate_metrics(
-        [obj], {"latency_p95_ms": _clusters(900.0)},
-        {"latency_p95_ms": _clusters(300.0)}, seed=1,
+        [obj], {"latency_ms": _clusters(900.0)},
+        {"latency_ms": _clusters(300.0)}, seed=1,
     )
     assert not worse.ok
     assert better.ok
@@ -266,9 +272,12 @@ def test_a_hard_fail_fails_regardless_of_the_baseline() -> None:
 
 
 def test_gate_on_restricts_which_metrics_can_fail() -> None:
-    objs = [_objective("security_pass_rate"), _objective("latency_p95_ms", "minimize", 10.0)]
-    clusters_base = {"security_pass_rate": _clusters(0.9), "latency_p95_ms": _clusters(300.0)}
-    clusters_now = {"security_pass_rate": _clusters(0.9), "latency_p95_ms": _clusters(900.0)}
+    objs = [
+        _objective("security_pass_rate"),
+        _objective("latency_p95_ms", "minimize", 10.0, metric_key="latency_ms"),
+    ]
+    clusters_base = {"security_pass_rate": _clusters(0.9), "latency_ms": _clusters(300.0)}
+    clusters_now = {"security_pass_rate": _clusters(0.9), "latency_ms": _clusters(900.0)}
 
     ungated = gate_metrics(objs, clusters_base, clusters_now, seed=1)
     gated = gate_metrics(

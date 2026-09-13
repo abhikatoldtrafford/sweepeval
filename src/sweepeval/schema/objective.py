@@ -52,10 +52,27 @@ class Objective(BaseModel):
     p-value (§13.6). Statistical significance is not importance."""
 
     min_effect_kind: MinEffectKind
+
+    metric_key: str = ""
+    """Which cluster table this objective resamples, when it is not the id.
+
+    Two of the six differ: ``latency_p95_ms`` is stored under ``latency_ms``
+    and ``cost_per_probe`` under ``tokens_out``. Looking those up by id found
+    nothing, which is how the gate came to silently gate nothing on four of
+    six objectives. Declaring it here rather than in a lookup table keeps the
+    two consumers -- the frontier and the gate -- from drifting apart, and
+    keeps the mapping out of ``stats``, which may not import ``rank``.
+    """
+
     default: bool = False
     note: str = ""
     weighting: str = ""
     """How this metric aggregates within its family, stated for I1."""
+
+    @property
+    def metric(self) -> str:
+        """The cluster-table key: ``metric_key`` when set, else the id."""
+        return self.metric_key or self.id
 
 
 class ObjectiveRegistry:
@@ -153,6 +170,7 @@ for _objective in (
     ),
     Objective(
         id="latency_p95_ms",
+        metric_key="latency_ms",
         display_label="Latency p95",
         direction="minimize",
         family="operational",
@@ -167,6 +185,7 @@ for _objective in (
     ),
     Objective(
         id="cost_per_probe",
+        metric_key="tokens_out",
         display_label="Cost per probe",
         direction="minimize",
         family="operational",

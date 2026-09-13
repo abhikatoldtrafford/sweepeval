@@ -36,9 +36,9 @@ sweepeval gate https://your-endpoint --key $KEY --baseline .sweepeval/baseline.j
 | Exit | Meaning |
 |---|---|
 | `0` | Unchanged, or improved. |
-| `1` | Regressed: at least one objective is significantly worse. |
+| `1` | Regressed: at least one objective is significantly worse, or a confirmed security hard fail. |
 | `2` | Incomparable: a hard comparability key differs. The message names it. |
-| `3` | Inconclusive: not enough evidence either way. |
+| `3` | Usage error: a bad flag, or a `--gate-on` name that is not an objective. |
 
 Exit `2` is worth handling separately in CI. It usually means something you
 changed on purpose — the profile, the extraction path, a scorer version — and

@@ -111,16 +111,33 @@ def gate_metrics(
     gated = set(gate_on) if gate_on is not None else {o.id for o in objectives}
     overrides = dict(min_effect_overrides or {})
 
+    # A name that resolves to no objective gates nothing, silently. A typo in
+    # --gate-on used to exit 0 on a run whose security rate had gone from 100%
+    # to 0%, which is the worst possible way for a gate to fail.
+    unknown = gated - {o.id for o in objectives}
+    if unknown:
+        raise ValueError(
+            f"--gate-on names {', '.join(sorted(unknown))}, which is not a known "
+            f"objective. Available: {', '.join(sorted(o.id for o in objectives))}"
+        )
+
     raw: dict[str, float] = {}
     detail: dict[str, tuple[Objective, PairedResult, float]] = {}
+    no_data: list[str] = []
 
     for objective in objectives:
         if objective.id not in gated:
             continue
-        base = baseline_clusters.get(objective.id, {})
-        current = current_clusters.get(objective.id, {})
+        # Objective ids are not always cluster-table keys: latency_p95_ms is
+        # stored as latency_ms and cost_per_probe as tokens_out. Looking up by
+        # id found nothing for four of the six objectives, so opting in to any
+        # of them gated nothing at all and said nothing about it.
+        metric = objective.metric
+        base = baseline_clusters.get(metric, {})
+        current = current_clusters.get(metric, {})
         shared = sorted(set(base) & set(current))
         if not shared:
+            no_data.append(objective.id)
             continue
 
         margin = overrides.get(objective.id, objective.min_effect)
@@ -147,8 +164,9 @@ def gate_metrics(
 
     diffs: list[MetricDiff] = []
     for metric, (objective, result, margin) in sorted(detail.items()):
-        base = baseline_clusters[metric]
-        current = current_clusters[metric]
+        key = objective.metric
+        base = baseline_clusters[key]
+        current = current_clusters[key]
         shared = sorted(set(base) & set(current))
         regressed = rejected.get(metric, False)
 
@@ -173,6 +191,27 @@ def gate_metrics(
         )
 
     regressions = tuple(d for d in diffs if d.regressed)
+
+    # A gate that tested nothing is not a pass. Exiting 0 because every
+    # requested metric was missing tells the user their build is clean when in
+    # fact nothing was checked.
+    if not diffs:
+        return GateVerdict(
+            ok=False,
+            exit_code=ExitCode.COMPARABILITY_REFUSED,
+            regressions=(),
+            diffs=(),
+            hard_fails=tuple(hard_fails),
+            notes=(
+                "no metric could be gated: "
+                + (
+                    f"{', '.join(no_data)} had no clusters shared with the baseline"
+                    if no_data
+                    else "no objective was selected"
+                ),
+            ),
+        )
+
     ok = not regressions and not hard_fails
     return GateVerdict(
         ok=ok,
