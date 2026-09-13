@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from sweepeval.schema.metric import MetricValue
-from sweepeval.store.json_io import read_json, write_json
+from sweepeval.store.derived import provenance_of, read_payload, write_derived
 
 __all__ = [
     "StoredConfig",
@@ -153,6 +153,14 @@ class StoredRun:
     store: Any = None
     run_dir: Path | None = None
 
+    provenance: dict[str, str] = field(default_factory=dict)
+    """``derived_from``: which logs this aggregates.json was computed off."""
+
+    stale: bool | None = None
+    """Whether those logs have changed since. ``None`` means undecidable --
+    an aggregates.json written before the envelope carries no provenance, and
+    reporting that as fresh would be a claim its bytes do not support."""
+
     @property
     def single_config(self) -> bool:
         return len(self.plan.configs) <= 1
@@ -243,18 +251,28 @@ def _config_payload(row: Any) -> dict[str, Any]:
 
 
 def write_aggregates(sweep: Any) -> Path | None:
-    """Write ``aggregates.json`` beside the logs it was derived from."""
+    """Write ``aggregates.json`` beside the logs it was derived from.
+
+    Through ``write_derived``, so the file records *which* logs (I7). Writing
+    it with ``write_json`` is why every aggregates.json the tool had ever
+    produced carried no provenance, and a stale one could not be told from a
+    current one.
+    """
     if sweep.store is None:
         return None
     path = sweep.store.aggregates_path
-    write_json(path, aggregates_payload(sweep))
+    write_derived(
+        path, aggregates_payload(sweep), derived_from=sweep.store.provenance()
+    )
     return path
 
 
 def load_run(run_dir: Path | str) -> StoredRun:
     """Read a stored run back. Sends nothing and needs no credentials."""
     directory = Path(run_dir)
-    payload = read_json(directory / "aggregates.json")
+    payload, provenance, stale = read_payload(
+        directory / "aggregates.json", current=provenance_of(directory)
+    )
     if not payload:
         raise FileNotFoundError(
             f"no aggregates.json in {directory} — a run can only be re-reported "
@@ -299,6 +317,8 @@ def load_run(run_dir: Path | str) -> StoredRun:
         stop_reason=str(payload.get("stop_reason", "")),
         discovery=_Discovery({"target": payload.get("target", {})}),
         run_dir=directory,
+        provenance=provenance,
+        stale=stale,
     )
 
     for row in payload.get("configs", []):

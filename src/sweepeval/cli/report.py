@@ -22,7 +22,7 @@ from sweepeval.report.frontier_json import frontier_payload
 from sweepeval.report.html import as_html, as_junit
 from sweepeval.report.stored import StoredRun, load_run
 from sweepeval.report.sweep import render_sweep
-from sweepeval.store.json_io import write_json
+from sweepeval.store.derived import provenance_of, write_derived
 
 console = Console()
 
@@ -46,6 +46,17 @@ def report_command(
     except FileNotFoundError as error:
         console.print(f"[red]{error}[/red]")
         raise typer.Exit(code=2) from error
+
+    if run.stale:
+        # I7: a derived file is regenerable, so the answer is to regenerate,
+        # not to refuse. But reporting numbers off an aggregates.json whose
+        # logs have since grown, without saying so, is how a stale frontier
+        # gets quoted as a current one.
+        console.print(
+            "[yellow]aggregates.json is stale: the logs beside it have "
+            "changed since it was written, so these numbers are not the "
+            "whole run. Re-rank from the logs to refresh it.[/yellow]"
+        )
 
     frontier = _rank(run, objectives, alpha, seed)
     labels = {row.config_id: row.config.label() for row in run.configs}
@@ -119,8 +130,14 @@ def _write(run: StoredRun, out: Path | None, name: str, text: str) -> None:
 
 
 def _write_json(run: StoredRun, out: Path | None, name: str, payload: Any) -> None:
+    """A re-derived frontier records the logs it was re-derived from (I7).
+
+    Those are the stored run's logs, not the destination's: `--out` can put
+    the file anywhere, and provenance that pointed at wherever it landed would
+    name nothing.
+    """
     path = _destination(run, out, name)
-    write_json(path, payload)
+    write_derived(path, payload, derived_from=provenance_of(run.run_dir))
     console.print(f"wrote {path}")
 
 

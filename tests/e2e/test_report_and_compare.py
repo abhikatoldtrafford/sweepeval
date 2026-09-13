@@ -82,9 +82,12 @@ def test_re_ranking_offline_gives_the_same_frontier(swept_dir: Path) -> None:
     """D33: changing a preference needs no re-run, so the offline path has to
     reach the same answer as the live one."""
     from sweepeval.pipeline import rank_sweep
-    from sweepeval.store.json_io import read_json
+    from sweepeval.store.derived import read_payload
 
-    stored = read_json(swept_dir / "frontier.json")
+    stored, provenance, _ = read_payload(swept_dir / "frontier.json")
+    # I7: the derived file names the logs it came from, so a stale one is
+    # detectable rather than indistinguishable from a current one.
+    assert set(provenance) == {"calls.jsonl", "observations.jsonl"}
     # The same seed the sweep ranked with; a different one would compare two
     # different bootstraps and pass only because the frontier was degenerate.
     offline = rank_sweep(load_run(swept_dir), seed=7)

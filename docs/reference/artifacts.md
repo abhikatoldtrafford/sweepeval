@@ -127,6 +127,34 @@ to be able to find the objective that blocked it.
 it asserting so. A rank column is a composite score with the arithmetic hidden
 in the sort.
 
+## The derived envelope
+
+`aggregates.json` and `frontier.json` are the two files the tool *rewrites*.
+I7 makes only the raw logs append-only, so rewriting them is correct — the
+hazard is a stale one being trusted after the log it came from has grown.
+Both are therefore wrapped:
+
+```json
+{
+  "schema_version": "1.0",
+  "tool_version": "0.1.0",
+  "derived_from": {
+    "calls.jsonl": "9f2c...",
+    "observations.jsonl": "1ab7..."
+  },
+  "payload": { }
+}
+```
+
+`sweepeval report` compares `derived_from` against the logs beside the file
+and prints a warning when they no longer match. It warns rather than refuses:
+a derived artifact is regenerable by definition, so the right response is to
+re-rank, not to fail.
+
+Runs written before this envelope existed are flat payloads with no
+`derived_from`. They still load, and their staleness is reported as *unknown*
+rather than as fresh.
+
 ## blobs/
 
 Content-addressed by SHA-256, so identical responses dedupe for free. Stored

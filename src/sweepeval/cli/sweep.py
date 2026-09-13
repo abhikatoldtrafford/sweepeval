@@ -21,7 +21,6 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
-from sweepeval.execute.artifacts import write_json
 from sweepeval.execute.budget import BudgetCap, Estimate, render_estimate
 from sweepeval.execute.sweep import SweepResult, SweepStatus, asweep_target
 from sweepeval.pipeline import rank_sweep
@@ -29,6 +28,7 @@ from sweepeval.rank.constraints import DEFAULT_CONSTRAINTS, Constraint
 from sweepeval.report.frontier import render_frontier, render_preference
 from sweepeval.report.frontier_json import frontier_payload
 from sweepeval.report.sweep import render_sweep
+from sweepeval.store.derived import write_derived
 
 console = Console()
 
@@ -253,7 +253,11 @@ def _rank(
     render_frontier(frontier, labels, console)
 
     if result.store is not None:
-        write_json(result.store.frontier_path, frontier_payload(frontier, labels))
+        write_derived(
+            result.store.frontier_path,
+            frontier_payload(frontier, labels),
+            derived_from=result.store.provenance(),
+        )
 
     if not prefer:
         return frontier
