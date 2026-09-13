@@ -45,19 +45,20 @@ shrink ladder (cap 6)
   cap models (12 -> 6 configs)
 
 measurements (unranked - the frontier is computed by `rank`)
-+--------+------------+------------+------------+------------+------------+
-| config |   security |  guardrail |  retention |  det@temp0 | latency ms |
-+--------+------------+------------+------------+------------+------------+
-| cfg-00 |  1 [0.679, |  1 [0.596, |  1 [0.679, |  1 [0.679, |     0.7775 |
-|        |         1] |   1] LOW_N |         1] |         1] |    [0.748, |
-|        |            |            |            |            |     0.807] |
-| cfg-01 |  1 [0.679, |  1 [0.596, |  1 [0.679, |  1 [0.679, |     0.8877 |
-|        |         1] |   1] LOW_N |         1] |         1] |    [0.837, |
-|        |            |            |            |            |     0.941] |
-+--------+------------+------------+------------+------------+------------+
++--------+--------------+--------------+--------------+--------------+--------------+
+| config |     security |    guardrail |    retention |    det@temp0 |   latency ms |
++--------+--------------+--------------+--------------+--------------+--------------+
+| cfg-00 | 1 [0.679, 1] | 1 [0.596, 1] | 1 [0.679, 1] | 1 [0.628, 1] |       0.9238 |
+|        |              |        LOW_N |              |              |    [0.874,   |
+|        |              |              |              |              |     0.978]   |
+| cfg-01 | 1 [0.679, 1] | 1 [0.596, 1] | 1 [0.679, 1] | 1 [0.628, 1] |       0.8913 |
+|        |              |        LOW_N |              |              |    [0.854,   |
+|        |              |              |              |              |     0.932]   |
++--------+--------------+--------------+--------------+--------------+--------------+
+                                                              (4 more configs)
 
 coverage (scored / attempted)
-  cfg-00     context 30/30  determinism 30/30  guardrail 21/30  security 30/30
+  cfg-00     context 20/20  determinism 24/30  guardrail 14/20  security 20/20
 
 SKIPPED
   retrieval        retrieval=UNSUPPORTED (citation probe)
@@ -65,28 +66,33 @@ SKIPPED
   degradation      not_implemented_in_v0.1: concurrency ramp, long inputs and
                    induced tool failures land in v0.2
 
-frontier - 4 non-dominated config(s) in 1 tied cluster(s), at alpha 0.05 family-wise
+frontier - 6 non-dominated config(s) in 1 tied cluster(s), at alpha 0.05 family-wise
 
-  cluster 1 (4 config(s))
+  cluster 1 (6 config(s))
     cfg-00  temperature=0.0 sys=none
     cfg-01  temperature=1.0 sys=none
-    cfg-03  temperature=1.0 sys=terse_neutral
-    cfg-04  temperature=0.0 sys=verbose_strict_with_guardrails
+    ...
     spread across members:
-      latency_p95_ms                   0.7775 .. 0.9133 wide
-    the range above is wide although no pair separates statistically -
-    raise --runs, or use --profile standard
+      context_retention_auc            1 .. 1
+      cost_per_probe                   11.95 .. 12.55
+      latency_mean_ms                  0.8823 .. 0.9521
+      security_pass_rate               1 .. 1
 
-dominated
-  cfg-02  temperature=0.0 sys=terse_neutral
-    dominated by cfg-00
-    cfg-00 is better on: latency_p95_ms
-    cfg-00 gives up:     nothing
-    p=0 against a Holm threshold of 0.001667
+  every configuration is statistically tied. That is an answer, not a
+  failure: at this profile the intervals are wide enough that the sweep
+  cannot separate them. Use --prefer to apply your own priority, or
+  --profile standard for narrower intervals.
 ```
 
-Every number carries an interval. Nothing carries a rank. Every family the
-endpoint could not support says which detector ruled it out.
+Every number carries an interval, or says it cannot give one. Nothing
+carries a rank. Every family the endpoint could not support says which
+detector ruled it out.
+
+Note what the mock's own run reports: **nothing separates**. Six configurations
+against a scripted target that behaves the same way for all of them, and the
+tool says so rather than ordering them anyway. A frontier of one cluster is
+the honest result there, and a tool that produced a ranking from this data
+would be inventing it.
 
 ## A real scorecard
 
@@ -135,6 +141,11 @@ point estimates produce gates that flap, and flapping gates get disabled.
 Every comparison here is a paired test over the identical probe set, corrected
 for multiplicity across the whole family of comparisons.
 
+Where an honest interval is not available, the metric says so instead of
+printing a narrow one. A p95 needs 72 probes before a distribution-free upper
+bound exists at all, so below that it declines and the p90 — which needs 36 —
+is reported alongside it, under its own name.
+
 **No composite score.** A single number hides the trade-off that makes a
 configuration decision hard: the most secure config is usually the slowest,
 and the cheapest one usually leaks. sweepeval reports the frontier and says
@@ -174,7 +185,7 @@ sweepeval sweep https://your-endpoint --key $KEY \
 
 # Answer the question, using YOUR priority.
 sweepeval sweep https://your-endpoint --key $KEY \
-  --prefer "maximize security_pass_rate subject to latency_p95_ms < 2000"
+  --prefer "maximize security_pass_rate subject to latency_mean_ms < 2000"
 
 # Re-report and re-rank a stored run. Offline, no credentials.
 sweepeval report .sweepeval/runs/<run-id> --format md --prefer security,cost
@@ -208,6 +219,11 @@ for cluster in frontier.clusters:
 Anything the endpoint cannot support reports `SKIPPED` with the detector that
 ruled it out. Never a silent pass, fail, or zero.
 
+Third-party scorers and objectives load from the `sweepeval.scorers` and
+`sweepeval.objectives` entry points; a probe from a family with no registered
+scorer is reported `SKIPPED` rather than dropped, and a plugin that fails to
+import is named in the report rather than swallowed.
+
 ## Cost and wall-clock
 
 Every run prints its estimate and asks before spending. The estimate covers
@@ -216,8 +232,8 @@ and gating after them would be gating after the money was gone.
 
 | Profile | Units | Calls/run | Configs | Requests at 3 runs | Wall-clock at concurrency 2 |
 |---|---|---|---|---|---|
-| `quick` | 40 | 62 | 6 | 1,201 | ~25 min |
-| `standard` | 80 | 191 | 12 | 6,961 | ~145 min |
+| `quick` | 40 | 60 | 6 | 1,165 | ~25 min |
+| `standard` | 80 | 188 | 12 | 6,853 | ~145 min |
 
 Those totals include discovery and capability detection, which is why they are
 larger than `units x calls x runs x configs`.
@@ -233,7 +249,14 @@ sweepeval sweep https://your-endpoint --key $KEY --max-requests 2000
 
 Below the estimate, that buys a partial sweep that stops between
 configurations and names every config that never ran. Below what discovery
-itself needs, nothing is sent at all.
+plus one configuration needs, nothing is sent at all — spending the budget on
+discovery and then having nothing left to score with is not a smaller sweep,
+it is no sweep.
+
+`--max-tokens` and `--max-dollars` bind the same way. The dollar cap needs
+prices declared in `--config`, because a price this tool invented is the one
+number you cannot check against your invoice — without them the cost objective
+is output tokens, and it says so.
 
 ## In CI
 
@@ -249,6 +272,12 @@ itself needs, nothing is sent at all.
 `gate` exits `0` unchanged, `1` regressed or hard-failed, `2` incomparable, `3` usage error.
 It compares against a committed `baseline.json` using the same paired test,
 so it does not flap.
+
+It also reports what it **could not** test. A metric whose family went
+unscorable shares no cluster with the baseline and cannot be compared; that
+does not fail the build, but `gate.json` carries `not_gated`, `degraded` and
+`incomplete`, and each raises a GitHub warning annotation. A green tab that
+checked one metric of five must not look like a green tab that checked five.
 
 Without `--yes` and without a TTY, a run **declines** rather than assuming
 consent. A CI job that starts spending thousands of requests because nobody

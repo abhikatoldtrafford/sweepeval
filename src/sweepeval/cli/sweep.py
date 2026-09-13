@@ -66,8 +66,34 @@ def _confirmer(
     return confirm
 
 
-def _cap(max_requests: int | None) -> BudgetCap | None:
-    return BudgetCap(value=max_requests, unit="requests") if max_requests else None
+def _cap(
+    max_requests: int | None,
+    max_tokens: int | None = None,
+    max_dollars: float | None = None,
+) -> BudgetCap | None:
+    """The one cap the run is held to.
+
+    All three units bind in the engine, and for a while only requests was
+    reachable from the CLI -- so the token and dollar caps were library-API
+    only, and the bugs in them went unnoticed because nothing exercised them.
+
+    One at a time on purpose: two caps in different units raise the question
+    of which one stopped the run, and the answer belongs in the stop reason,
+    not in the user's head.
+    """
+    given = [
+        (max_requests, "requests"),
+        (max_tokens, "tokens"),
+        (max_dollars, "dollars"),
+    ]
+    chosen = [(v, unit) for v, unit in given if v]
+    if not chosen:
+        return None
+    if len(chosen) > 1:
+        names = ", ".join(f"--max-{unit}" for _v, unit in chosen)
+        raise typer.BadParameter(f"give one cap, not {len(chosen)}: {names}")
+    value, unit = chosen[0]
+    return BudgetCap(value=value, unit=unit)  # type: ignore[arg-type]
 
 
 def sweep_command(
@@ -89,6 +115,14 @@ def sweep_command(
     ),
     max_requests: int | None = typer.Option(
         None, "--max-requests", help="Hard cap; the sweep stops between configs."
+    ),
+    max_tokens: int | None = typer.Option(
+        None, "--max-tokens", help="Hard cap in tokens; stops between configs."
+    ),
+    max_dollars: float | None = typer.Option(
+        None,
+        "--max-dollars",
+        help="Hard cap in currency. Needs pricing in --config; inert without it.",
     ),
     resume: str | None = typer.Option(
         None, "--resume", help="Continue an existing run id."
@@ -149,9 +183,9 @@ def sweep_command(
             seed=seed,
             authorized=authorized,
             confirm=_confirmer(  # type: ignore[arg-type]
-                yes, no_input=False, cap=_cap(max_requests)
+                yes, no_input=False, cap=_cap(max_requests, max_tokens, max_dollars)
             ),
-            cap=_cap(max_requests),
+            cap=_cap(max_requests, max_tokens, max_dollars),
             resume_run_id=resume,
             config_cap=max_configs,
             declared=declared,
@@ -187,6 +221,8 @@ def run_command(
         authorized=authorized,
         yes=yes,
         max_requests=None,
+        max_tokens=None,
+        max_dollars=None,
         resume=None,
         max_configs=None,
         objectives=None,

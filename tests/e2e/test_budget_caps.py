@@ -194,3 +194,34 @@ def test_room_for_one_configuration_is_required_not_just_discovery(
         )
     )
     assert BudgetCap(value=unavoidable + 1, unit=unit).forbids_starting(estimate)
+
+
+# --- reachable from the CLI ------------------------------------------------
+
+
+def test_all_three_caps_are_exposed_on_the_sweep_command() -> None:
+    """They all bind in the engine, and for a while only requests was
+    reachable -- which is why the bugs in the other two went unnoticed: no CLI
+    path exercised them."""
+    from typer.testing import CliRunner
+
+    from sweepeval.cli.main import app
+
+    help_text = CliRunner().invoke(app, ["sweep", "--help"]).output
+    for flag in ("--max-requests", "--max-tokens", "--max-dollars"):
+        assert flag in help_text, flag
+
+
+def test_two_caps_at_once_are_refused_rather_than_silently_ordered() -> None:
+    """Which one stopped the run is a question the stop reason should answer,
+    not the user's memory of precedence rules."""
+    from typer.testing import CliRunner
+
+    from sweepeval.cli.main import app
+
+    result = CliRunner().invoke(
+        app,
+        ["sweep", "https://x.invalid", "--max-requests", "10", "--max-tokens", "10"],
+    )
+    assert result.exit_code != 0
+    assert "give one cap" in result.output
