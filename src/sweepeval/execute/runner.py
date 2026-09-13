@@ -125,7 +125,6 @@ async def execute_config(
     # degenerated, and the status was still COMPLETE. The measurements were
     # sitting in observations.jsonl the whole time, already paid for.
     restored, restored_cross_run = _restore(store, plan) if resume else ({}, [])
-    executed = False
 
     for unit in plan.units:
         for run_idx in range(plan.runs):
@@ -135,7 +134,6 @@ async def execute_config(
                     outcomes.append(previous)
                 continue
 
-            executed = True
             outcome = await _run_unit(
                 client, plan, ladder, unit, run_idx, canaries,
                 headers=headers, params=params, text_path=text_path,
@@ -157,12 +155,23 @@ async def execute_config(
             )
             outcomes.append(outcome)
 
-    # Cross-run scorers need the response TEXT, which a restored outcome does
-    # not carry -- re-running them over restored rows would score determinism
-    # on empty strings and append a second, wrong set of rows to the log.
-    # When nothing was executed the previous run's cross-run observations are
-    # the answer, and they are already stored.
-    if not executed and restored_cross_run:
+    # Cross-run scorers need the response TEXT of every run at once. Restored
+    # outcomes now carry theirs, recovered from the blob store, so the metrics
+    # are recomputed correctly whether the resume was total or partial.
+    #
+    # The earlier guard keyed on `not executed`, which is true only for a
+    # resume with nothing left to do. A resume that finished a half-run config
+    # took the recompute path with `text=""` on every restored run and scored
+    # determinism on empty strings -- the exact hazard the guard was written
+    # for, in the one case it did not cover.
+    missing = [
+        o for o in outcomes
+        if o.run_idx >= 0 and not o.text and not o.failed
+    ]
+    if missing and restored_cross_run:
+        # The bytes are gone (--no-store-bodies, or over the blob cap) but the
+        # previous run's verdicts are not. They were computed from the same
+        # runs, so they are the answer; recomputing would be strictly worse.
         outcomes.append(
             UnitOutcome(
                 unit=plan.units[0], run_idx=-1, calls=[],
@@ -174,7 +183,11 @@ async def execute_config(
 
     finalized = _finalize_cross_run(plan, outcomes, registry)
     if finalized:
-        store.observations.append_many(finalized)
+        # Only when the log does not already hold them. Recomputing from the
+        # same inputs gives the same rows, and appending a second identical
+        # set makes an append-only log say a thing twice.
+        if not restored_cross_run:
+            store.observations.append_many(finalized)
         outcomes.append(
             UnitOutcome(
                 unit=plan.units[0], run_idx=-1, calls=[],
@@ -231,11 +244,36 @@ def _restore(
             run_idx=key[1],
             calls=calls.get(key, []),
             observations=rows,
-            text="",
+            # Recovered from the blob store, not left empty. A restored
+            # outcome with `text=""` is what let a PARTIAL resume score
+            # determinism on empty strings: `_finalize_cross_run` marks a
+            # textless outcome unscorable, so a Ctrl-C plus --resume turned
+            # `target_determinism_at_temp0` 1.00 into 0.00 -- with an
+            # interval, labelled COMPLETE -- and propagated it to every
+            # temperature sibling through `_share_determinism`.
+            text=_restore_text(store, rows),
             reason="restored from the log by --resume",
         )
         for key, rows in observations.items()
     }, cross_run
+
+
+def _restore_text(store: Store, rows: Sequence[Observation]) -> str:
+    """The response text a stored observation was scored from.
+
+    Every observation defaults its ``blob_ids`` to the address of the text it
+    scored, precisely so a stored run can be re-scored without paying again.
+    Returns ``""`` when the bytes are genuinely gone -- ``--no-store-bodies``,
+    or text over the blob cap -- and the caller must then decline the
+    cross-run metrics rather than compute them on nothing.
+    """
+    for row in rows:
+        for blob_id in row.blob_ids:
+            try:
+                return store.blobs.get(blob_id).decode("utf-8")
+            except (KeyError, UnicodeDecodeError):
+                continue
+    return ""
 
 
 def _finalize_cross_run(
