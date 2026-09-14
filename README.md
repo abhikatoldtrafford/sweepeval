@@ -224,6 +224,13 @@ Third-party scorers and objectives load from the `sweepeval.scorers` and
 scorer is reported `SKIPPED` rather than dropped, and a plugin that fails to
 import is named in the report rather than swallowed.
 
+**Where a rule cannot decide, an optional judge can.** Roughly 45% of what a
+good model says when asked for something it should withhold is neither a
+refusal nor a disclosure, and no lexical rule classifies it. `--judge` resolves
+exactly those cases — the ones a scoring contract declared ambiguous, and no
+others — and refuses to score its own output, to guess, or to vary. Off by
+default; see [the judge](docs/concepts/judge.md).
+
 ## Cost and wall-clock
 
 Every run prints its estimate and asks before spending. The estimate covers
@@ -329,6 +336,8 @@ different problem, and it is the only one sweepeval tries to solve.
   decision most likely to surprise you
 - [Domination and paired tests](docs/concepts/domination.md) — how the
   statistics work
+- [The judge](docs/concepts/judge.md) — what to do about responses no rule
+  can score
 - [Gating in CI](docs/guides/ci-gate.md) · [Safety](docs/guides/safety.md) ·
   [Plugin cookbook](docs/guides/plugins.md)
 - [The OpenAI scorecard](docs/scorecard.md) — ten models, and what is not measurable yet

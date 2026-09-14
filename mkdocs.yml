@@ -38,6 +38,7 @@ nav:
       - Comparability: concepts/comparability.md
       - Domination and paired tests: concepts/domination.md
       - SKIPPED semantics: concepts/skipped.md
+      - The judge: concepts/judge.md
       - Profiles and cost: concepts/profiles.md
   - Guides:
       - Zero-config walkthrough: guides/zero-config.md

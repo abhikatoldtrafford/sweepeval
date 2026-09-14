@@ -17,7 +17,74 @@ silently mixed. Those are marked **Comparability**.
 
 The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.2.0] - 2026-09-14
+
+### Added
+
+- **LLM-judge escalation (§11.9).** Off by default; `--judge MODEL
+  --judge-url URL`. It resolves the ambiguities a deterministic contract
+  declared it could not settle, and nothing else -- the trigger is a scoring
+  contract's own `ambiguous_when`, so the judge never sees a case a regex got
+  right.
+
+  It exists because retuning the guardrail scorer against 60 live responses
+  left 45% that no lexical rule can classify. Not edge cases: hedged, general,
+  helpful answers, which is most of what a good model says when asked for
+  something it should withhold. Measured against a live gpt-4o-mini judge, the
+  guardrail metric goes from `NO_VALID_INTERVAL` at 0/20 coverage to
+  `1.000 [0.596, 1.000]` at 14/20.
+
+  What it refuses to do is most of the design. It will not score its own
+  output: a judge model that is one of the models under test is refused at any
+  endpoint, and a judge sharing an endpoint with a target whose model is
+  unknown is refused too. It will not guess: anything that is not strict JSON
+  with one of three verdicts is a recorded failure, and the deterministic
+  UNSCORABLE stands. It will not vary: temperature 0, pinned model, versioned
+  rubric, all three in the manifest.
+
+  The probe and response are fenced and labelled as data in the prompt,
+  because a probe in this corpus is an adversarial injection string by design
+  and the judge is an LLM -- scoring a successful injection must not mean
+  running it.
+
+  Verdicts are appended as a second observation rather than replacing the
+  first, so the log keeps both and any model-decided number can be dropped by
+  filtering on `scorer == "judge"`.
+
+- `--max-tokens` and `--max-dollars` on `sweep`. All three cap units bound in
+  the engine, and only requests was reachable from the CLI -- which is why the
+  bugs in the other two survived so long.
+- `latency_p90_ms`, registered and promotable: §13.3's documented fallback for
+  a p95 that needs 72 probes before a distribution-free bound exists.
+- Third-party scorers and objectives actually load from their entry points.
+
+### Fixed
+
+- **A re-scored trial is one trial.** The judge appends rather than
+  overwrites, and both coverage counters counted rows -- so a judged family
+  with 20 trials reported 14 scored of 34, understating coverage exactly where
+  the judge had improved it.
+- The judge independence check refuses self-judging rather than shared
+  hosting. §11.9's literal endpoint rule made the judge unusable for sweeping
+  models on one provider, which is the commonest configuration there is.
+- The guardrail scorer no longer calls correct behaviour a policy breach.
+  Retuned on live responses; see below.
+
+### Comparability
+
+- `security` and `guardrail` scorers are at **v2**. Both changed what their
+  number means, so `scorer_versions` refuses to compare a v1 baseline rather
+  than mixing definitions.
+- `judge{present, model, prompt_version}` is populated. A judged run refuses
+  to compare against an unjudged one, and editing a rubric refuses too.
+
+## [0.1.0] - never released
+
+Everything below was built and merged under this version, and the two
+independent audits that followed found enough wrong with it that no release
+was cut. It is kept as its own section because the **Fixed** list under it is
+the record of what those audits found, and because the version numbers in
+`scorer_versions` refer to it.
 
 ### Added
 

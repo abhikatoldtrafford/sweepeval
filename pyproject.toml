@@ -1,6 +1,6 @@
 [project]
 name = "sweepeval"
-version = "0.1.0.dev0"
+version = "0.2.0"
 description = "Zero-config, black-box sweep and benchmark engine for LLM and agent systems."
 readme = "README.md"
 requires-python = ">=3.10"
