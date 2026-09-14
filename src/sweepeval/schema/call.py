@@ -12,6 +12,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from sweepeval.schema.hashing import sha256_hex
+
 __all__ = [
     "Call",
     "CallRole",
@@ -138,6 +140,32 @@ class Call(BaseModel):
         in ``error_rate``, not in ``latency_p95_ms``.
         """
         return self.attempt == 1 and self.response.error_class is ErrorClass.ok
+
+    def with_extraction(self, path: str | None, text: str) -> Call:
+        """Record what extraction actually found (§6.2).
+
+        The transport writes ``ok=False`` on every row because it cannot know
+        better: the declared path is chosen a layer above it, and for a
+        non-streamed response the transport never reads the body at all.
+        Extraction happens in the runner and, until this method existed,
+        nothing wrote the answer back -- so every stored row claimed the text
+        could not be read while the scorers were scoring that very text.
+
+        That is worse than an unused field. §5.1 promises a stored run can be
+        re-scored offline from these rows, and anyone filtering on
+        ``extraction.ok`` to find the responses that failed to parse would
+        have selected the whole run.
+        """
+        return self.model_copy(
+            update={
+                "extraction": ExtractionPart(
+                    path=path,
+                    ok=bool(text),
+                    text_sha256=sha256_hex(text.encode()) if text else None,
+                    text_len=len(text),
+                )
+            }
+        )
 
     @classmethod
     def example(cls, **over: Any) -> Call:

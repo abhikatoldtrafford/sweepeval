@@ -20,7 +20,7 @@
     "sweep": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'"
   },
   "sweepeval.schema.call": {
-    "Call": "model(fields=attempt,config_id,extraction,refusal,request,response,role,run_id,run_idx,timing,tokens,ts,turn_idx,unit_id;methods=)",
+    "Call": "model(fields=attempt,config_id,extraction,refusal,request,response,role,run_id,run_idx,timing,tokens,ts,turn_idx,unit_id;methods=with_extraction)",
     "CallRole": "alias(typing.Literal['target', 'judge', 'discovery', 'capability'])",
     "ErrorClass": "enum(ok,retryable,terminal,refusal,malformed)",
     "ExtractionPart": "model(fields=ok,path,text_len,text_sha256;methods=)",

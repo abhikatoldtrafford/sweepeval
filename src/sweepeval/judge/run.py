@@ -14,7 +14,7 @@ model decided it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from sweepeval.discovery.extract import extract_at
@@ -139,14 +139,22 @@ async def aresolve(
 
         outcome.requests += len(results)
         outcome.tokens_out += sum(r.call.tokens.out or 0 for r in results)
-        outcome.calls.extend(results)
         final = results[-1] if results else None
         if final is None:
             outcome.failures.append((escalation.observation.unit_id, "no response"))
             continue
 
+        # Extract before storing, so the row records what was read from it.
+        # The calls are stored either way -- a judge that answered
+        # ungrammatically was still paid for.
+        reply = _reply_text(final)
+        results[-1] = replace(
+            final, call=final.call.with_extraction(JUDGE_TEXT_PATH, reply)
+        )
+        outcome.calls.extend(results)
+
         try:
-            verdict = parse_verdict(_reply_text(final))
+            verdict = parse_verdict(reply)
         except JudgeError as error:
             # The deterministic UNSCORABLE stands. A judge that cannot answer
             # must not be rounded into one that did.

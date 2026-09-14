@@ -143,6 +143,28 @@ def test_judge_calls_are_billed_and_tagged(judged) -> None:
     assert all(c.response.status == 200 for c in judge_calls)
 
 
+def test_judge_rows_record_the_verdict_text_they_were_parsed_from(judged) -> None:
+    """The other half of `tests/e2e/test_extraction_provenance.py`.
+
+    The transport stamps `extraction.ok=False` on every row because it does not
+    know the declared path; the runner learned to write the answer back and the
+    judge did not, which is this codebase's recurring shape -- one concept, two
+    call sites, a fix on one. Here it would have been the more misleading of
+    the two: a judge verdict is a model-decided number, so the row proving
+    which text produced it is exactly what an auditor reaches for.
+    """
+    from sweepeval.judge.run import JUDGE_TEXT_PATH
+
+    result, _routed = judged
+    judge_calls = [c for c in result.store.calls.read() if c.role == "judge"]
+    assert judge_calls
+
+    for call in judge_calls:
+        assert call.extraction.ok, "the verdict was parsed and the row denies it"
+        assert call.extraction.path == JUDGE_TEXT_PATH
+        assert call.extraction.text_sha256 and call.extraction.text_len
+
+
 # --- the refusals hold in the wired path ----------------------------------
 
 

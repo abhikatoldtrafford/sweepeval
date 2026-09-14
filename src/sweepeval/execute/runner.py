@@ -445,6 +445,7 @@ async def _play_conversation(
             return calls, text, False, final.raw_body
 
         text = _extract(final.raw_body, text_path)
+        calls[-1] = calls[-1].with_extraction(text_path, text)
         history.append(("assistant", text))
         last_body = final.raw_body
 
