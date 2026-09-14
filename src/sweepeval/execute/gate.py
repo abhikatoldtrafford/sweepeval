@@ -23,7 +23,38 @@ from sweepeval.schema.comparability import compare_keys
 from sweepeval.schema.objective import REGISTRY, Objective
 from sweepeval.stats.diff import DEFAULT_GATE_ALPHA, ExitCode, GateVerdict, gate_metrics
 
-__all__ = ["DEFAULT_GATE_ON", "gate", "load_baseline", "save_baseline", "snapshot"]
+__all__ = [
+    "DEFAULT_GATE_ON",
+    "gate",
+    "load_baseline",
+    "profile_refusal",
+    "save_baseline",
+    "snapshot",
+]
+
+
+def profile_refusal(profile: str) -> str | None:
+    """Why this profile cannot gate, or ``None`` if it can (§16).
+
+    Split out so the answer is available **before** anything is spent. It used
+    to live inside :func:`gate_result`, which runs after the target has been
+    re-evaluated, so `sweepeval gate --profile quick` paid for a full
+    evaluation -- 120 requests against a live endpoint, measured -- and then
+    refused on a property of the command line that was knowable before the
+    first request. §3 makes cost a first-class constraint and I9 puts the
+    estimate before any spend; charging for a refusal inverts both.
+
+    ``quick``'s cluster counts sit just above the bootstrap floor, so its
+    intervals are too wide to gate on. Refusing is better than passing
+    everything and calling it a green build.
+    """
+    if profile == "quick":
+        return (
+            "profile=quick is not gate-eligible: its intervals are wide by "
+            "design. Re-run with --profile standard."
+        )
+    return None
+
 
 DEFAULT_GATE_ON = (
     "security_pass_rate",
@@ -104,17 +135,10 @@ def gate(
     if verdict is not None:
         return verdict
 
-    if result.profile == "quick":
-        # §16: quick's cluster counts sit just above the bootstrap floor, so
-        # its intervals are too wide to gate on. Refusing is better than
-        # passing everything and calling it a green build.
+    refusal = profile_refusal(result.profile)
+    if refusal is not None:
         return GateVerdict(
-            ok=False,
-            exit_code=ExitCode.USAGE_ERROR,
-            refusals=(
-                "profile=quick is not gate-eligible: its intervals are wide by "
-                "design. Re-run with --profile standard.",
-            ),
+            ok=False, exit_code=ExitCode.USAGE_ERROR, refusals=(refusal,)
         )
 
     objectives = objectives or REGISTRY.defaults()

@@ -13,6 +13,7 @@ from sweepeval.execute.gate import (
     DEFAULT_GATE_ON,
     gate_payload,
     load_baseline,
+    profile_refusal,
     save_baseline,
     snapshot,
 )
@@ -155,6 +156,16 @@ def gate_command(
     yes: bool = typer.Option(False, "--yes", "-y"),
 ) -> None:
     """Re-run the target and compare against a baseline. Exits 0/1/2/3."""
+    # Before `_run`, which spends. Refusing an ineligible profile after paying
+    # for the evaluation it refuses to use cost 120 live requests the first
+    # time this path was exercised against a real endpoint.
+    refusal = profile_refusal(profile)
+    if refusal is not None:
+        # ExitCode.USAGE_ERROR, the same code `gate` returns for this refusal
+        # after the run. Moving the check earlier must not change what CI sees.
+        console.print(f"[red]REFUSED[/red]    {refusal}")
+        raise typer.Exit(code=int(ExitCode.USAGE_ERROR))
+
     baseline = load_baseline(baseline_path)
     result = _run(url, key, profile, runs, root, seed, authorized, yes)
 

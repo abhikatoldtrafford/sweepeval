@@ -228,6 +228,7 @@ def cluster_bootstrap(
     if bounded:
         ac_lo, ac_hi = agresti_coull_interval(point, n, alpha)
         lo, hi = min(lo, ac_lo), max(hi, ac_hi)
+        lo, hi = _clamp_to_unit(lo, hi)
 
     return MetricValue(
         point=point,
@@ -239,6 +240,29 @@ def cluster_bootstrap(
         estimand=estimand,
         flags=tuple(extra_flags),
     )
+
+
+def _clamp_to_unit(lo: float, hi: float) -> tuple[float, float]:
+    """Hold a bounded metric's interval inside the parameter space.
+
+    ``bounded=True`` says the statistic is a mean of values in [0, 1], so the
+    estimand is a rate and cannot lie outside it. The t-interval below the
+    cluster floor is unbounded, and taking its union with Agresti-Coull widens
+    but never clips, so a real baseline against a live endpoint recorded:
+
+        guardrail_pass_rate  0.667 [-0.768, 2.101]   method=t, n_clusters=3
+
+    A pass rate of -0.77 is not a wide interval, it is a wrong one, and it was
+    written into a file the tool tells users to commit.
+
+    Clipping costs no coverage: the true value is never in the discarded
+    region, so a 95% interval stays a 95% interval. That is also what makes it
+    safe for domination -- narrowing an interval normally risks pruning a
+    config that belonged on the frontier (the one non-negotiable property of
+    §13.5), but removing an impossible region cannot change which comparisons
+    a correct analysis would support.
+    """
+    return max(0.0, lo), min(1.0, hi)
 
 
 def t_interval(
@@ -273,6 +297,7 @@ def t_interval(
     if bounded:
         ac_lo, ac_hi = agresti_coull_interval(centre, n, alpha)
         lo, hi = min(lo, ac_lo), max(hi, ac_hi)
+        lo, hi = _clamp_to_unit(lo, hi)
 
     return MetricValue(
         point=centre,
