@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
@@ -229,9 +230,16 @@ def test_no_qualifying_call_makes_latency_unscorable_not_zero() -> None:
 def test_a_deferred_family_reports_skipped_with_a_reason(family: str) -> None:
     """A family absent from a report is indistinguishable from one that passed."""
     obs = registry().get(family).score(_unit(), [], _ctx("x"))
+    reason = obs[0].reason or ""
     assert obs[0].verdict is Verdict.SKIPPED
-    assert DEFERRED_REASON in (obs[0].reason or "")
-    assert "v0.2" in (obs[0].reason or "")
+    assert DEFERRED_REASON in reason
+    # It says what is missing, and where the spec defines it.
+    assert "specified but not built" in reason
+    assert "spec section 11" in reason
+    # And names no release. This assertion used to require "v0.2" -- so the
+    # test enforced a promise that 0.2 then shipped without keeping. A date in
+    # a machine-readable error is a claim about the future nothing maintains.
+    assert not re.search(r"v\d+\.\d+", reason), reason
 
 
 def test_every_shipped_and_deferred_family_is_registered() -> None:

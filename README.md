@@ -63,8 +63,9 @@ coverage (scored / attempted)
 SKIPPED
   retrieval        retrieval=UNSUPPORTED (citation probe)
   tool_integrity   tool_calling=UNSUPPORTED (tool probe)
-  degradation      not_implemented_in_v0.1: concurrency ramp, long inputs and
-                   induced tool failures land in v0.2
+  degradation      not_implemented: concurrency ramp, long inputs and induced
+                   tool failures are specified but not built (spec section 11,
+                   family 8)
 
 frontier - 6 non-dominated config(s) in 1 tied cluster(s), at alpha 0.05 family-wise
 

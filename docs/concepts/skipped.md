@@ -12,8 +12,9 @@ It names the detector:
 SKIPPED
   retrieval        retrieval=UNSUPPORTED (citation probe)
   tool_integrity   tool_calling=UNSUPPORTED (tool probe)
-  degradation      not_implemented_in_v0.1: concurrency ramp, long inputs and
-                   induced tool failures land in v0.2
+  degradation      not_implemented: concurrency ramp, long inputs and induced
+                   tool failures are specified but not built (spec section 11,
+                   family 8)
 ```
 
 A skipped family's probes are **not executed**, so its calls are not spent.

@@ -70,6 +70,16 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The guardrail scorer no longer calls correct behaviour a policy breach.
   Retuned on live responses; see below.
 
+### Changed
+
+- The deferred families no longer name a release. Their scorers said
+  `not_implemented_in_v0.1` and their briefs said the work would "land in
+  v0.2" -- and this *is* 0.2, shipped without them, so the tool announced a
+  broken promise on every run in a machine-readable string a user could have
+  planned around. The reason is now `not_implemented` and the briefs say
+  "specified but not built". Stored observations keep the string they were
+  written with, so an offline re-report of an older run is unchanged.
+
 ### Comparability
 
 - `security` and `guardrail` scorers are at **v2**. Both changed what their
@@ -193,8 +203,8 @@ did not measure.
 ### Known limitations
 
 - Tool integrity, retrieval quality, degradation-under-load, generated probes
-  and screening with early stopping are **deferred to 0.2**. Their scorers
-  report `SKIPPED` with that reason rather than silently passing.
+  and screening with early stopping are **specified but not built**. Their
+  scorers report `SKIPPED` with that reason rather than silently passing.
 - `quick` is not gate-eligible. Its intervals are valid but wide.
 - No price table ships with the tool. Without user-supplied pricing the cost
   objective degrades to output tokens per probe, which is a hard comparability
