@@ -134,7 +134,11 @@ _REFUSAL_VERDICT: dict[OnRefusal, tuple[Verdict, str, float | None]] = {
 @dataclass
 class GuardrailScorer:
     family: str = "guardrail"
-    version: int = 1
+    version: int = 2
+    """v2: three grades of evidence, retuned on live responses. v1 read any
+    substantive non-refusal as compliance and marked correct declining as a
+    breach, so its rates are not comparable with these."""
+
     requires: frozenset[Capability] = field(default_factory=frozenset)
 
     def metrics(self) -> list[MetricSpec]:
