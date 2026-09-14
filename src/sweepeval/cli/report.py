@@ -11,6 +11,8 @@ require the target again.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -27,10 +29,69 @@ from sweepeval.store.derived import provenance_of, write_derived
 console = Console()
 
 
+@dataclass(frozen=True)
+class _Context:
+    """Everything a reporter is given. One argument, so the table is a table."""
+
+    run: StoredRun
+    frontier: Any
+    labels: dict[str, str]
+    out: Path | None
+    prefer: str | None
+
+
+def _terminal(ctx: _Context) -> None:
+    render_sweep(ctx.run, console)
+    if ctx.frontier is not None:
+        render_frontier(ctx.frontier, ctx.labels, console)
+        _prefer(ctx.frontier, ctx.run, ctx.prefer, ctx.labels)
+
+
+def _html(ctx: _Context) -> None:
+    _write(ctx.run, ctx.out, "report.html", as_html(ctx.run, ctx.frontier))
+
+
+def _junit(ctx: _Context) -> None:
+    _write(ctx.run, ctx.out, "report.xml", as_junit(ctx.run, ctx.frontier))
+
+
+def _markdown(ctx: _Context) -> None:
+    _write(ctx.run, ctx.out, "report.md", markdown(ctx.run, ctx.frontier))
+
+
+def _frontier_json(ctx: _Context) -> None:
+    if ctx.frontier is None:
+        console.print("[yellow]nothing to rank, so no frontier.json[/yellow]")
+        return
+    _write_json(
+        ctx.run, ctx.out, "frontier.json",
+        frontier_payload(ctx.frontier, ctx.labels),
+    )
+
+
+REPORTERS: dict[str, Callable[[_Context], None]] = {
+    "terminal": _terminal,
+    "html": _html,
+    "junit": _junit,
+    "json": _frontier_json,
+    "md": _markdown,
+}
+"""The formats ``--format`` accepts, and the only list of them.
+
+It was an if/elif chain, which put the set of valid formats in three places
+that could disagree: the chain, the ``--format`` help text, and the docs. I10
+survived on a technicality -- the chain is CLI code, not runner code -- but the
+extension point it implies did not exist, and neither did a list anything could
+read. The help string and the error message are both generated from this dict
+now, so a format cannot be added without being offered, or offered without
+being added.
+"""
+
+
 def report_command(
     run_dir: Path = typer.Argument(..., help="A stored run directory."),
     fmt: str = typer.Option(
-        "terminal", "--format", help="terminal,html,junit,json,md"
+        "terminal", "--format", help=",".join(sorted(REPORTERS))
     ),
     objectives: str | None = typer.Option(None, "--objectives"),
     prefer: str | None = typer.Option(None, "--prefer"),
@@ -41,6 +102,21 @@ def report_command(
     ),
 ) -> None:
     """Rebuild a report from a stored run, offline."""
+    # Checked before anything is loaded or ranked. An unknown format used to
+    # print a yellow line and carry on, so `--format htlm` wrote no file and
+    # exited 0 -- in CI, a report step that passes by doing nothing, which is
+    # the silent no-op I5 forbids everywhere else in this tool. Checking it
+    # first also means a typo costs nothing: ranking a large run to then
+    # discover the output format was misspelled is a slow way to be told.
+    names = [f.strip() for f in fmt.split(",") if f.strip()]
+    unknown = [name for name in names if name not in REPORTERS]
+    if unknown:
+        console.print(
+            f"[red]unknown --format {', '.join(repr(n) for n in unknown)}; "
+            f"known formats are {', '.join(sorted(REPORTERS))}[/red]"
+        )
+        raise typer.Exit(code=2)
+
     try:
         run = load_run(run_dir)
     except FileNotFoundError as error:
@@ -61,27 +137,11 @@ def report_command(
     frontier = _rank(run, objectives, alpha, seed)
     labels = {row.config_id: row.config.label() for row in run.configs}
 
-    for name in [f.strip() for f in fmt.split(",") if f.strip()]:
-        if name == "terminal":
-            render_sweep(run, console)
-            if frontier is not None:
-                render_frontier(frontier, labels, console)
-                _prefer(frontier, run, prefer, labels)
-        elif name == "html":
-            _write(run, out, "report.html", as_html(run, frontier))
-        elif name == "junit":
-            _write(run, out, "report.xml", as_junit(run, frontier))
-        elif name == "json":
-            if frontier is None:
-                console.print("[yellow]nothing to rank, so no frontier.json[/yellow]")
-            else:
-                _write_json(
-                    run, out, "frontier.json", frontier_payload(frontier, labels)
-                )
-        elif name == "md":
-            _write(run, out, "report.md", markdown(run, frontier))
-        else:
-            console.print(f"[yellow]unknown --format {name!r}, skipped[/yellow]")
+    context = _Context(
+        run=run, frontier=frontier, labels=labels, out=out, prefer=prefer
+    )
+    for name in names:
+        REPORTERS[name](context)
 
 
 def _rank(run: StoredRun, objectives: str | None, alpha: float, seed: int) -> Any:
