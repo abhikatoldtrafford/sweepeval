@@ -38,7 +38,8 @@ Hard limits, none of them adjustable upward by accident:
 - a token cap;
 - full-jitter exponential backoff, with a circuit breaker after five
   consecutive failures;
-- per-target concurrency of 2 by default.
+- one request in flight per target, so the tool never multiplies its own
+  load on an endpoint it has just met.
 
 Never an indefinite loop against an unknown endpoint. When the budget is spent
 without identifying a shape, the tool aborts and prints the full transcript —

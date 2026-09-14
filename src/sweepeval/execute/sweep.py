@@ -64,7 +64,7 @@ from sweepeval.execute.hard_fail import HardFailReport, classify_hard_fails
 from sweepeval.execute.planner import CAP_BY_PROFILE, ConfigSpec, SweepPlan, plan_sweep
 from sweepeval.execute.runner import RunPlan, UnitOutcome, execute_config
 from sweepeval.http.client import TransportClient
-from sweepeval.http.governor import Governor
+from sweepeval.http.governor import DEFAULT_CONCURRENCY, Governor
 from sweepeval.judge.client import JudgeConfig, check_independence
 from sweepeval.schema.call import Call
 from sweepeval.schema.comparability import (
@@ -870,7 +870,11 @@ def _comparability(
             scorer_versions=scorers,
             extraction_path=(text_path or discovery.extraction.path) or "",
         ),
-        soft=SoftKeys(n_runs=runs, concurrency=2, tool_version=TOOL_VERSION),
+        soft=SoftKeys(
+            n_runs=runs,
+            concurrency=DEFAULT_CONCURRENCY,
+            tool_version=TOOL_VERSION,
+        ),
         local=False,
     )
 

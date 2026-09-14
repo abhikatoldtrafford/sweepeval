@@ -91,8 +91,11 @@ conversation is fifteen rows here and one observation there.
 A call that succeeded only after 30s of backoff describes the rate limiter,
 and a 500 that took 30s belongs in `error_rate`.
 
-`timing.total_ms` **excludes** `queue_ms`, so the harness's own queueing under
-concurrency is not measured as target latency.
+`timing.total_ms` **excludes** `queue_ms`, so the harness's own queueing is
+not measured as target latency. Requests currently go out one at a time, so
+`queue_ms` is 0 on every row; the subtraction is what would keep
+`latency_p95_ms` a measurement of the target rather than of sweepeval if that
+ever changed.
 
 ## observations.jsonl
 

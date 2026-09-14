@@ -20,8 +20,23 @@ from sweepeval.schema.call import ErrorClass
 # --- documented defaults --------------------------------------------------
 
 
-def test_defaults_match_d25() -> None:
-    assert DEFAULT_CONCURRENCY == 2
+def test_defaults_match_d25_except_the_one_we_depart_from() -> None:
+    """D25 says concurrency 2. This build does 1, deliberately.
+
+    Not a reinterpretation: the executor has always dispatched one request at
+    a time, and the 2 was a claim made in three places -- here, the pre-flight
+    ETA, which divides by it, and the soft comparability key -- about
+    behaviour that never existed. Given a choice between making the number
+    true and making the behaviour match it, the number moved, because serial
+    is also the better measurement: `latency_p95_ms` describes the target, and
+    in-flight overlap makes part of it describe sweepeval.
+
+    Conforming to D25 means implementing the dispatch and verifying the
+    `queue_ms` subtraction under real contention. Until then the honest state
+    is recorded rather than the specified one. See
+    `tests/unit/test_concurrency_is_what_we_claim.py`.
+    """
+    assert DEFAULT_CONCURRENCY == 1
     assert MAX_ATTEMPTS == 4
     assert BASE_DELAY_S == 1.0
     assert MAX_DELAY_S == 60.0
@@ -172,4 +187,4 @@ async def test_semaphore_admits_only_the_configured_concurrency() -> None:
 
 def test_a_governor_can_be_built_outside_an_event_loop() -> None:
     """Planning constructs one before asyncio.run is called."""
-    assert Governor().concurrency == 2
+    assert Governor().concurrency == DEFAULT_CONCURRENCY

@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
 from sweepeval.corpus.loader import Corpus
+from sweepeval.http.governor import DEFAULT_CONCURRENCY
 
 if TYPE_CHECKING:  # `cost` imports CHARS_PER_TOKEN from here, so the
     # runtime import would be circular. Only the annotation is needed.
@@ -82,7 +83,7 @@ class Estimate:
     profile: str = "quick"
     configs: int = 1
     runs: int = 3
-    concurrency: int = 2
+    concurrency: int = DEFAULT_CONCURRENCY
     pricing_source: str = "none"
     gate_eligible: bool = True
 
@@ -137,7 +138,17 @@ class Estimate:
 
     @property
     def wall_clock_minutes(self) -> float:
-        """At roughly 2.5s per request, divided by concurrency."""
+        """At roughly 2.5s per request, divided by concurrency.
+
+        The division is real arithmetic over a real number now. It used to
+        divide by a hardcoded 2 that nothing dispatched, so the ETA shown
+        before every run was optimistic by a factor of two -- and 2.5s per
+        request is itself generous against a reasoning model: the sweep this
+        was found during was averaging 10.8s.
+
+        An estimate is the last thing a user sees before agreeing to spend
+        (§3, I9), so it is the wrong place to be cheerful.
+        """
         return (self.total_requests * 2.5) / max(1, self.concurrency) / 60.0
 
 
@@ -221,7 +232,7 @@ def estimate_run(
     configs: int,
     runs: int,
     profile: str,
-    concurrency: int = 2,
+    concurrency: int = DEFAULT_CONCURRENCY,
     hard_fail_units: int = 0,
     judge_units: int = 0,
     pricing_source: str = "none",

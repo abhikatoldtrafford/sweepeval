@@ -38,7 +38,7 @@ from sweepeval.execute.budget import BudgetCap, Estimate, estimate_run
 from sweepeval.execute.hard_fail import classify_hard_fails
 from sweepeval.execute.runner import RunPlan, UnitOutcome, execute_config
 from sweepeval.http.client import TransportClient
-from sweepeval.http.governor import Governor
+from sweepeval.http.governor import DEFAULT_CONCURRENCY, Governor
 from sweepeval.schema.comparability import Comparability, HardKeys, SoftKeys
 from sweepeval.schema.metric import MetricValue
 from sweepeval.schema.objective import REGISTRY
@@ -259,7 +259,11 @@ def _comparability(
             scorer_versions=scorers,
             extraction_path=discovery.extraction.path or "",
         ),
-        soft=SoftKeys(n_runs=runs, concurrency=2, tool_version=TOOL_VERSION),
+        soft=SoftKeys(
+            n_runs=runs,
+            concurrency=DEFAULT_CONCURRENCY,
+            tool_version=TOOL_VERSION,
+        ),
         local=False,
     )
 

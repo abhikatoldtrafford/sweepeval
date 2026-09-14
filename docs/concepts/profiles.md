@@ -4,11 +4,18 @@ Every run prints its estimate and asks before spending. The estimate covers
 **discovery and capability detection too** — those spend first, and gating
 after them would be gating after the money was gone. That is invariant I9.
 
-| Profile | Units | Calls/run | Configs | Requests at 3 runs | Wall-clock at concurrency 2 |
+| Profile | Units | Calls/run | Configs | Requests at 3 runs | Wall-clock, serial |
 |---|---|---|---|---|---|
-| `quick` | 40 | 62 | 6 | 1,201 | ~25 min |
-| `standard` | 80 | 191 | 12 | 6,961 | ~145 min |
-| `deep` | 80 | 191 | 12 | more | adds the context-ceiling search |
+| `quick` | 40 | 60 | 6 | 1,165 | ~49 min |
+| `standard` | 80 | 188 | 12 | 6,853 | ~286 min |
+| `deep` | 80 | 188 | 12 | more | adds the context-ceiling search |
+
+Requests go out **one at a time**. The column above used to be computed at a
+concurrency of 2 that the executor never dispatched, so it promised half the
+wait. It is still a floor rather than a forecast: it assumes 2.5s per request,
+and a reasoning model is several times that. A `standard` sweep against
+reasoning models measured 10.8s per request, which turns the 6,853-request row
+above into roughly **21 hours** rather than five.
 
 The totals include discovery and capability detection, which is why they
 exceed `units x calls x runs x configs`.

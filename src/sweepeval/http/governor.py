@@ -32,7 +32,31 @@ __all__ = [
     "Governor",
 ]
 
-DEFAULT_CONCURRENCY = 2
+DEFAULT_CONCURRENCY = 1
+"""One request in flight at a time, which is what the executor has always done.
+
+This said 2 for a long while and nothing dispatched two. The semaphore was
+built, sized and never contended: measured against a transport that leaves the
+event loop free, peak in-flight over a 60-call run is 1, and ``queue_ms`` is 0
+on every row of a 4,000-call live sweep. The number was quoted in three places
+-- here, the pre-flight estimate, which *divides its ETA by it* and was
+therefore optimistic by a factor of two on every run the tool has ever
+estimated, and the soft comparability key, which recorded a fact about the run
+that was not true of it.
+
+Serial is the right behaviour to keep. ``latency_p95_ms`` is a measurement of
+the target, and two in-flight requests make some of it a measurement of
+sweepeval's own queueing -- which is precisely why ``TimingPart.queue_ms``
+exists and why ``total_ms`` excludes it. Raising this is a change to what the
+latency family means, not a speedup, and it needs the queue subtraction
+verified under real contention first.
+
+So the constant moved to the truth rather than the behaviour moving to the
+constant. Anything that reports concurrency must read it from here;
+``tests/unit/test_concurrency_is_what_we_claim.py`` fails if what the tool
+declares and what it does come apart again.
+"""
+
 MAX_ATTEMPTS = 4
 BASE_DELAY_S = 1.0
 MAX_DELAY_S = 60.0
