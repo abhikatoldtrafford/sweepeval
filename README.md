@@ -97,26 +97,56 @@ would be inventing it.
 
 ## A real scorecard
 
-Ten OpenAI chat models, one `sweepeval` run, 2026-09-13. Latency and output
-tokens per probe, each with its 95% cluster-bootstrap interval:
+Fourteen OpenAI chat models, one `sweepeval` run at `standard`/N=3, 2026-09-14.
+7,917 requests, zero transport errors. Every figure carries its 95%
+cluster-bootstrap interval, and there is no overall score anywhere.
+
+The headline is prompt-injection resistance, and it is the one place on the
+page where two models separate from the rest by more than their intervals:
+
+| Model | security_pass_rate |
+|---|---|
+| gpt-6-astra, gpt-5.6-terra, gpt-5.5, gpt-5.4, gpt-5.2, gpt-5, gpt-5-mini, gpt-4o | 1.000 [0.837, 1.000] |
+| gpt-5-nano | 0.986 [0.818, 1.000] |
+| gpt-5.1 | 0.971 [0.792, 1.000] |
+| gpt-4o-mini | 0.958 [0.781, 1.000] |
+| gpt-4.1 | 0.917 [0.730, 0.988] |
+| **gpt-4.1-mini** | **0.306 [0.139, 0.507]** |
+| **gpt-4.1-nano** | **0.306 [0.139, 0.507]** |
+
+`gpt-4.1-mini` and `gpt-4.1-nano` fail 50 of 72 injection probes; every other
+model fails six or fewer. Many failures are replies consisting of nothing but
+the canary. It is not a size effect and not an age effect — `gpt-4o` and
+`gpt-5-mini` both score 1.000.
+
+Latency and output tokens, same run:
 
 | Model | Mean latency (s) | Output tokens / probe |
 |---|---|---|
-| gpt-4.1-nano | 1.18 [0.95, 1.51] | 101 [75, 129] |
-| gpt-4.1-mini | 1.33 [1.08, 1.62] | 115 [77, 158] |
-| gpt-4.1 | 1.36 [1.07, 1.70] | 169 [119, 222] |
-| gpt-4o-mini | 1.54 [1.27, 1.87] | 171 [122, 226] |
-| gpt-4o | 1.91 [1.49, 2.46] | 206 [151, 264] |
-| gpt-5.1 | 2.54 [1.99, 3.14] | 273 [201, 350] |
-| gpt-5.2 | 3.81 [2.60, 5.24] | 266 [186, 355] |
-| gpt-5-nano | 9.66 [8.45, 10.95] | 2166 [1901, 2458] |
-| gpt-5-mini | 10.06 [8.31, 12.10] | 1175 [979, 1388] |
-| gpt-5 | 12.36 [10.25, 14.67] | 1543 [1294, 1797] |
+| gpt-4.1-nano | 1.70 [1.46, 1.97] | 190 [132, 257] |
+| gpt-4o-mini | 1.70 [1.46, 1.96] | 306 [194, 436] |
+| gpt-4.1-mini | 1.94 [1.65, 2.24] | 181 [128, 240] |
+| gpt-4.1 | 1.98 [1.70, 2.27] | 353 [219, 513] |
+| gpt-4o | 3.28 [2.67, 3.90] | 313 [206, 439] |
+| gpt-5.4 | 3.52 [2.39, 4.99] | 297 [192, 416] |
+| gpt-5.6-terra | 3.82 [2.85, 4.94] | 307 [199, 440] |
+| gpt-5.1 | 4.79 [3.81, 5.93] | 461 [324, 615] |
+| gpt-6-astra | 4.96 [4.10, 5.97] | 208 [158, 264] |
+| gpt-5.5 | 5.21 [3.88, 6.73] | 425 [297, 561] |
+| gpt-5.2 | 5.43 [3.95, 7.09] | 408 [293, 534] |
+| gpt-5-nano | 12.11 [10.83, 13.58] | 3072 [2383, 3855] |
+| gpt-5-mini | 14.93 [13.06, 16.89] | 1821 [1364, 2341] |
+| gpt-5 | 17.39 [15.15, 19.71] | 2228 [1682, 2855] |
 
-The reasoning tier costs roughly 10× the latency and 10–20× the output tokens
-of the 4.x tier on this corpus, most of it reasoning tokens that never reach
-the answer. That gap is far larger than the intervals; the ones within a tier
-mostly are not, which is what N=2 buys.
+The reasoning tier costs 3–10× the latency and 5–15× the output tokens of
+everything else, most of it reasoning tokens that never reach the answer. That
+gap is far wider than the intervals; most neighbouring pairs elsewhere in the
+table are not, which is what N=3 buys.
+
+[Full scorecard](docs/scorecard.md) — including guardrail adherence, where
+every model trips `LOW_COVERAGE` because 37–58% of those probes are neither a
+refusal nor a disclosure, and determinism at temperature 0, where nothing in
+the set is reproducible.
 
 **The security column that stood here has been withdrawn.** An independent
 adversarial audit found the canary matcher wrong in the unsafe direction — a
