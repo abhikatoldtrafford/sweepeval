@@ -65,7 +65,7 @@ from sweepeval.execute.planner import CAP_BY_PROFILE, ConfigSpec, SweepPlan, pla
 from sweepeval.execute.runner import RunPlan, UnitOutcome, execute_config
 from sweepeval.http.client import TransportClient
 from sweepeval.http.governor import Governor
-from sweepeval.judge.client import JudgeConfig, refuse_if_same_endpoint
+from sweepeval.judge.client import JudgeConfig, check_independence
 from sweepeval.schema.call import Call
 from sweepeval.schema.comparability import (
     Comparability,
@@ -262,11 +262,11 @@ async def asweep_target(
     # would silently truncate two of them out of the scorecard. The estimate
     # below is computed from whatever this ends up being, so the user still
     # consents to the real figure.
-    if judge is not None:
-        # §11.9, before the pre-flight: a judge that is the target scores
-        # its own output. Raised rather than warned, and raised here so it
-        # costs nothing to discover.
-        refuse_if_same_endpoint(judge, url)
+    if judge is not None and declared is not None:
+        # §11.9, before the pre-flight where the models are already declared:
+        # a judge that is one of them scores its own output. Raised here so a
+        # misconfiguration costs nothing to discover.
+        check_independence(judge, url, _declared_models(declared))
 
     planned_cap = config_cap or CAP_BY_PROFILE[profile]
     estimate = estimate_run(
@@ -386,6 +386,16 @@ async def asweep_target(
         not_run_families = sorted({t.family for t in corpus.probes} & skipped_families)
 
         master_seed = f"{run_id}:{seed}"
+        judge_warning: str | None = None
+        if judge is not None:
+            # Authoritative check: by here the plan exists, so every model
+            # actually under test is known -- including ones discovery found
+            # rather than the user declaring. Any warning is recorded as an
+            # assumption the user can see and correct (§8.6).
+            judge_warning = check_independence(
+                judge, url, [c.params.get("model", "") for c in plan.configs]
+            )
+
         comparability = _comparability(
             discovery, corpus, profile, runs, text_path, judge
         )
@@ -557,6 +567,10 @@ async def asweep_target(
 
     _collect_skips(result)
     _collect_assumptions(result)
+    if judge_warning:
+        # Disclosed, not blocked: independence cannot be established from a
+        # black box, so §11.9 asks for the record rather than a gate.
+        result.assumptions.append(("judge.independence", "low", judge_warning))
     return result
 
 
@@ -818,6 +832,13 @@ def _determinism_sharing(plan: SweepPlan) -> dict[str, str]:
         if owner:
             sharing[config.config_id] = owner
     return sharing
+
+
+def _declared_models(declared: DeclaredConfig | None) -> list[str]:
+    """Model ids the user declared, for the judge independence check."""
+    if declared is None:
+        return []
+    return [str(m) for m in declared.axes.get("model", []) if m]
 
 
 def _comparability(

@@ -2,14 +2,17 @@
 
 Three things this deliberately refuses to do.
 
-**It will not be the target.** A judge whose resolved endpoint is the target's
-is scoring its own output, and the number that comes out means nothing. That
-is checked and refused outright. Model *family* is not knowable from a black
-box -- a target behind a proxy may be anything -- so instead of pretending to
-detect it, a shared vendor prefix between the judge model and any discovered
-target model raises a warning, is recorded in the manifest, and proceeds. The
-disclosure is the mitigation; a check that cannot actually work should not be
-written as though it can.
+**It will not be the target.** A model scoring its own output produces a
+number that means nothing. §11.9 states the check as endpoint equality, which
+read literally makes the judge unusable for the commonest case there is --
+sweeping several models on one provider, where `gpt-4o-mini` judging `gpt-5.2`
+at the same host is not self-scoring and refusing it protects nothing. So
+`check_independence` refuses on the fact that is actually knowable: the judge
+model being one of the models under test, at any endpoint. The same endpoint
+with an unknown target model is refused too, because self-judging cannot be
+ruled out there. Everything else proceeds with a disclosure, since model
+family is not knowable from a black box and a check that cannot work should
+not be written as though it can.
 
 **It will not guess.** A response that is not strict JSON, or whose verdict is
 not one of the three, is a judge failure and is recorded as such. Salvaging a
@@ -25,6 +28,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -34,6 +38,8 @@ __all__ = [
     "JudgeConfig",
     "JudgeError",
     "JudgeVerdict",
+    "check_independence",
+    "endpoint_fingerprint",
     "parse_verdict",
     "shares_vendor_prefix",
 ]
@@ -129,24 +135,73 @@ def shares_vendor_prefix(judge_model: str, target_models: list[str]) -> str | No
     return next((t for t in target_models if vendor(t) == mine), None)
 
 
-def refuse_if_same_endpoint(judge: JudgeConfig, target_url: str) -> None:
-    """§11.9: the judge may not be the target.
-
-    Compared on the resolved endpoint rather than the configured string, so
-    the same host reached two ways still refuses.
-    """
+def endpoint_fingerprint(url: str) -> tuple[str, str]:
+    """Host and path, normalised, so the same endpoint reached two ways matches."""
     from urllib.parse import urlsplit
 
-    def fingerprint(url: str) -> tuple[str, str]:
-        parts = urlsplit(url.strip().rstrip("/"))
-        return (parts.netloc.lower(), parts.path.lower())
+    parts = urlsplit(url.strip().rstrip("/"))
+    return (parts.netloc.lower(), parts.path.lower())
 
-    if fingerprint(judge.url) == fingerprint(target_url):
+
+def check_independence(
+    judge: JudgeConfig, target_url: str, target_models: Sequence[str] = ()
+) -> str | None:
+    """§11.9: the judge may not be the target. Returns a warning, or raises.
+
+    The spec says to refuse when "the judge's resolved endpoint fingerprint
+    equals the target's", and taken literally that makes the judge unusable
+    for the commonest case there is: sweeping several models on one provider.
+    `gpt-4o-mini` scoring `gpt-5.2` at the same host is not a model scoring
+    its own output, and refusing it protects nothing.
+
+    So the endpoint is used as evidence rather than as the rule:
+
+    * the judge model is one of the models under test -- **refused**, this is
+      the thing §11.9 exists to prevent, and it is refused at any endpoint;
+    * the same endpoint and the models under test are unknown -- **refused**,
+      because self-judging cannot be ruled out and a number that might be
+      self-scored is worth nothing;
+    * the same endpoint with known, different models -- allowed, with a
+      warning naming the shared host;
+    * a different endpoint -- allowed, with the vendor-prefix warning §11.9
+      asks for when the two model strings look related.
+
+    Model *family* still is not knowable from a black box, and this does not
+    pretend otherwise. It only uses the one fact that is knowable: which model
+    ids this run is actually sweeping.
+    """
+    models = [m for m in target_models if m]
+    same_endpoint = endpoint_fingerprint(judge.url) == endpoint_fingerprint(target_url)
+
+    if any(judge.model.strip().lower() == m.strip().lower() for m in models):
         raise JudgeError(
-            "the judge endpoint is the target endpoint. A model scoring its "
-            "own output produces a number that means nothing (§11.9). Point "
-            "--judge-url at a different endpoint, or drop --judge."
+            f"the judge model {judge.model!r} is one of the models under test. "
+            "A model scoring its own output produces a number that means "
+            "nothing (§11.9). Choose a judge that is not in the sweep."
         )
+
+    if same_endpoint and not models:
+        raise JudgeError(
+            "the judge endpoint is the target endpoint and the target's model "
+            "is unknown, so the judge may be scoring its own output (§11.9). "
+            "Point --judge-url elsewhere, or declare the model axis so the two "
+            "can be told apart."
+        )
+
+    if same_endpoint:
+        return (
+            f"judge {judge.model!r} shares an endpoint with the models under "
+            "test; it is not one of them, but they are likely the same vendor"
+        )
+
+    related = shares_vendor_prefix(judge.model, models)
+    if related:
+        return (
+            f"judge {judge.model!r} and target {related!r} share a vendor "
+            "prefix. Independence cannot be established from a black box, so "
+            "this is disclosed rather than blocked (§11.9)"
+        )
+    return None
 
 
 def build_prompt(

@@ -23,9 +23,9 @@ from sweepeval.judge import (
     JudgeConfig,
     JudgeError,
     JudgeVerdict,
+    check_independence,
     parse_verdict,
     plan_escalations,
-    refuse_if_same_endpoint,
     resolved_observation,
     rubric_for,
     shares_vendor_prefix,
@@ -131,21 +131,52 @@ def test_a_contract_kind_with_no_rubric_is_skipped() -> None:
 # --- the judge may not be the target --------------------------------------
 
 
-def test_judging_your_own_output_is_refused() -> None:
-    judge = JudgeConfig(model="gpt-5.1", url="https://api.openai.com/v1/chat/completions")
-    with pytest.raises(JudgeError, match="means nothing"):
-        refuse_if_same_endpoint(judge, "https://api.openai.com/v1/chat/completions")
+def test_the_judge_model_being_under_test_is_refused() -> None:
+    """The thing §11.9 actually exists to prevent, and it is refused at any
+    endpoint -- a second provider proxying the same model is still
+    self-scoring."""
+    judge = JudgeConfig(model="gpt-5.1", url="https://judge.test/v1")
+    with pytest.raises(JudgeError, match="one of the models under test"):
+        check_independence(
+            judge, "https://api.openai.com/v1/chat/completions", ["gpt-4o", "gpt-5.1"]
+        )
 
 
-def test_the_same_endpoint_reached_two_ways_still_refuses() -> None:
-    judge = JudgeConfig(model="m", url="https://API.openai.com/v1/chat/completions/")
+def test_the_same_endpoint_with_an_unknown_target_model_is_refused() -> None:
+    """Self-judging cannot be ruled out, and a number that might be
+    self-scored is worth nothing."""
+    judge = JudgeConfig(model="m", url="https://api.openai.com/v1/chat/completions")
+    with pytest.raises(JudgeError, match="model is unknown"):
+        check_independence(judge, "https://api.openai.com/v1/chat/completions")
+
+
+def test_a_different_model_on_the_same_endpoint_is_allowed_with_a_warning() -> None:
+    """The case the literal reading of §11.9 blocked: sweeping models on one
+    provider. `gpt-4o-mini` judging `gpt-5.2` at the same host is not a model
+    scoring its own output, and refusing it protects nothing."""
+    judge = JudgeConfig(
+        model="gpt-4o-mini", url="https://api.openai.com/v1/chat/completions"
+    )
+    warning = check_independence(
+        judge, "https://api.openai.com/v1/chat/completions", ["gpt-5.2", "gpt-5.1"]
+    )
+    assert warning is not None and "shares an endpoint" in warning
+
+
+def test_a_different_endpoint_and_an_unrelated_model_is_clean() -> None:
+    judge = JudgeConfig(model="claude-opus", url="https://api.anthropic.com/v1/messages")
+    assert (
+        check_independence(
+            judge, "https://api.openai.com/v1/chat/completions", ["gpt-4o"]
+        )
+        is None
+    )
+
+
+def test_the_same_endpoint_reached_two_ways_is_still_the_same_endpoint() -> None:
+    judge = JudgeConfig(model="j", url="https://API.openai.com/v1/chat/completions/")
     with pytest.raises(JudgeError):
-        refuse_if_same_endpoint(judge, "https://api.openai.com/v1/chat/completions")
-
-
-def test_a_different_endpoint_is_allowed() -> None:
-    judge = JudgeConfig(model="m", url="https://api.anthropic.com/v1/messages")
-    refuse_if_same_endpoint(judge, "https://api.openai.com/v1/chat/completions")
+        check_independence(judge, "https://api.openai.com/v1/chat/completions")
 
 
 def test_a_shared_vendor_prefix_warns_rather_than_blocks() -> None:

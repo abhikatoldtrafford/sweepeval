@@ -11,8 +11,9 @@ from sweepeval.judge.client import (
     JudgeConfig,
     JudgeError,
     JudgeVerdict,
+    check_independence,
+    endpoint_fingerprint,
     parse_verdict,
-    refuse_if_same_endpoint,
     shares_vendor_prefix,
 )
 from sweepeval.judge.escalate import (
@@ -33,9 +34,10 @@ __all__ = [
     "JudgeError",
     "JudgeVerdict",
     "Rubric",
+    "check_independence",
+    "endpoint_fingerprint",
     "parse_verdict",
     "plan_escalations",
-    "refuse_if_same_endpoint",
     "resolved_observation",
     "rubric_for",
     "shares_vendor_prefix",

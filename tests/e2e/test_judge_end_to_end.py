@@ -146,9 +146,11 @@ def test_judge_calls_are_billed_and_tagged(judged) -> None:
 # --- the refusals hold in the wired path ----------------------------------
 
 
-async def test_a_judge_pointed_at_the_target_refuses_before_spending(tmp_path) -> None:
+async def test_a_judge_that_may_be_the_target_refuses(tmp_path) -> None:
+    """Same endpoint, and this sweep declares no model axis, so the target's
+    model is unknown and self-judging cannot be ruled out."""
     judge = JudgeConfig(model="m", url="https://mock.test/v1/chat/completions")
-    with pytest.raises(JudgeError, match="means nothing"):
+    with pytest.raises(JudgeError, match="model is unknown"):
         await _sweep(tmp_path, judge=judge)
 
 
