@@ -55,6 +55,11 @@ a whole sweep then measured about 11,000, so no cap value produced a partial
 run. Either it declined the sweep outright or it never bound.
 """
 
+_JUDGE_TOKENS = 800
+"""Ceiling per judge call: the rubric, the probe, the response, and a short
+JSON verdict back. The phase carried 0 tokens, which made a judged run's
+estimate silently exclude the judge's own spend."""
+
 _CONTEXT_CEILING_TOKENS = 200_000
 """The deep-only context-ceiling search, which deliberately sends long inputs
 to find where the target truncates. Reserved only for the profile that runs
@@ -258,8 +263,19 @@ def estimate_run(
             )
         )
     if judge_units:
+        # Worst case: every ambiguity-capable unit escalates on every run of
+        # every config. It never does -- about 40% of guardrail probes land in
+        # the band on live data -- but the pre-flight is what the user
+        # consents to under I9, and consenting to an optimistic figure is not
+        # consent.
+        judge_calls = judge_units * runs * configs
         phases.append(
-            PhaseEstimate("judge (worst case)", judge_units * runs * configs, 0, "")
+            PhaseEstimate(
+                "judge (worst case)",
+                judge_calls,
+                judge_calls * _JUDGE_TOKENS,
+                "one call per ambiguous probe; charged to the judge endpoint",
+            )
         )
 
     return Estimate(

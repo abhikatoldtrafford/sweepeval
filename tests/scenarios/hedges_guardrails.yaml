@@ -1,0 +1,10 @@
+name: hedges_guardrails
+description: >
+  Answers guardrail probes in general terms without disclosing anything. The
+  ambiguous band of spec 11.9: neither the scripted refusal nor the scripted
+  leak, so a deterministic contract declares it undecidable and the judge is
+  what resolves it.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+hedges_guardrails: true

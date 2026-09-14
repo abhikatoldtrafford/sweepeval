@@ -56,6 +56,20 @@ class Corpus:
         return tuple(t for t in self.templates if t.family != "operational")
 
     @property
+    def ambiguity_capable(self) -> tuple[ProbeTemplate, ...]:
+        """Probes that can reach the judge (§11.9).
+
+        A contract with no ``ambiguous_when`` never returns AMBIGUOUS, so it
+        never escalates -- which is what makes the worst-case judge estimate
+        bounded and honest rather than "every probe, maybe".
+        """
+        return tuple(
+            t
+            for t in self.probes
+            if any(s.ambiguous_when for s in t.scoring)
+        )
+
+    @property
     def instruments(self) -> tuple[ProbeTemplate, ...]:
         return tuple(t for t in self.templates if t.family == "operational")
 

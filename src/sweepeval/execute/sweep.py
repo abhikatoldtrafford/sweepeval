@@ -65,6 +65,7 @@ from sweepeval.execute.planner import CAP_BY_PROFILE, ConfigSpec, SweepPlan, pla
 from sweepeval.execute.runner import RunPlan, UnitOutcome, execute_config
 from sweepeval.http.client import TransportClient
 from sweepeval.http.governor import Governor
+from sweepeval.judge.client import JudgeConfig, refuse_if_same_endpoint
 from sweepeval.schema.call import Call
 from sweepeval.schema.comparability import Comparability, HardKeys, SoftKeys
 from sweepeval.schema.observation import Observation
@@ -108,6 +109,11 @@ class ConfigResult:
     cache: CacheVerdict = field(default_factory=CacheVerdict)
     cost: CostAccounting | None = None
     hard_fails: HardFailReport = field(default_factory=HardFailReport)
+    judge: Any = None
+    """The §11.9 outcome when a judge ran: what it resolved, and what it
+    could not. Carried so the report can say how many of this row's
+    numbers a model decided rather than a contract."""
+
     requests: int = 0
 
     @property
@@ -226,6 +232,7 @@ async def asweep_target(
     resume_run_id: str | None = None,
     config_cap: int | None = None,
     declared: DeclaredConfig | None = None,
+    judge: JudgeConfig | None = None,
     on_progress: Callable[[str], None] | None = None,
 ) -> SweepResult:
     """Discover, plan, sweep and aggregate. Ranking is the caller's.
@@ -250,6 +257,12 @@ async def asweep_target(
     # would silently truncate two of them out of the scorecard. The estimate
     # below is computed from whatever this ends up being, so the user still
     # consents to the real figure.
+    if judge is not None:
+        # §11.9, before the pre-flight: a judge that is the target scores
+        # its own output. Raised rather than warned, and raised here so it
+        # costs nothing to discover.
+        refuse_if_same_endpoint(judge, url)
+
     planned_cap = config_cap or CAP_BY_PROFILE[profile]
     estimate = estimate_run(
         corpus,
@@ -257,6 +270,10 @@ async def asweep_target(
         runs=runs,
         profile=profile,
         pricing_source=pricing.source if pricing else "none",
+        # I9: the judge spends too, and the worst case is bounded by how many
+        # probes can return AMBIGUOUS at all. Left out, a judged run's
+        # estimate silently excluded thousands of requests.
+        judge_units=len(corpus.ambiguity_capable) if judge else 0,
     )
     if confirm is not None and not confirm(estimate):
         return SweepResult(
@@ -519,6 +536,7 @@ async def asweep_target(
                 seed=seed,
                 profile=profile,
                 pricing=pricing,
+                judge=judge,
             )
             spent += row.requests
             tokens_in += row.tokens_in
@@ -601,6 +619,7 @@ async def _run_one(
     seed: int,
     profile: Profile,
     pricing: Pricing | None,
+    judge: JudgeConfig | None = None,
 ) -> ConfigResult:
     """Execute one configuration and aggregate it."""
     # A declared ``headers.x-...`` axis is a header, not a body field.
@@ -635,6 +654,16 @@ async def _run_one(
     )
 
     row = ConfigResult(config=config, outcomes=outcomes)
+
+    # §11.9: resolve the ambiguities a deterministic contract declared it
+    # could not settle. Between execution and aggregation, so the judge's
+    # verdicts are in the observation set the metrics are computed from.
+    if judge is not None:
+        row.judge = await _judge_config(
+            row, units=units, judge=judge, transport=transport,
+            store=store, config_id=config.config_id,
+        )
+
     row.requests = len(row.calls)
     row.cache = detect_cache(row.calls, config_id=config.config_id)
     row.cost = account(row.calls, pricing=pricing)
@@ -657,6 +686,60 @@ async def _run_one(
     aggregate.metrics = flag_affected(aggregate.metrics, row.cache)
     row.aggregate = aggregate
     return row
+
+
+async def _judge_config(
+    row: ConfigResult,
+    *,
+    units: tuple[Unit, ...],
+    judge: JudgeConfig,
+    transport: TransportClient,
+    store: Store,
+    config_id: str,
+) -> Any:
+    """Escalate this config's ambiguities and append the verdicts.
+
+    The response text comes from the blob store rather than from memory, so a
+    resumed run judges the same bytes the original scored -- and so this works
+    at all on a config whose outcomes were restored rather than executed.
+    """
+    from sweepeval.judge.escalate import plan_escalations
+    from sweepeval.judge.run import aresolve
+
+    texts = {
+        (outcome.unit.unit_id, outcome.run_idx): outcome.text
+        for outcome in row.outcomes
+        if outcome.run_idx >= 0 and outcome.text
+    }
+    plan = plan_escalations(row.observations, units, texts=texts)
+    if not plan.escalations:
+        return None
+
+    outcome = await aresolve(
+        plan.escalations, judge=judge, client=transport,
+        texts=texts, config_id=config_id,
+    )
+    if outcome.calls:
+        # §11.9: judge calls are billed and auditable like any other.
+        store.calls.append_many([r.call for r in outcome.calls])
+        for result in outcome.calls:
+            if result.text or result.raw_body:
+                store.blobs.put_text(result.text or result.raw_body.decode(
+                    "utf-8", errors="replace"
+                ))
+
+    if outcome.observations:
+        # Appended, never substituted: the deterministic UNSCORABLE stays in
+        # the log beside the judge's answer (I7).
+        store.observations.append_many(outcome.observations)
+        row.outcomes.append(
+            UnitOutcome(
+                unit=units[0], run_idx=-1, calls=[],
+                observations=outcome.observations, text="",
+                reason="judge verdicts (§11.9)",
+            )
+        )
+    return outcome
 
 
 def _cap_reached(
