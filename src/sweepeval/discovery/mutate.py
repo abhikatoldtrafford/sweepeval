@@ -161,17 +161,37 @@ def mutations_for(
                 )
             continue
 
-        # 1. rename the offending field to the name the error mentions
-        for key in payload_keys:
-            renamed = {name if k == key else k: v for k, v in body.items()}
-            yield (Mutation("rename", f"{key}->{name}", excerpt), renamed)
-            break
-
-        # 2. add a required field with a type-appropriate minimal value
+        # 1. add a required field with a type-appropriate minimal value
+        #
+        # Before rename, because adding is non-destructive and renaming is
+        # not. `rename:messages->model` answers "you must provide a model
+        # parameter" by moving the prompt into the model field: it satisfies
+        # the complaint and destroys the request. The endpoint then errors
+        # about the field it just lost, and those mutations come out of the
+        # same attempt pool -- one pool for the whole tree, since a pool per
+        # level would permit MAX**DEPTH requests against a stranger.
+        #
+        # The order was the other way round. That is not broken against
+        # api.openai.com -- it is discovered as `openai.chat_completions +
+        # add:model`, and the sweep running today proves it -- but it gets
+        # there only on whatever the rename branch leaves unspent, so the
+        # margin is set by how many field names the *intermediate* error
+        # happens to yield. A provider whose wording yields one or two more
+        # pushes `add` past the cap, and discovery then aborts with "request
+        # budget exhausted" against an endpoint it was one request from
+        # reading. `tests/e2e/test_mutation_path.py` is that endpoint: the
+        # same OpenAI wording, one extra name in the intermediate error, and
+        # under the old order the walk never sent `add:model` at all.
         yield (
             Mutation("add", name, excerpt),
             {**body, name: _minimal_for(name, prompt, hints)},
         )
+
+        # 2. rename the offending field to the name the error mentions
+        for key in payload_keys:
+            renamed = {name if k == key else k: v for k, v in body.items()}
+            yield (Mutation("rename", f"{key}->{name}", excerpt), renamed)
+            break
 
         # 3. nest the payload under the named field
         yield (Mutation("nest", name, excerpt), {name: dict(body)})

@@ -55,6 +55,27 @@ class Scenario(BaseModel):
     auth: AuthStyle = "bearer"
     expected_key: str | None = None
 
+    require_fields: tuple[str, ...] = ()
+    """Fields the endpoint 400s without, announced the way OpenAI announces it.
+
+    Every other scenario answers a bare ``{"messages": [...]}``, so nothing in
+    CI ever reached §8.2's error-guided mutation: the ladder found a 200 on its
+    first shape and stopped. That left the whole mutation path -- the part of
+    discovery that talks to an endpoint which has already said no -- covered
+    only by unit tests over canned error strings.
+
+    It is not a hypothetical gap. Pointing discovery at api.openai.com on
+    2026-09-12 found three bugs living exactly here, all of them invisible to
+    the suite. The wording below is deliberately OpenAI's: prose, unquoted,
+    ``error.param`` null, and the field name *before* the keyword.
+
+    When ``model`` is required and ``expose_models`` is non-empty, the value is
+    checked against that list too, so a mutation that invents a plausible
+    string rather than reading one off ``/v1/models`` still fails. That was the
+    third bug: the mutator guessed ``model="default"``, which no provider
+    serves.
+    """
+
     # --- behaviour --------------------------------------------------------
     echoes_prompt: bool = False
     """Mirror the request text back in a response field.

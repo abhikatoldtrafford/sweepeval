@@ -1,0 +1,14 @@
+name: demands_a_model
+description: >
+  An OpenAI-compatible endpoint that 400s on a bare messages body, the way the
+  real one does: "you must provide a model parameter", error.param null, the
+  field name ahead of the keyword. The only scenario that reaches error-guided
+  mutation, and the only one where the model name has to come off /v1/models
+  rather than out of a guess.
+shape: openai
+paths: ["/v1/chat/completions"]
+expose_models: ["gpt-mock-large", "gpt-mock-small"]
+expose_openapi: false
+auth: bearer
+expected_key: test-key-abcdefgh
+require_fields: ["model"]

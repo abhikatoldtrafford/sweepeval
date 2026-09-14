@@ -120,6 +120,10 @@ class MockApp:
         if shape_error is not None:
             return shape_error
 
+        required_error = self._check_required_fields(request)
+        if required_error is not None:
+            return required_error
+
         prompt = self._extract_prompt(request)
         if (
             scenario.max_input_chars is not None
@@ -218,6 +222,57 @@ class MockApp:
         return None
 
     # --- shape -------------------------------------------------------------
+
+    def _check_required_fields(
+        self, request: dict[str, Any]
+    ) -> tuple[int, list[tuple[str, str]], bytes] | None:
+        """400 on a missing required field, in OpenAI's prose (§8.2).
+
+        Distinct from ``_check_shape``, which decides whether the body is the
+        right *shape*. This is a well-formed body missing a field the endpoint
+        happens to demand, and it is the case the mutator exists for.
+
+        The message form matters more than the fact of the 400. It carries no
+        quotes, no "missing"/"required", a null ``error.param``, and the field
+        name ahead of the keyword -- which is why, against the real endpoint,
+        every extraction pattern sweepeval had came back empty and discovery
+        aborted without ever mutating.
+        """
+        scenario = self.scenario
+
+        def bad(message: str, param: str | None) -> tuple[
+            int, list[tuple[str, str]], bytes
+        ]:
+            return (
+                400,
+                [("content-type", "application/json")],
+                json.dumps(
+                    {
+                        "error": {
+                            "message": message,
+                            "param": param,
+                            "type": "invalid_request_error",
+                            "code": None,
+                        }
+                    }
+                ).encode(),
+            )
+
+        for field in scenario.require_fields:
+            value = request.get(field)
+            if value is None or value == "":
+                return bad(f"you must provide a {field} parameter", None)
+
+        if "model" in scenario.require_fields and scenario.expose_models:
+            model = request.get("model")
+            if model not in scenario.expose_models:
+                return bad(
+                    f"The model `{model}` does not exist or you do not have "
+                    "access to it.",
+                    "model",
+                )
+
+        return None
 
     def _check_shape(
         self, request: dict[str, Any]
