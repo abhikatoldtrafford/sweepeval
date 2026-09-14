@@ -127,13 +127,44 @@ def count_coverage(
 ) -> dict[str, tuple[int, int]]:
     """``family -> (scored, attempted)`` for one config."""
     counts: dict[str, list[int]] = {f: [0, 0] for f in families}
-    for observation in observations:
+    # One count per trial, however many times it was scored. §11.9's judge
+    # appends a second observation for an ambiguity rather than rewriting the
+    # first (I7), so counting rows reported 14 scored of 34 attempted on a
+    # family with 20 trials -- inflating the denominator precisely where the
+    # judge had just improved the numerator.
+    for observation in _latest_per_trial(observations):
         if observation.family not in counts:
             continue
         counts[observation.family][1] += 1
         if observation.verdict not in (Verdict.UNSCORABLE, Verdict.SKIPPED):
             counts[observation.family][0] += 1
     return {f: (v[0], v[1]) for f, v in counts.items()}
+
+
+def _latest_per_trial(observations: Iterable[Observation]) -> list[Observation]:
+    """Collapse re-scorings of the same ``(metric, unit, run)``.
+
+    Precedence by verdict rather than by scorer name: a decided verdict
+    supersedes an UNSCORABLE, and among decided rows the later wins. `rank`
+    does not need to know the judge exists, and the rule holds for any future
+    re-scorer.
+    """
+    winners: dict[tuple[str, str, int], Observation] = {}
+    order: list[tuple[str, str, int]] = []
+
+    def decided(o: Observation) -> bool:
+        return o.verdict not in (Verdict.UNSCORABLE, Verdict.SKIPPED)
+
+    for observation in observations:
+        key = (observation.metric, observation.unit_id, observation.run_idx)
+        current = winners.get(key)
+        if current is None:
+            winners[key] = observation
+            order.append(key)
+        elif decided(observation) or not decided(current):
+            winners[key] = observation
+
+    return [winners[k] for k in order]
 
 
 def coverage_matrix(

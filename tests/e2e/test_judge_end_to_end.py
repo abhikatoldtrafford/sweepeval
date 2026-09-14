@@ -197,3 +197,60 @@ def test_the_worst_case_judge_cost_is_in_the_preflight() -> None:
     assert sum(p.requests for p in with_judge.phases) > sum(
         p.requests for p in without.phases
     )
+
+
+# --- a re-scored trial is one trial ---------------------------------------
+
+
+def test_the_judge_does_not_inflate_the_trial_count(judged) -> None:
+    """Found against a live OpenAI judge. The judge appends a row rather than
+    rewriting one (I7), and both coverage counters counted rows -- so a family
+    with 20 trials reported 14 scored of **34**, understating coverage exactly
+    where the judge had just improved it and pushing LOW_COVERAGE toward
+    firing on the runs that need it least."""
+    result, _routed = judged
+    row = result.configs[0]
+    scored, attempted = row.coverage["guardrail"]
+
+    judged_rows = [o for o in row.observations if o.scorer == "judge"]
+    guardrail_rows = [
+        o for o in row.observations
+        if o.metric == "guardrail_pass_rate" and o.scorer == "guardrail"
+    ]
+    assert judged_rows, "no judge rows, so this proves nothing"
+    assert attempted == len(guardrail_rows), (
+        f"{attempted} attempted against {len(guardrail_rows)} trials"
+    )
+    assert scored <= attempted
+
+
+def test_the_judges_verdicts_reach_the_metric(judged) -> None:
+    """The point of the feature. Without it the metric has no interval at
+    all."""
+    result, _routed = judged
+    value = result.configs[0].metrics["guardrail_pass_rate"]
+    assert value.lo is not None, "the judge resolved trials and the metric ignored them"
+    assert value.n_clusters > 0
+
+
+def test_a_decided_verdict_supersedes_the_unscorable_for_the_same_trial() -> None:
+    """The precedence rule, directly. Keyed on verdict rather than scorer name
+    so `stats` and `rank` need not know the judge exists."""
+    from sweepeval.rank.coverage import count_coverage
+    from sweepeval.schema.observation import Observation
+
+    def row(scorer: str, verdict: Verdict, value: float | None, reason: str):
+        return Observation(
+            ts="t", run_id="r", config_id="c", unit_id="u1", run_idx=0,
+            scorer=scorer, scorer_version=1, metric="guardrail_pass_rate",
+            family="guardrail", layer="generic", verdict=verdict, value=value,
+            reason=reason,
+        )
+
+    deterministic = row(
+        "guardrail", Verdict.UNSCORABLE, None, "ambiguous:partial_compliance_with_caveat"
+    )
+    resolved = row("judge", Verdict.PASS, 1.0, "judge(m@v1) pass")
+
+    assert count_coverage([deterministic])["guardrail"] == (0, 1)
+    assert count_coverage([deterministic, resolved])["guardrail"] == (1, 1)

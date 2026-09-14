@@ -83,6 +83,45 @@ class ClusterTable:
         return inner
 
 
+def _one_per_trial(
+    observations: Iterable[Observation], metric: str, config_id: str
+) -> list[Observation]:
+    """At most one observation per ``(unit, run)``, latest decided wins.
+
+    A trial is a trial however many times it was scored. §11.9's judge appends
+    a second observation for an ambiguity rather than rewriting the first
+    (I7), so counting rows counted those trials twice: a judged run reported
+    coverage 14/34 where only 20 trials existed, understating coverage exactly
+    where the judge had just improved it, and pushing LOW_COVERAGE toward
+    firing on the runs that need it least.
+
+    Precedence is by verdict, not by scorer name: a decided PASS or FAIL
+    supersedes an UNSCORABLE for the same trial, and among decided rows the
+    later one wins. That keeps `stats` from having to know the judge exists,
+    and it is the right rule for any future re-scorer.
+    """
+    winners: dict[tuple[str, int], Observation] = {}
+    order: list[tuple[str, int]] = []
+
+    for observation in observations:
+        if observation.metric != metric or observation.config_id != config_id:
+            continue
+        key = (observation.unit_id, observation.run_idx)
+        current = winners.get(key)
+        if current is None:
+            winners[key] = observation
+            order.append(key)
+            continue
+        if _decided(observation) or not _decided(current):
+            winners[key] = observation
+
+    return [winners[k] for k in order]
+
+
+def _decided(observation: Observation) -> bool:
+    return observation.verdict not in (Verdict.UNSCORABLE, Verdict.SKIPPED)
+
+
 def build_cluster_table(
     observations: Iterable[Observation],
     *,
@@ -101,10 +140,7 @@ def build_cluster_table(
     scored = unscorable = skipped = 0
     reasons: set[str] = set()
 
-    for observation in observations:
-        if observation.metric != metric or observation.config_id != config_id:
-            continue
-
+    for observation in _one_per_trial(observations, metric, config_id):
         if observation.verdict is Verdict.SKIPPED:
             skipped += 1
             if observation.reason:
