@@ -166,12 +166,20 @@ def gate_command(
         except ValueError:
             raise typer.BadParameter(f"--min-effect wants metric=value, got {entry!r}") from None
 
-    verdict = gate_result(
-        result, baseline,
-        gate_on=tuple(g.strip() for g in gate_on.split(",")) if gate_on else None,
-        min_effect_overrides=overrides or None,
-        seed=seed,
-    )
+    try:
+        verdict = gate_result(
+            result, baseline,
+            gate_on=tuple(g.strip() for g in gate_on.split(",")) if gate_on else None,
+            min_effect_overrides=overrides or None,
+            seed=seed,
+        )
+    except ValueError as error:
+        # An unknown --gate-on name. The engine raises so a typo cannot gate
+        # nothing silently, and the CLI has to turn that into a usage error
+        # the user can read -- it escaped as a traceback, which buries the
+        # message naming the metric and the alternatives.
+        console.print(f"[red]{error}[/red]")
+        raise typer.Exit(code=ExitCode.USAGE_ERROR.value) from None
 
     console.print(verdict.explain())
 
@@ -186,7 +194,12 @@ def gate_command(
     if "json" in wanted and result.store is not None:
         import json as _json
 
-        result.store.report_path("gate.json").write_text(
+        # `run_dir / "gate.json"`, not `report_path("gate.json")` -- that
+        # helper prefixes "report.", so the payload landed as
+        # `report.gate.json` while the README told CI to read `gate.json`.
+        # A job following the docs found nothing, and could not tell that
+        # from a gate that had written nothing.
+        (result.store.run_dir / "gate.json").write_text(
             _json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
 
