@@ -425,6 +425,38 @@ def write_aggregates(sweep: Any) -> Path | None:
     return path
 
 
+def _no_aggregates_reason(directory: Path) -> str:
+    """Why there is no ``aggregates.json``, and what to do about it.
+
+    There are two reasons and they take opposite advice. A directory with no
+    run in it was never stored, and the fix is to re-run somewhere readable. A
+    directory with calls in it and no aggregates is a run **still in progress**
+    or interrupted -- aggregates are written once, at the end -- and the fix is
+    to wait or to resume.
+
+    The message used to give the first answer to both. Told that an in-flight
+    sweep "can only be re-reported if it was stored", the obvious response is
+    to start it again with a different ``--root``, which on the run this was
+    found against would have meant abandoning several thousand paid requests
+    and paying for them a second time. Cost is a first-class constraint here
+    (§3), so an error that recommends spending has to be right about it.
+    """
+    calls = directory / "calls.jsonl"
+    if calls.exists() and calls.stat().st_size > 0:
+        return (
+            f"no aggregates.json in {directory} — this run has calls but no "
+            "aggregates, so it is still running or was interrupted. Aggregates "
+            "are written once, when the sweep finishes. Wait for it, or finish "
+            f"it with `sweepeval sweep --resume {directory.name}`. Do not "
+            "start a new run: the calls already stored are paid for, and "
+            "resuming keeps them."
+        )
+    return (
+        f"no aggregates.json in {directory} — a run can only be re-reported "
+        "if it was stored; re-run with a --root you can read back"
+    )
+
+
 def load_run(run_dir: Path | str) -> StoredRun:
     """Read a stored run back. Sends nothing and needs no credentials."""
     directory = Path(run_dir)
@@ -432,10 +464,7 @@ def load_run(run_dir: Path | str) -> StoredRun:
         directory / "aggregates.json", current=provenance_of(directory)
     )
     if not payload:
-        raise FileNotFoundError(
-            f"no aggregates.json in {directory} — a run can only be re-reported "
-            "if it was stored; re-run with a --root you can read back"
-        )
+        raise FileNotFoundError(_no_aggregates_reason(directory))
 
     plan_payload = payload.get("plan", {})
     specs = tuple(
