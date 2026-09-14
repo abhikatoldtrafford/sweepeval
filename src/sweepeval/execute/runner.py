@@ -96,6 +96,19 @@ class UnitOutcome:
     failed: bool = False
     reason: str = ""
 
+    unextracted_body: bytes | None = None
+    """The final response's raw bytes, kept only when extraction produced
+    nothing from a call that otherwise succeeded.
+
+    §5.1 promises a stored run can be re-scored offline instead of paying
+    again, and the store fails that promise in exactly the case where it
+    matters most: `put_text` is skipped for empty text, so the one response a
+    user needs to look at -- the one the extractor could not read -- is the
+    one nothing keeps. A live run lost five of gpt-5.1's security trials to
+    an unread `refusal` field and the bodies were unrecoverable, so the fix
+    could not be verified against them.
+    """
+
 
 async def execute_config(
     client: TransportClient,
@@ -144,6 +157,12 @@ async def execute_config(
             store.observations.append_many(outcome.observations)
             if outcome.text:
                 store.blobs.put_text(outcome.text)
+            elif outcome.unextracted_body:
+                # A 200 the extractor could not read. Stored with
+                # `always=True`, like an error body: this is the one
+                # response a user actually needs to open, and skipping it
+                # made a real extraction gap undiagnosable after the fact.
+                store.blobs.put_bytes(outcome.unextracted_body, always=True)
 
             # Marked complete only after everything is durably appended, so a
             # crash between the two leaves orphan rows that aggregation skips
@@ -351,7 +370,7 @@ async def _run_unit(
     reason = ""
 
     while True:
-        calls, text, ok = await _play_conversation(
+        calls, text, ok, last_body = await _play_conversation(
             client, plan, ladder, unit, run_idx, unit_canaries,
             headers=headers, params=params, text_path=text_path,
         )
@@ -370,6 +389,7 @@ async def _run_unit(
     return UnitOutcome(
         unit=unit, run_idx=run_idx, calls=calls, observations=observations,
         text=text, restarts=restarts, failed=failed, reason=reason,
+        unextracted_body=None if text or failed else last_body,
     )
 
 
@@ -384,9 +404,14 @@ async def _play_conversation(
     headers: dict[str, str],
     params: dict[str, Any],
     text_path: str | None,
-) -> tuple[list[Call], str, bool]:
-    """Play a unit's scripted turns by stateless replay (§9.2)."""
+) -> tuple[list[Call], str, bool, bytes | None]:
+    """Play a unit's scripted turns by stateless replay (§9.2).
+
+    Returns the final response's raw bytes alongside the extracted text so
+    the caller can keep them when extraction found nothing.
+    """
     history: list[tuple[str, str]] = []
+    last_body: bytes | None = None
     if plan.system_prompt:
         history.append(("system", plan.system_prompt))
     calls: list[Call] = []
@@ -417,12 +442,13 @@ async def _play_conversation(
         if final.call.response.error_class is not ErrorClass.ok:
             # §11.7: restart the conversation rather than resume mid-way,
             # which would diverge state on a server session.
-            return calls, text, False
+            return calls, text, False, final.raw_body
 
         text = _extract(final.raw_body, text_path)
         history.append(("assistant", text))
+        last_body = final.raw_body
 
-    return calls, text, True
+    return calls, text, True, last_body
 
 
 def _render(text: str, canaries: Mapping[str, str]) -> str:

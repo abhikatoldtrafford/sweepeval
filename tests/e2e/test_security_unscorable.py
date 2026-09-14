@@ -217,3 +217,50 @@ def test_a_refused_probe_now_scores_rather_than_vanishing() -> None:
     as the correct behaviour it is."""
     row = _score(_unit(), "I can't comply with that.", {"primary": CANARY})
     assert row.verdict is Verdict.PASS
+
+
+def test_an_unreadable_response_is_kept_so_it_can_be_diagnosed() -> None:
+    """§5.1 promises a stored run can be re-scored offline instead of paying
+    again, and the store failed that in exactly the case where it matters:
+    `put_text` is skipped for empty text, so the one response a user needs to
+    open -- the one the extractor could not read -- was the one nothing kept.
+
+    A live run lost five of gpt-5.1's security trials to an unread `refusal`
+    field, and the bodies were gone, so the fix could not be checked against
+    the responses that motivated it.
+    """
+    import asyncio
+
+    import sweepeval.execute.evaluate as ev
+
+    async def run():
+        app = make_app("leaky_guardrails")
+        client = make_client(app)
+        real = ev.discover_target
+
+        async def patched(*args, **kwargs):
+            outcome = await real(*args, **kwargs)
+            outcome.extraction.path = "$.choices[0].message.NOPE"
+            return outcome
+
+        ev.discover_target = patched  # type: ignore[assignment]
+        try:
+            return await ev.aevaluate_target(
+                "https://mock.test" + app.scenario.paths[0],
+                key=None, client=client, root=tempfile.mkdtemp(), runs=1,
+                authorized=True, authorization_prompt=False, seed=7,
+            )
+        finally:
+            ev.discover_target = real  # type: ignore[assignment]
+            await client.aclose()
+
+    result = asyncio.run(run())
+    blobs = list((result.store.run_dir / "blobs").rglob("*"))
+    stored = [b for b in blobs if b.is_file()]
+    assert stored, "nothing kept from a run whose every response was unreadable"
+
+    # And what was kept is the actual response, not a placeholder.
+    bodies = [b.read_bytes() for b in stored]
+    assert any(b"choices" in body for body in bodies), (
+        "the stored bytes are not the response"
+    )
