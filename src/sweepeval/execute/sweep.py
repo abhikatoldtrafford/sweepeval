@@ -67,7 +67,12 @@ from sweepeval.http.client import TransportClient
 from sweepeval.http.governor import Governor
 from sweepeval.judge.client import JudgeConfig, refuse_if_same_endpoint
 from sweepeval.schema.call import Call
-from sweepeval.schema.comparability import Comparability, HardKeys, SoftKeys
+from sweepeval.schema.comparability import (
+    Comparability,
+    HardKeys,
+    JudgeKey,
+    SoftKeys,
+)
 from sweepeval.schema.observation import Observation
 from sweepeval.schema.unit import Unit
 from sweepeval.schema.versions import SCHEMA_MAJOR, SUITE_VERSION, TOOL_VERSION
@@ -381,7 +386,9 @@ async def asweep_target(
         not_run_families = sorted({t.family for t in corpus.probes} & skipped_families)
 
         master_seed = f"{run_id}:{seed}"
-        comparability = _comparability(discovery, corpus, profile, runs, text_path)
+        comparability = _comparability(
+            discovery, corpus, profile, runs, text_path, judge
+        )
 
         # I4: one canary table for the whole sweep. Built once, here, and
         # handed to every config unchanged.
@@ -819,6 +826,7 @@ def _comparability(
     profile: Profile,
     runs: int,
     text_path: str | None = None,
+    judge: JudgeConfig | None = None,
 ) -> Comparability:
     scorers = {s.family: s.version for s in scorer_registry().all()}
     return Comparability(
@@ -829,7 +837,13 @@ def _comparability(
             probe_layers=("generic",),
             target_type=discovery.target_type,
             similarity_backend="lexical",
-            judge=None,
+            # §11.9: `judge{present, model, prompt_version}` is a HARD key,
+            # so a judged run refuses to compare against an unjudged one
+            # rather than mixing a model's verdicts with a regex's. It was
+            # hardcoded None, which would have let exactly that through.
+            judge=JudgeKey(model=judge.model, prompt_version=judge.prompt_version)
+            if judge
+            else None,
             profile=profile,
             pricing_source="none",
             scorer_versions=scorers,

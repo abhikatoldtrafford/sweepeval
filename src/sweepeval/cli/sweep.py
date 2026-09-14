@@ -23,6 +23,7 @@ from rich.console import Console
 
 from sweepeval.execute.budget import BudgetCap, Estimate, render_estimate
 from sweepeval.execute.sweep import SweepResult, SweepStatus, asweep_target
+from sweepeval.judge.client import JudgeConfig
 from sweepeval.pipeline import rank_sweep
 from sweepeval.rank.constraints import DEFAULT_CONSTRAINTS, Constraint
 from sweepeval.report.frontier import render_frontier, render_preference
@@ -64,6 +65,27 @@ def _confirmer(
         return typer.confirm("proceed?", default=False)
 
     return confirm
+
+
+def _judge(
+    model: str | None, url: str | None, key: str | None, target_key: str | None
+) -> JudgeConfig | None:
+    """Build the judge config, or refuse clearly.
+
+    A model with no endpoint is the likeliest mistake, and defaulting it to the
+    target's URL would silently produce a model scoring its own output -- which
+    §11.9 refuses anyway, but at the cost of a confusing error much later.
+    """
+    if model is None:
+        if url or key:
+            raise typer.BadParameter("--judge-url/--judge-key need --judge")
+        return None
+    if not url:
+        raise typer.BadParameter(
+            "--judge needs --judge-url. The judge may not be the target (§11.9), "
+            "so there is no safe default."
+        )
+    return JudgeConfig(model=model, url=url, key=key or target_key)
 
 
 def _cap(
@@ -123,6 +145,21 @@ def sweep_command(
         None,
         "--max-dollars",
         help="Hard cap in currency. Needs pricing in --config; inert without it.",
+    ),
+    judge: str | None = typer.Option(
+        None,
+        "--judge",
+        help=(
+            "Model id for §11.9 judge escalation. Resolves the ambiguities a "
+            "deterministic contract declared it could not settle. Off by default; "
+            "it spends, and its worst case is in the pre-flight."
+        ),
+    ),
+    judge_url: str | None = typer.Option(
+        None, "--judge-url", help="Judge endpoint. Must not be the target."
+    ),
+    judge_key: str | None = typer.Option(
+        None, "--judge-key", help="Judge credential. Defaults to --key."
     ),
     resume: str | None = typer.Option(
         None, "--resume", help="Continue an existing run id."
@@ -186,6 +223,7 @@ def sweep_command(
                 yes, no_input=False, cap=_cap(max_requests, max_tokens, max_dollars)
             ),
             cap=_cap(max_requests, max_tokens, max_dollars),
+            judge=_judge(judge, judge_url, judge_key, key),
             resume_run_id=resume,
             config_cap=max_configs,
             declared=declared,
@@ -223,6 +261,9 @@ def run_command(
         max_requests=None,
         max_tokens=None,
         max_dollars=None,
+        judge=None,
+        judge_url=None,
+        judge_key=None,
         resume=None,
         max_configs=None,
         objectives=None,

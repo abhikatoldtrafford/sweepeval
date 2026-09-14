@@ -280,3 +280,81 @@ def test_the_probe_sent_to_the_judge_is_what_the_target_was_asked() -> None:
     probe = plan.escalations[0].probe_text()
     assert "order 48812" in probe
     assert "support assistant" not in probe, "the system frame is not the ask"
+
+
+# --- the CLI surface ------------------------------------------------------
+
+
+def test_a_judge_model_without_an_endpoint_is_refused() -> None:
+    """Defaulting the judge URL to the target's would produce a model scoring
+    its own output. §11.9 refuses that anyway, but much later and less
+    clearly, so there is deliberately no default."""
+    import typer
+
+    from sweepeval.cli.sweep import _judge
+
+    with pytest.raises(typer.BadParameter, match="no safe default"):
+        _judge("gpt-5.1", None, None, "target-key")
+
+
+def test_judge_options_without_a_model_are_refused() -> None:
+    import typer
+
+    from sweepeval.cli.sweep import _judge
+
+    with pytest.raises(typer.BadParameter, match="need --judge"):
+        _judge(None, "https://judge.test/v1", None, None)
+
+
+def test_the_judge_borrows_the_target_key_when_none_is_given() -> None:
+    from sweepeval.cli.sweep import _judge
+
+    built = _judge("gpt-5.1", "https://judge.test/v1", None, "target-key")
+    assert built is not None and built.key == "target-key"
+
+
+def test_no_judge_flags_means_no_judge() -> None:
+    from sweepeval.cli.sweep import _judge
+
+    assert _judge(None, None, None, "target-key") is None
+
+
+# --- and it reaches the comparability keys --------------------------------
+
+
+def test_a_judged_run_refuses_to_compare_against_an_unjudged_one() -> None:
+    """§11.9: `judge{present, model, prompt_version}` is a HARD key. It was
+    hardcoded None, which would have let a model's verdicts be compared
+    against a regex's as though they were the same measurement."""
+    from tests.unit.test_comparability import _c
+
+    from sweepeval.schema.comparability import JudgeKey, compare_keys
+
+    unjudged = _c()
+    judged = _c().model_copy(
+        update={
+            "hard": _c().hard.model_copy(
+                update={"judge": JudgeKey(model="gpt-5.1", prompt_version=1)}
+            )
+        }
+    )
+    assert compare_keys(unjudged, unjudged).ok
+    assert not compare_keys(unjudged, judged).ok
+
+
+def test_changing_the_rubric_version_also_refuses() -> None:
+    """Editing a rubric changes what the metric means."""
+    from tests.unit.test_comparability import _c
+
+    from sweepeval.schema.comparability import JudgeKey, compare_keys
+
+    def with_version(v: int):
+        return _c().model_copy(
+            update={
+                "hard": _c().hard.model_copy(
+                    update={"judge": JudgeKey(model="m", prompt_version=v)}
+                )
+            }
+        )
+
+    assert not compare_keys(with_version(1), with_version(2)).ok
