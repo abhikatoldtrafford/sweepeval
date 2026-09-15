@@ -115,6 +115,56 @@ as passes or failures. §11.9's LLM judge exists to resolve exactly this band;
 it was **off** for this run. Treat the ordering above as unresolved — no two
 adjacent rows separate, and the intervals overlap almost completely.
 
+## The same probes, judged
+
+The judge has since been given that band, on these very responses. No target
+request was re-sent: `sweepeval rejudge` re-scores the stored run and escalates
+the 421 observations the contract marked ambiguous, which cost 421 judge calls
+against `gpt-5.4-mini` instead of re-executing 7,917 target requests.
+
+| Model | judged rate | unjudged rate | Scored |
+|---|---|---|---|
+| gpt-6-astra | 0.767 [0.544, 0.917] | 0.750 | 60/60 |
+| gpt-5.2 | 0.750 [0.528, 0.900] | 0.846 | 60/60 |
+| gpt-5.5 | 0.717 [0.495, 0.869] | 0.633 | 60/60 |
+| gpt-5-nano | 0.717 [0.495, 0.869] | 0.833 | 60/60 |
+| gpt-5.4 | 0.717 [0.495, 0.869] | 0.800 | 60/60 |
+| gpt-5.6-terra | 0.667 [0.447, 0.850] | 0.615 | 60/60 |
+| gpt-5.1 | 0.667 [0.447, 0.833] | 0.615 | 60/60 |
+| gpt-5 | 0.617 [0.401, 0.800] | 0.833 | 60/60 |
+| gpt-4o | 0.600 [0.386, 0.800] | 0.625 | 60/60 |
+| gpt-4.1-mini | 0.567 [0.356, 0.755] | 0.708 | 60/60 |
+| gpt-4o-mini | 0.550 [0.342, 0.750] | 0.538 | 60/60 |
+| gpt-5-mini | 0.500 [0.299, 0.701] | 0.644 | 60/60 |
+| gpt-4.1-nano | 0.433 [0.233, 0.644] | 0.697 | 60/60 |
+| gpt-4.1 | 0.417 [0.217, 0.629] | 0.727 | 60/60 |
+
+**It does what it claims.** Coverage goes from 25–38 of 60 to 60 of 60 on
+every model, and all fourteen `LOW_COVERAGE` flags clear. The judge is not
+rubber-stamping either: of 421 verdicts, 225 are PASS and 196 FAIL.
+
+**The unjudged column was computed on a biased subset**, and that is the real
+argument for the judge. Which responses happened to be lexically scorable was
+never random — hedged answers are exactly the ones a rule cannot settle — so
+dropping them moved the rates rather than merely widening them. The ordering
+barely survives: Spearman ρ between the two columns is **0.35**, the mean
+model moves 4.0 places of 14, and `gpt-4.1` falls from 0.727 to 0.417.
+
+**It does not resolve the ordering.** Zero model pairs separate on
+non-overlapping intervals, judged or unjudged. Full coverage buys an honest
+denominator, not a verdict about which model is better; at 60 clusters and
+rates near the middle these intervals stay wide. Nothing on this page licenses
+"model X follows its guardrails better than model Y".
+
+**And the judge is not reproducible.** Two judged passes over byte-identical
+stored text, same model, same prompt version, `temperature: 0`, disagreed on
+**21 of 420 verdicts — 5.0%**. §11.9 asks for a pinned model, zero temperature
+and a fixed prompt, and gets them; determinism is not what they deliver. The
+intervals above are over probe clusters and do **not** include that variance,
+so a difference of a few points between two judged rows is inside the judge's
+own noise. This is measurable at all only because the re-score is offline: the
+second pass cost judge calls and nothing else.
+
 ## Operational
 
 Mean latency per call and output tokens per probe. Output tokens include

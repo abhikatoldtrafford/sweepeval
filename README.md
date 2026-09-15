@@ -378,11 +378,17 @@ them. They are reported `UNSCORABLE` with a reason rather than scored as
 passes, so every row trips `LOW_COVERAGE` and no two adjacent rows separate.
 The LLM judge exists to resolve exactly this band and was off for the run.
 
-**The judge itself is thinly evidenced.** It is the headline of 0.2 and has
-been exercised against a single live judge model, gpt-4o-mini, on one
-guardrail trial: the metric went from `NO_VALID_INTERVAL` at 0/20 coverage to
-`1.000 [0.596, 1.000]` at 14/20. That is a real result and a small one, and it
-was off for the whole 14-model scorecard run.
+**The judge resolves coverage, not the ordering — and it is not
+reproducible.** It has now been run over the whole 14-model scorecard: 421
+ambiguities, every `LOW_COVERAGE` flag cleared, coverage from 25–38 of 60 to
+60 of 60 on every model. It also showed that the unjudged rates had been
+computed on a biased subset — the ordering barely survives judging (Spearman
+ρ 0.35), because the responses a lexical rule cannot settle are exactly the
+hedged ones. But **no model pair separates on non-overlapping intervals,
+judged or unjudged**, and two judged passes over byte-identical text at
+`temperature: 0` disagreed on **21 of 420 verdicts, 5.0%**. The published
+intervals are over probe clusters and do not include that variance. See
+[the scorecard](docs/scorecard.md#the-same-probes-judged).
 
 **Concurrency is 1.** Deliberately: the governor dispatches one request at a
 time, and the pre-flight ETA is honest about it. It also means a reasoning
@@ -467,6 +473,12 @@ contract declared it could not settle, and it refuses to score its own output.
 It never rewrites `observations.jsonl`, and it self-checks by reproducing the
 untouched configs' stored numbers exactly. This is what corrected the
 scorecard's security column without re-running 7,917 paid requests.
+
+**`sweepeval rejudge`.** Put the judge on a stored run without paying for the
+run again — the judge decides from the response text, and the text is already
+in the store. On the scorecard run that is 421 judge calls instead of 7,917
+target requests. It writes a *new* run rather than editing the old one,
+because the source is append-only and `judge` is a hard comparability key.
 
 **A scorecard that survived being checked.** Fourteen models, 7,917 live
 requests, every figure verified against the run by script rather than by eye.

@@ -21,6 +21,39 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`sweepeval rejudge` — the judge, on a run you already paid for (§11.9,
+  §5.1).** `rejudge <run> --judge MODEL --judge-url URL` re-scores a stored
+  run, escalates every observation a scoring contract marked ambiguous, and
+  writes a new run. The judge decides from the response text and the response
+  text is in the store, so re-running the whole sweep with `--judge` was the
+  wrong price: on the published 14-model run this is 421 judge calls rather
+  than 7,917 target requests. The count is exact rather than estimated — the
+  ambiguities are on disk — and the pre-flight shows it before spending.
+
+  A **new** run, not an edit. `observations.jsonl` is append-only and is what
+  was paid for (I7); `judge` is a hard comparability key, so a judged result
+  and an unjudged one are different measurements and `compare` must refuse to
+  put them side by side. The derived run carries the source's blobs and plan,
+  records `derived_from`, and its `calls.jsonl` holds the judge's calls and
+  nothing else — zero target calls, which is the point of the price.
+
+  What it showed, on the scorecard run: coverage from 25–38 of 60 to **60 of
+  60** on every model, all fourteen `LOW_COVERAGE` flags cleared, 225 PASS and
+  196 FAIL. The unjudged rates turn out to have been computed on a biased
+  subset — the responses no lexical rule settles are exactly the hedged ones —
+  and the ordering barely survives judging, Spearman ρ 0.35, with `gpt-4.1`
+  falling 0.727 → 0.417. It does **not** resolve the ordering: no model pair
+  separates on non-overlapping intervals either way.
+
+  And it is **not reproducible**. Two judged passes over byte-identical stored
+  text, same model, same prompt version, `temperature: 0`, disagreed on 21 of
+  420 verdicts — 5.0%. §11.9 asks for a pinned model, zero temperature and a
+  fixed prompt and gets all three; determinism is not what they deliver. The
+  published intervals are over probe clusters and do not include that
+  variance. `scripts/judge_stability.py` measures it;
+  `scripts/verify_judged_scorecard.py` checks all 94 published figures against
+  the runs.
+
 - **The model is targetable and recorded (§16).** `evaluate`, `baseline` and
   `gate` take `--model`; `baseline.json` gains a `model` field; the gate
   refuses a run whose model is not the baseline's, exit `2`, naming both.
@@ -56,6 +89,17 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   say which models the verdict was about.
 
 ### Fixed
+
+- A re-scored observation lost its `blob_ids`. A scorer is handed text rather
+  than blob addresses, so the row it returns names none, and nothing noticed
+  while a re-score was only ever a report. Persisting those rows — which
+  `rejudge` does — produced a run whose every verdict had no evidence behind
+  it: 1,422 unjoinable rows and a run that could not be re-scored again.
+
+- `rescore` re-scored the judge's own rows with the deterministic scorer,
+  which is precisely the scorer that could not settle them. On a judged run
+  that reported 420 spurious changed verdicts and marked every config as
+  touched, leaving the reproduction self-check with nothing to check.
 
 - A swept or pinned `model` against a Gemini target went into
   `generationConfig.model` -- a field the API does not read, in a body it
