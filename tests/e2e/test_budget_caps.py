@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
-from tests.conftest import make_app
+from tests.conftest import cli_help, make_app
 
 from sweepeval.corpus.loader import load_corpus
 from sweepeval.execute.budget import BudgetCap, estimate_run
@@ -199,15 +199,30 @@ def test_room_for_one_configuration_is_required_not_just_discovery(
 # --- reachable from the CLI ------------------------------------------------
 
 
-def test_all_three_caps_are_exposed_on_the_sweep_command() -> None:
+def test_all_three_caps_are_declared_on_the_sweep_command() -> None:
     """They all bind in the engine, and for a while only requests was
     reachable -- which is why the bugs in the other two went unnoticed: no CLI
-    path exercised them."""
-    from typer.testing import CliRunner
+    path exercised them.
+
+    Asserted against the declared parameters, which no rendering can hide.
+    """
+    from typer.main import get_command
 
     from sweepeval.cli.main import app
 
-    help_text = CliRunner().invoke(app, ["sweep", "--help"]).output
+    sweep = get_command(app).commands["sweep"]  # type: ignore[attr-defined]
+    declared = {opt for param in sweep.params for opt in getattr(param, "opts", ())}
+    assert declared, "no options found; the introspection, not the CLI, is wrong"
+    for flag in ("--max-requests", "--max-tokens", "--max-dollars"):
+        assert flag in declared, flag
+
+
+def test_all_three_caps_are_visible_in_the_help() -> None:
+    """Declared is not the same as discoverable. This is the half that kept CI
+    red for twelve runs: rich puts escape sequences inside the option name
+    when colour is on, so `"--max-requests" in output` was false in GitHub
+    Actions and true everywhere I looked."""
+    help_text = cli_help("sweep")
     for flag in ("--max-requests", "--max-tokens", "--max-dollars"):
         assert flag in help_text, flag
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests.conftest import cli_help
 from typer.testing import CliRunner
 
 from sweepeval.cli.main import app
@@ -115,7 +116,12 @@ def test_a_bad_format_is_caught_before_the_run_is_even_read(tmp_path: Path) -> N
 
 
 def test_the_help_text_is_generated_from_the_registry() -> None:
-    """It used to be a hand-written string, free to drift from the chain."""
-    result = runner.invoke(app, ["report", "--help"])
-    help_text = result.output.replace("\n", "").replace(" ", "")
-    assert ",".join(sorted(REPORTERS)) in help_text, result.output
+    """It used to be a hand-written string, free to drift from the chain.
+
+    Through `cli_help`, which strips rich's styling: with colour on the escape
+    sequences land inside the rendered token, and this would otherwise have
+    been the second assertion in the suite that passed locally and failed in
+    CI for it.
+    """
+    help_text = cli_help("report").replace("\n", "").replace(" ", "")
+    assert ",".join(sorted(REPORTERS)) in help_text, help_text

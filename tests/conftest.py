@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -18,6 +19,28 @@ from sweepeval.mock.app import MockApp
 from sweepeval.mock.scenario import Scenario, load_scenario, load_scenario_dir
 
 SCENARIO_DIR = Path(__file__).parent / "scenarios"
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def cli_help(*args: str) -> str:
+    """``--help`` for a command, with styling stripped.
+
+    Rich styles option names when colour is on, and the escape sequences land
+    *inside* the token: ``--max-requests`` is plainly visible on screen and
+    absent from a `"--max-requests" in help_text` test. Colour is off when
+    output is not a terminal, which it never is locally under the CliRunner —
+    and on in GitHub Actions, which sets ``FORCE_COLOR``.
+
+    So a help assertion passes on two local interpreters and fails in CI. One
+    did, for twelve consecutive runs across two days, while every local gate
+    stayed green. Strip the styling and assert on the text a reader sees.
+    """
+    from typer.testing import CliRunner
+
+    from sweepeval.cli.main import app
+
+    return _ANSI.sub("", CliRunner().invoke(app, [*args, "--help"]).output)
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
