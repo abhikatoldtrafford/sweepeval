@@ -33,6 +33,7 @@ __all__ = [
     "gate",
     "rank",
     "report",
+    "rescore",
     "run",
     "run_gate",
     "sweep",
@@ -127,6 +128,17 @@ def report(run_id: str, *, fmt: str = "terminal", **kwargs: Any) -> Any:
     from sweepeval.report.stored import load_run
 
     return load_run(run_id)
+
+
+def rescore(run_dir: str, **kwargs: Any) -> Any:
+    """Recompute a stored run's verdicts with this build's scorers (§5.1).
+
+    Sends nothing, needs no credentials, and never rewrites the log it reads:
+    a re-score is a derived view of what was paid for, not a replacement.
+    """
+    from sweepeval.execute.rescore import rescore_run
+
+    return rescore_run(run_dir, **kwargs)
 
 
 def demo(**kwargs: Any) -> Any:

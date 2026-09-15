@@ -15,6 +15,7 @@
     "gate": "def(result: 'Any', *, baseline: 'Path | str', **kwargs: 'Any') -> 'Any'",
     "rank": "def(result: 'Any', **kwargs: 'Any') -> 'Any'",
     "report": "def(run_id: 'str', *, fmt: 'str' = 'terminal', **kwargs: 'Any') -> 'Any'",
+    "rescore": "def(run_dir: 'str', **kwargs: 'Any') -> 'Any'",
     "run": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'",
     "run_gate": "def(url: 'str', *, baseline: 'Path | str', **kwargs: 'Any') -> 'Any'",
     "sweep": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'"

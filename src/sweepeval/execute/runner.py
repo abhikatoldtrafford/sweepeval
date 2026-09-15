@@ -25,6 +25,7 @@ from sweepeval.discovery.extract import extract_at
 from sweepeval.discovery.ladder import LadderResult, body_for_turns
 from sweepeval.http.client import TransportClient
 from sweepeval.schema.call import Call, ErrorClass
+from sweepeval.schema.hashing import sha256_hex
 from sweepeval.schema.observation import Observation
 from sweepeval.schema.unit import Unit
 from sweepeval.scorers import RunEvidence, ScoreContext, ScorerRegistry
@@ -200,7 +201,7 @@ async def execute_config(
         )
         return outcomes
 
-    finalized = _finalize_cross_run(plan, outcomes, registry)
+    finalized = _finalize_cross_run(plan, outcomes, registry, run_id=store.run_id)
     if finalized:
         # Only when the log does not already hold them. Recomputing from the
         # same inputs gives the same rows, and appending a second identical
@@ -296,7 +297,10 @@ def _restore_text(store: Store, rows: Sequence[Observation]) -> str:
 
 
 def _finalize_cross_run(
-    plan: RunPlan, outcomes: Sequence[UnitOutcome], registry: ScorerRegistry
+    plan: RunPlan,
+    outcomes: Sequence[UnitOutcome],
+    registry: ScorerRegistry,
+    run_id: str = "",
 ) -> list[Observation]:
     """Give cross-run scorers every run at once (§11.4).
 
@@ -327,6 +331,13 @@ def _finalize_cross_run(
             unit=units[unit_id],
             texts=tuple(runs.get(i, "") for i in range(plan.runs)),
             unscorable=tuple(sorted(unscorable.get(unit_id, set()))),
+            # The same addresses the blob store files these texts under, so a
+            # determinism verdict can be re-checked offline against the
+            # responses that produced it, exactly as a security one can.
+            blob_ids=tuple(
+                sha256_hex(runs[i].encode("utf-8")) if runs.get(i) else ""
+                for i in range(plan.runs)
+            ),
         )
         for unit_id, runs in sorted(by_unit.items())
     ]
@@ -334,7 +345,12 @@ def _finalize_cross_run(
         return []
 
     context = ScoreContext(
-        run_id=plan.config_id, config_id=plan.config_id, run_idx=0, text="",
+        # The run, not the config. This said `plan.config_id` for both, so
+        # every cross-run row ever written recorded `run_id: "cfg-00"` -- the
+        # one field that joins an observation back to the run it came from,
+        # holding a value that is not a run id at all.
+        run_id=run_id or plan.config_id,
+        config_id=plan.config_id, run_idx=0, text="",
         layer=plan.layer, ts=datetime.now(timezone.utc).isoformat(),
     )
 

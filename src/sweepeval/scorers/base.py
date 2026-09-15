@@ -117,6 +117,17 @@ class RunEvidence:
     unscorable: tuple[int, ...] = ()
     """Run indices excluded under §11.8 — refused, or the conversation failed."""
 
+    blob_ids: tuple[str, ...] = ()
+    """Blob addresses of ``texts``, in the same order.
+
+    Per-run observations get theirs from ``ScoreContext.text_blob_id``, but a
+    cross-run scorer is handed N texts and the context carries none, so every
+    determinism-family row ever written had ``blob_ids: []``. That is the one
+    family whose verdict cannot then be re-checked offline against the
+    responses it came from — the §5.1 guarantee the security column relied on
+    when three of its verdicts turned out to be wrong.
+    """
+
 
 @runtime_checkable
 class Scorer(Protocol):

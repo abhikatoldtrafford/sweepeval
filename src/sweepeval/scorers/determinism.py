@@ -119,6 +119,7 @@ class DeterminismScorer:
                         f"({excluded} excluded under §11.8)"
                     ),
                     unit=item.unit,
+                    blob_ids=_blobs(item),
                 )
                 for metric in metrics
             ]
@@ -132,14 +133,14 @@ class DeterminismScorer:
                 metric="config_repeatability", family=self.family,
                 verdict=Verdict.PASS, value=exact,
                 reason=f"{len(texts)} scorable runs at the config's own settings",
-                unit=item.unit,
+                unit=item.unit, blob_ids=_blobs(item),
             ),
             context.observation(
                 scorer=self.family, version=self.version,
                 metric="semantic_stability", family=self.family,
                 verdict=Verdict.PASS, value=semantic,
                 reason="mean pairwise lexical similarity (D12 default backend)",
-                unit=item.unit,
+                unit=item.unit, blob_ids=_blobs(item),
             ),
         ]
 
@@ -156,7 +157,7 @@ class DeterminismScorer:
                         "temperature is not a swept axis, so this coincides "
                         "with config_repeatability (§11.4)"
                     ),
-                    unit=item.unit,
+                    unit=item.unit, blob_ids=_blobs(item),
                 )
             )
 
@@ -181,6 +182,7 @@ class DeterminismScorer:
                     family=self.family, verdict=Verdict.UNSCORABLE,
                     reason=f"group {group}: fewer than two scorable paraphrases",
                     unit=members[0].unit,
+                    blob_ids=tuple(b for m in members for b in _blobs(m)),
                 )
             ]
 
@@ -191,8 +193,24 @@ class DeterminismScorer:
                 value=_mean_pairwise_similarity(usable),
                 reason=f"group {group}: {len(usable)} paraphrases compared",
                 unit=members[0].unit,
+                # Every paraphrase in the group, since the verdict is about
+                # all of them together.
+                blob_ids=tuple(b for m in members for b in _blobs(m)),
             )
         ]
+
+
+def _blobs(item: RunEvidence) -> tuple[str, ...]:
+    """Blob addresses of the runs this verdict actually compared.
+
+    Excluded and empty runs are dropped: a blob id for a text that was not
+    scored points a reader at evidence the number does not rest on.
+    """
+    return tuple(
+        blob
+        for i, blob in enumerate(item.blob_ids)
+        if blob and i not in item.unscorable
+    )
 
 
 def _group_of(unit: Unit) -> str | None:
