@@ -311,6 +311,11 @@ is output tokens, and it says so.
 It compares against a committed `baseline.json` using the same paired test,
 so it does not flap.
 
+The baseline records the **model** it measured, and the gate re-measures that
+model by default — pin it yourself with `--model`. A model that differs from
+the baseline's exits `2` rather than reporting the difference as a regression;
+`--allow-model-change` compares them anyway and annotates the verdict.
+
 It also reports what it **could not** test. A metric whose family went
 unscorable shares no cluster with the baseline and cannot be compared; that
 does not fail the build, but `gate.json` carries `not_gated`, `degraded` and

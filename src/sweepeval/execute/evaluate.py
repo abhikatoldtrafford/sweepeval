@@ -27,6 +27,7 @@ from sweepeval.capabilities.detect import (
 from sweepeval.corpus.loader import Corpus, load_corpus
 from sweepeval.corpus.template import Profile
 from sweepeval.discovery.budget import DiscoveryBudget
+from sweepeval.discovery.ladder import model_in_body
 from sweepeval.discovery.runner import DiscoveryOutcome, discover_target
 from sweepeval.execute.aggregation import aggregate_config
 from sweepeval.execute.authz import (
@@ -50,7 +51,18 @@ from sweepeval.stats.aggregate import ClusterTable
 from sweepeval.store.redaction import Redactor
 from sweepeval.store.run import Store, new_run_id
 
-__all__ = ["EvaluationResult", "aevaluate_target"]
+__all__ = ["EvaluationResult", "ModelPinRefused", "aevaluate_target"]
+
+
+class ModelPinRefused(ValueError):
+    """``--model`` was asked for and the shape cannot carry it (§16).
+
+    Raised rather than warned. The point of pinning the model is that the
+    baseline and the gate measure the same thing; honouring the flag only
+    sometimes would put a model id in a committed baseline that the requests
+    never actually named, which is worse than not offering the flag.
+    """
+
 
 @dataclass
 class EvaluationResult:
@@ -98,6 +110,28 @@ class EvaluationResult:
     retention_depth_at_floor: int | None = None
     store: Store | None = None
 
+    model: str | None = None
+    """The model id every probe in this run actually named, if any (§16).
+
+    Not a comparability key and it cannot become one: a sweep varies the model
+    *across configs inside a single run*, and the manifest carries one
+    comparability block for the whole run, so a per-run model key would have
+    to lie for every sweep. It belongs to the config, and on this path there
+    is exactly one.
+
+    It is recorded because `baseline.json` is a committed, shared artifact and
+    said nothing about what produced it. The model was chosen by discovery's
+    `_preferred_model` heuristic -- first id containing `mini`, `flash`,
+    `haiku` and so on -- so a change to a provider's model listing could move
+    a CI gate onto a different model between the baseline run and the gate
+    run, with no signal anywhere. Verified against api.openai.com: a
+    gpt-5-mini baseline gated against gpt-5-nano reported a cost regression
+    (p=0.0005) and never mentioned that the model had changed.
+
+    ``None`` means the requests carried no model field -- a shape that names
+    the model in the URL, or one that has no notion of models.
+    """
+
     @property
     def observations(self) -> list[Observation]:
         return [o for outcome in self.outcomes for o in outcome.observations]
@@ -121,6 +155,7 @@ async def aevaluate_target(
     store_text: bool = True,
     confirm: Callable[[Estimate], bool] | None = None,
     cap: BudgetCap | None = None,
+    model: str | None = None,
 ) -> EvaluationResult:
     """Discover, detect, plan, execute and aggregate one configuration.
 
@@ -129,6 +164,11 @@ async def aevaluate_target(
     first statement, and ``evaluate``, ``baseline`` and ``run_gate`` all share
     it -- so three verbs spent, measured against 133 billable requests, with
     nothing shown to the user first.
+
+    ``model`` pins the model every probe names, instead of leaving it to
+    discovery's preference heuristic. The pin is verified against a built body
+    before anything is executed, and :class:`ModelPinRefused` is raised if the
+    shape cannot carry it.
     """
     from pathlib import Path
 
@@ -172,6 +212,22 @@ async def aevaluate_target(
         discovery = await discover_target(
             http, url, key, budget=DiscoveryBudget(), seed=seed
         )
+        # Immediately after discovery, which is the earliest the answer is
+        # knowable, and before capability detection, which spends. A pin that
+        # cannot be honoured must not cost a capability sweep first -- and a
+        # pin that *can* has to be in place before detection runs, or the
+        # capability report describes a model the metrics did not come from.
+        params = {"model": model} if model is not None else {}
+        discovery.ladder.pinned = dict(params)
+        resolved_model = model_in_body(discovery.ladder)
+        if model is not None and resolved_model != model:
+            raise ModelPinRefused(
+                f"--model {model!r} cannot be honoured against this target: "
+                f"shape {discovery.ladder.shape.name} builds a request that "
+                f"names {resolved_model!r}. Drop --model to use the model the "
+                "endpoint was discovered with."
+            )
+
         capabilities = await detect_all(
             http, discovery.ladder, key, discovery.extraction.path,
             budget=CapabilityBudget(), profile=profile,
@@ -202,6 +258,7 @@ async def aevaluate_target(
             units=units,
             runs=runs,
             master_seed=f"{run_id}:{seed}",
+            params=params,
         )
 
         transport = TransportClient(
@@ -228,6 +285,7 @@ async def aevaluate_target(
         authorization=authorization,
         outcomes=outcomes,
         store=store,
+        model=resolved_model,
     )
     result.families_not_run = tuple(not_run)
     result.hard_fail_report = classify_hard_fails(

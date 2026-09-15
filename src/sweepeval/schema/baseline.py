@@ -54,6 +54,22 @@ class Baseline(BaseModel):
 
     hard_fails: tuple[str, ...] = ()
 
+    model: str | None = None
+    """The model id the run's requests named, when they named one (§16).
+
+    Deliberately not a comparability key. A sweep varies the model across
+    configs within one run and the manifest carries one comparability block
+    for the whole run, so a per-run key would have to lie for every sweep.
+    This is the config's own parameter, recorded here because a baseline is a
+    committed, shared file that said nothing about what produced it -- and
+    because the model is chosen by a discovery heuristic when it is not
+    pinned, so it can move between the baseline run and the gate run on its
+    own.
+
+    Defaulted rather than required: baselines committed before this field
+    existed must still load, and the gate says when it could not check.
+    """
+
     @field_serializer("clusters")
     def _sorted_clusters(
         self, value: dict[str, dict[str, float]]

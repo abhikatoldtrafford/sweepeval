@@ -27,6 +27,7 @@ __all__ = [
     "DEFAULT_GATE_ON",
     "gate",
     "load_baseline",
+    "model_to_pin",
     "profile_refusal",
     "save_baseline",
     "snapshot",
@@ -100,6 +101,7 @@ def snapshot(
             if hard_fails is not None
             else getattr(result, "hard_fails", None) or ()
         ),
+        model=getattr(result, "model", None),
     )
 
 
@@ -126,14 +128,43 @@ def gate(
     min_effect_overrides: dict[str, float] | None = None,
     seed: int = 0,
     objectives: tuple[Objective, ...] | None = None,
+    allow_model_change: bool = False,
 ) -> GateVerdict:
     """Compare a result against a baseline. Pure; sends nothing."""
     if not isinstance(baseline, Baseline):
         baseline = load_baseline(Path(baseline))
 
+    verdict = _gate(
+        result, baseline,
+        alpha=alpha, gate_on=gate_on, min_effect_overrides=min_effect_overrides,
+        seed=seed, objectives=objectives, allow_model_change=allow_model_change,
+    )
+    # Stamped on every exit, including the refusals: a CI job reading gate.json
+    # needs to know which models the verdict is about whatever the verdict was,
+    # and four separate `return`s is how one of them ends up without it.
+    verdict.baseline_model = baseline.model
+    verdict.current_model = getattr(result, "model", None)
+    return verdict
+
+
+def _gate(
+    result: EvaluationResult,
+    baseline: Baseline,
+    *,
+    alpha: float,
+    gate_on: tuple[str, ...] | None,
+    min_effect_overrides: dict[str, float] | None,
+    seed: int,
+    objectives: tuple[Objective, ...] | None,
+    allow_model_change: bool,
+) -> GateVerdict:
     verdict = _check_comparability(result, baseline)
     if verdict is not None:
         return verdict
+
+    model_verdict, model_notes = _check_model(result, baseline, allow_model_change)
+    if model_verdict is not None:
+        return model_verdict
 
     refusal = profile_refusal(result.profile)
     if refusal is not None:
@@ -144,7 +175,7 @@ def gate(
     objectives = objectives or REGISTRY.defaults()
     selected = gate_on if gate_on is not None else DEFAULT_GATE_ON
 
-    return gate_metrics(
+    verdict = gate_metrics(
         objectives,
         baseline.clusters,
         result.clusters,
@@ -163,6 +194,92 @@ def gate(
         strata=baseline.strata or {
             k: dict(v) for k, v in (getattr(result, "strata", None) or {}).items()
         },
+    )
+    # Carried onto a verdict the statistics produced, not dropped: a gate that
+    # could not check the model, or was told to ignore a change, has to say so
+    # on the same output that reports the numbers.
+    verdict.notes = verdict.notes + model_notes
+    return verdict
+
+
+def model_to_pin(
+    baseline: Baseline, requested: str | None, allow_model_change: bool = False
+) -> str | None:
+    """Which model a gate run should pin, given the baseline and the flags.
+
+    Defaulting to the baseline's model is what makes the gate re-measure what
+    the baseline measured. Without it the gate spends a full run -- 120
+    requests at `standard` -- and only then discovers its model is not the
+    baseline's and refuses; §3 makes cost a first-class constraint.
+
+    Shared by the CLI and :func:`sweepeval.api.arun_gate`, which are the two
+    ways to re-run and gate. They had no shared helper and the second would
+    have quietly kept the old behaviour.
+    """
+    if requested is not None:
+        return requested
+    if allow_model_change:
+        return None
+    return baseline.model or None
+
+
+def _check_model(
+    result: EvaluationResult, baseline: Baseline, allow_model_change: bool
+) -> tuple[GateVerdict | None, tuple[str, ...]]:
+    """Refuse a gate whose model is not the baseline's (§16).
+
+    Not part of :func:`_check_comparability`, because the model is not a
+    comparability key and must not become one -- a sweep varies it across
+    configs inside one run. It is a property of the single config a baseline
+    and a gate each measure, and comparing two different models is the same
+    category of mistake as comparing two different profiles: the number moves
+    for a reason the change under test did not cause.
+
+    Three cases that are not a refusal:
+
+    * neither side named a model -- a shape that puts it in the URL, or has no
+      notion of one. Nothing to compare, and nothing is claimed.
+    * the baseline predates the field. It cannot be checked, and silently
+      treating "unknown" as "matching" is what this whole check exists to stop,
+      so it is annotated instead.
+    * ``allow_model_change``, which is how you deliberately gate a model
+      upgrade. Still annotated: a green gate that compared two models must not
+      look like a green gate that compared one.
+    """
+    was, now = baseline.model, getattr(result, "model", None)
+    if was == now:
+        return None, ()
+    if was is None:
+        return None, (
+            f"this baseline predates model recording, so the gate could not "
+            f"check that it measured the same model as this run "
+            f"({now!r}). Re-baseline to make the check active.",
+        )
+    if now is None:
+        return None, (
+            f"the baseline named model {was!r} and this run's requests name no "
+            "model at all, so the gate could not check them against each other.",
+        )
+    if allow_model_change:
+        return None, (
+            f"--allow-model-change: gated {was!r} against {now!r}. Any "
+            "difference below may be the model, not the change under test.",
+        )
+    return (
+        GateVerdict(
+            ok=False,
+            exit_code=ExitCode.COMPARABILITY_REFUSED,
+            refusals=(
+                f"model differs: {was} vs {now} — the baseline and this run "
+                "measured different models, so a difference between them is "
+                "not evidence about the change under test",
+            ),
+            notes=(
+                "re-baseline against this model, pin the baseline's model with "
+                "--model, or pass --allow-model-change to compare them anyway.",
+            ),
+        ),
+        (),
     )
 
 
@@ -214,6 +331,10 @@ def gate_payload(verdict: GateVerdict) -> dict[str, Any]:
         ],
         "hard_fails": list(verdict.hard_fails),
         "refusals": list(verdict.refusals),
+        "model": {
+            "baseline": verdict.baseline_model,
+            "current": verdict.current_model,
+        },
         # What the gate could NOT do. Absent from the payload entirely
         # before, so a CI job parsing gate.json had no way to tell a run
         # that tested five metrics from one that tested one.

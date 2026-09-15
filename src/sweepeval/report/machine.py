@@ -47,6 +47,10 @@ def as_json(result: Any) -> str:
         "config_id": result.config_id,
         "profile": result.profile,
         "single_config": True,
+        # What answered, which nothing on this path recorded: `evaluate`
+        # writes no manifest, and the manifest's target block names the URL
+        # and the shape but not the model.
+        "model": getattr(result, "model", None),
         "target": result.discovery.payload["target"],
         "extraction": result.discovery.payload["extraction"],
         "corpus": {

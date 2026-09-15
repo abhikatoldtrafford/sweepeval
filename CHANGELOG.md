@@ -17,6 +17,61 @@ silently mixed. Those are marked **Comparability**.
 
 The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **The model is targetable and recorded (§16).** `evaluate`, `baseline` and
+  `gate` take `--model`; `baseline.json` gains a `model` field; the gate
+  refuses a run whose model is not the baseline's, exit `2`, naming both.
+  `--allow-model-change` compares them anyway and annotates the verdict.
+
+  `baseline` and `gate` could not target a model and did not record one. The
+  model came from discovery's preference heuristic -- first id on `/v1/models`
+  containing `mini`, `flash`, `haiku`, `small`, `lite` or `turbo` -- and
+  nothing wrote it down: the manifest's target block names the url, shape,
+  auth and extraction path; `calls.jsonl` carries a `params_hash` and no model
+  string; the baseline carried `config_id: "default"`. So a committed baseline
+  did not say what produced it, and a change to a provider's model listing
+  could move a CI gate onto a different model between the baseline run and the
+  gate run with no signal anywhere. Measured against `api.openai.com`: a
+  gpt-5-mini baseline gated against gpt-5-nano exited 1 on `cost_per_probe`
+  (1881 -> 3074, p=0.0005) and never mentioned the model.
+
+  The model is **not** a comparability key and cannot become one -- a sweep
+  varies it across configs inside one run, and a run carries one comparability
+  block, so a per-run key would have to lie for every sweep. It is checked
+  where the pairing actually lives, between a baseline and its gate.
+
+  `gate` defaults to pinning the baseline's model, so it re-measures what the
+  baseline measured rather than spending a full run -- 120 requests at
+  `standard` -- on a comparison it can only refuse. A pin that the shape
+  cannot carry is refused outright (exit `3`) rather than accepted and
+  ignored, which would put a model id in a committed baseline that no request
+  ever named. Baselines written before this release still load; the gate says
+  it could not check.
+
+- `gate.json` carries `model: {baseline, current}`, and the single-config
+  `report.json` carries `model`. A gate log read three weeks later could not
+  say which models the verdict was about.
+
+### Fixed
+
+- A swept or pinned `model` against a Gemini target went into
+  `generationConfig.model` -- a field the API does not read, in a body it
+  rejects -- because `model` is a sampling key for the shapes that carry it in
+  the body and Gemini names it in the URL. Every request of a Gemini sweep
+  with a model axis was affected.
+
+### Changed
+
+- The pinned params live on `LadderResult`, so every body built from a ladder
+  inherits them. Pinning on the probe plan alone left capability detection --
+  five detectors and the sampling probe, all building bodies straight off the
+  ladder -- probing a different model from the one the metrics came from, which
+  matters precisely where it is worst: a reasoning model rejects the sampling
+  parameters a chat model accepts.
+
 ## [0.2.0] - 2026-09-14
 
 ### Added

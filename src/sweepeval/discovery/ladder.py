@@ -39,7 +39,7 @@ from sweepeval.discovery.shapes import (
 )
 from sweepeval.discovery.sniff import SniffResult, sniff
 
-__all__ = ["LadderResult", "body_for_turns", "climb"]
+__all__ = ["LadderResult", "body_for_turns", "climb", "model_in_body"]
 
 
 @dataclass
@@ -55,6 +55,22 @@ class LadderResult:
     stage: str
     mutations: tuple[str, ...] = ()
     attempts: list[Attempt] = field(default_factory=list)
+
+    pinned: dict[str, Any] = field(default_factory=dict)
+    """Params every body built from this ladder carries unless overridden.
+
+    Structural on purpose. ``--model`` first pinned the model on the probe
+    plan alone, so the probes named it and capability detection -- five
+    detectors and the sampling probe, all building their bodies straight off
+    the ladder -- went on naming whichever model discovery had picked. The
+    capability report would then describe a different model from the one the
+    metrics came from, and the two would disagree exactly where it matters:
+    a reasoning model rejects the sampling parameters a chat model accepts.
+
+    Putting it here means every caller of :func:`body_for_turns` inherits it
+    and there is no call site left to miss. A swept param still wins: the
+    sweep sets it per config, and this is the run-wide floor.
+    """
 
     @property
     def puts_key_in_url(self) -> bool:
@@ -192,6 +208,8 @@ def body_for_turns(
     exist. The shape builds the body; the added keys are merged back; swept
     params win over the discovered value.
     """
+    if ladder.pinned:
+        params = {**ladder.pinned, **params}
     if not ladder.mutations:
         return ladder.shape.build_multi_turn(turns, **params)
 
@@ -210,6 +228,26 @@ def body_for_turns(
     if substituted != ladder.body:
         return substituted
     return ladder.shape.build_multi_turn(turns, **params)
+
+
+def model_in_body(ladder: LadderResult, **params: Any) -> str | None:
+    """The model id the next request will actually carry, or ``None``.
+
+    Read out of a body built by :func:`body_for_turns` rather than off the
+    params or the discovered body, because those two disagree and only the
+    built body is what goes on the wire: discovery reaches OpenAI as
+    ``openai.chat_completions + add:model`` and the added value is *overridden*
+    by a swept ``model``, while for a shape that puts the model in the URL
+    there is no body field to override at all.
+
+    ``None`` is a real answer and means "this request carries no model field".
+    A shape like ``gemini.generate_content`` names the model in the path, and
+    ``raw.text`` has no notion of one; asserting a model for either would be
+    provenance that is not true.
+    """
+    body = body_for_turns(ladder, [("user", INERT_PROMPT)], **params)
+    value = body.get("model") if isinstance(body, dict) else None
+    return value if isinstance(value, str) and value else None
 
 
 def _additive_only(ladder: LadderResult) -> dict[str, Any] | None:

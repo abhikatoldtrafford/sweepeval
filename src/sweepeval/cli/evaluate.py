@@ -8,11 +8,16 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
-from sweepeval.execute.evaluate import EvaluationResult, aevaluate_target
+from sweepeval.execute.evaluate import (
+    EvaluationResult,
+    ModelPinRefused,
+    aevaluate_target,
+)
 from sweepeval.execute.gate import (
     DEFAULT_GATE_ON,
     gate_payload,
     load_baseline,
+    model_to_pin,
     profile_refusal,
     save_baseline,
     snapshot,
@@ -32,21 +37,34 @@ from sweepeval.stats.diff import ExitCode
 
 console = Console()
 
+_MODEL_HELP = (
+    "Pin the model every probe names. Without it, discovery picks one and a "
+    "change to the provider's model list can move a gate onto a different "
+    "model between runs."
+)
+
 
 def _run(
     url: str, key: str | None, profile: str, runs: int, root: Path,
-    seed: int, authorized: bool, yes: bool = False,
+    seed: int, authorized: bool, yes: bool = False, model: str | None = None,
 ) -> EvaluationResult:
     """Run one configuration, behind the same pre-flight a sweep uses (I9)."""
     from sweepeval.cli.sweep import _confirmer
 
-    result = asyncio.run(
-        aevaluate_target(
-            url, key=key, profile=profile, runs=runs,  # type: ignore[arg-type]
-            root=str(root), seed=seed, authorized=authorized,
-            confirm=_confirmer(yes),  # type: ignore[arg-type]
+    try:
+        result = asyncio.run(
+            aevaluate_target(
+                url, key=key, profile=profile, runs=runs,  # type: ignore[arg-type]
+                root=str(root), seed=seed, authorized=authorized,
+                confirm=_confirmer(yes),  # type: ignore[arg-type]
+                model=model,
+            )
         )
-    )
+    except ModelPinRefused as error:
+        # A usage error, not a comparability refusal: the flag is wrong for
+        # this target, which is a fact about the command line.
+        console.print(f"[red]REFUSED[/red]    {error}")
+        raise typer.Exit(code=int(ExitCode.USAGE_ERROR)) from None
     if result.declined:
         console.print(f"[yellow]{result.declined}[/yellow]")
         raise typer.Exit(code=0)
@@ -106,9 +124,12 @@ def evaluate_command(
     yes: bool = typer.Option(
         False, "--yes", "-y", help="Accept the pre-flight estimate without prompting."
     ),
+    model: str | None = typer.Option(
+        None, "--model", help=_MODEL_HELP
+    ),
 ) -> None:
     """Score a single configuration."""
-    result = _run(url, key, profile, runs, root, seed, authorized, yes)
+    result = _run(url, key, profile, runs, root, seed, authorized, yes, model)
     render_evaluation(result, console)
     _emit(result, fmt, root)
 
@@ -123,9 +144,10 @@ def baseline_command(
     seed: int = typer.Option(0, "--seed"),
     authorized: bool = typer.Option(False, "--i-am-authorized"),
     yes: bool = typer.Option(False, "--yes", "-y"),
+    model: str | None = typer.Option(None, "--model", help=_MODEL_HELP),
 ) -> None:
     """Snapshot a run as a committable baseline."""
-    result = _run(url, key, profile, runs, root, seed, authorized, yes)
+    result = _run(url, key, profile, runs, root, seed, authorized, yes, model)
     render_evaluation(result, console)
 
     path = save_baseline(snapshot(result), out)
@@ -154,6 +176,16 @@ def gate_command(
     ),
     fmt: str | None = typer.Option(None, "--format", help="json,gha"),
     yes: bool = typer.Option(False, "--yes", "-y"),
+    model: str | None = typer.Option(
+        None, "--model",
+        help="Pin the model. Defaults to the baseline's, so the gate "
+             "re-measures what the baseline measured.",
+    ),
+    allow_model_change: bool = typer.Option(
+        False, "--allow-model-change",
+        help="Compare against a baseline taken on a different model. The "
+             "verdict says so; a difference may be the model, not the change.",
+    ),
 ) -> None:
     """Re-run the target and compare against a baseline. Exits 0/1/2/3."""
     # Before `_run`, which spends. Refusing an ineligible profile after paying
@@ -167,7 +199,13 @@ def gate_command(
         raise typer.Exit(code=int(ExitCode.USAGE_ERROR))
 
     baseline = load_baseline(baseline_path)
-    result = _run(url, key, profile, runs, root, seed, authorized, yes)
+
+    pinned = model_to_pin(baseline, model, allow_model_change)
+    if pinned is not None and model is None:
+        console.print(f"[dim]pinned to the baseline's model: {pinned}[/dim]")
+    model = pinned
+
+    result = _run(url, key, profile, runs, root, seed, authorized, yes, model)
 
     overrides: dict[str, float] = {}
     for entry in min_effect:
@@ -183,6 +221,7 @@ def gate_command(
             gate_on=tuple(g.strip() for g in gate_on.split(",")) if gate_on else None,
             min_effect_overrides=overrides or None,
             seed=seed,
+            allow_model_change=allow_model_change,
         )
     except ValueError as error:
         # An unknown --gate-on name. The engine raises so a typo cannot gate

@@ -90,6 +90,15 @@ class GateVerdict:
     edge one.
     """
 
+    baseline_model: str | None = None
+    current_model: str | None = None
+    """The models the two sides named, for the payload a CI job parses.
+
+    Not used by the comparison — :func:`sweepeval.execute.gate.gate` decides
+    what a mismatch means — but a verdict that cannot say which models it is
+    about is not much use in a log read three weeks later.
+    """
+
     degraded: tuple[str, ...] = ()
     """Objectives gated on a weaker statistic than they are reported with.
 

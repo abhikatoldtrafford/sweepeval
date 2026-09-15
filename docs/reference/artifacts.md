@@ -178,7 +178,11 @@ a checkpoint claiming work that was never stored.
 
 ## What is safe to commit
 
-`baseline.json` — yes. It is designed for it and carries no credentials.
+`baseline.json` — yes. It is designed for it and carries no credentials. It
+also records the `model` its requests named, so a reader can tell what it
+measured and the gate can refuse to compare it against a different one. A
+baseline written before that field existed still loads; the gate says it could
+not check.
 
 `.sweepeval/` — no. `sweepeval init` writes the `.gitignore` entries and
 prints exactly what is and is not safe to commit.

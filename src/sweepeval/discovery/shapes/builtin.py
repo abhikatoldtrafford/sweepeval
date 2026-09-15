@@ -101,7 +101,12 @@ class GeminiGenerateContent:
                 if role != "system"
             ]
         }
-        config = _sampling(params)
+        # `model` is a sampling key for the shapes that carry it in the body.
+        # Gemini names the model in the URL, so passing it here put a `model`
+        # field inside `generationConfig` — somewhere the API does not read it
+        # and rejects it — which is what a swept or pinned model did to every
+        # request against a Gemini target.
+        config = {k: v for k, v in _sampling(params).items() if k != "model"}
         if config:
             body["generationConfig"] = config
         return body

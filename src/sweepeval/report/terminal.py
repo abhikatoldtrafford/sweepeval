@@ -62,13 +62,18 @@ def render_evaluation(result: object, console: Console | None = None) -> None:
     """Render a single-configuration evaluation."""
     console = console or Console()
 
+    # The model belongs on the header for the same reason the shape does: it
+    # is what was measured, and a reader of a baseline or a gate has no other
+    # way to see which one answered.
+    model = getattr(result, "model", None)
     console.print(
         Panel(
             f"[bold]single-configuration evaluation[/bold]\n"
             f"target      {result.discovery.payload['target']['url']}\n"  # type: ignore[attr-defined]
             f"shape       {result.discovery.ladder.shape.name}\n"  # type: ignore[attr-defined]
             f"type        {result.discovery.target_type}\n"  # type: ignore[attr-defined]
-            f"profile     {result.profile}  ({result.corpus.unit_count} units, "  # type: ignore[attr-defined]
+            + (f"model       {model}\n" if model else "")
+            + f"profile     {result.profile}  ({result.corpus.unit_count} units, "  # type: ignore[attr-defined]
             f"{result.corpus.calls_per_run} calls/run)\n"  # type: ignore[attr-defined]
             f"run         {result.run_id}",  # type: ignore[attr-defined]
             title="sweepeval",

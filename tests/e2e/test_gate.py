@@ -198,5 +198,9 @@ async def test_the_gate_payload_is_machine_readable(tmp_path: Path) -> None:
         # What the gate could NOT do. A consumer that cannot see this cannot
         # tell a run that tested five metrics from one that tested one.
         "not_gated", "degraded", "incomplete",
+        # Which models the verdict is about. A gate log read three weeks later
+        # could not say, and the gate will refuse on a mismatch.
+        "model",
     }
     assert isinstance(payload["exit_code"], int)
+    assert set(payload["model"]) == {"baseline", "current"}

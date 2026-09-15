@@ -202,14 +202,27 @@ async def agate(result: Any, *, baseline: Path | str, **kwargs: Any) -> Any:
 async def arun_gate(url: str, *, baseline: Path | str, **kwargs: Any) -> Any:
     """Async twin of :func:`run_gate`."""
     from sweepeval.execute.gate import gate as _gate
+    from sweepeval.execute.gate import load_baseline, model_to_pin
+    from sweepeval.schema.baseline import Baseline
 
     gate_kwargs = {
         k: kwargs.pop(k)
-        for k in ("alpha", "gate_on", "min_effect_overrides", "objectives")
+        for k in (
+            "alpha", "gate_on", "min_effect_overrides", "objectives",
+            # Belongs to the comparison, not to the run. Left out of this
+            # tuple it would reach `aevaluate` as an unexpected keyword.
+            "allow_model_change",
+        )
         if k in kwargs
     }
+    # The same default the CLI applies: re-measure the baseline's model rather
+    # than paying for a run that can only be refused.
+    loaded = baseline if isinstance(baseline, Baseline) else load_baseline(Path(baseline))
+    kwargs["model"] = model_to_pin(
+        loaded, kwargs.get("model"), bool(gate_kwargs.get("allow_model_change"))
+    )
     result = await aevaluate(url, **kwargs)
-    return _gate(result, baseline, **gate_kwargs)
+    return _gate(result, loaded, **gate_kwargs)
 
 
 async def areport(run_id: str, *, fmt: str = "terminal", **kwargs: Any) -> Any:
