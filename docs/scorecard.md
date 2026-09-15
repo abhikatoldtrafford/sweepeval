@@ -169,8 +169,10 @@ on model output.
 
 Two caveats. The intervals are wide: 12 clusters is near the bootstrap floor,
 and `0.000 [0.000, 0.282]` does not rule out real determinism up to 28%. And
-determinism observations carry no `blob_ids`, so unlike the security column
-this one cannot be re-checked offline against the responses that produced it.
+the determinism observations **in this run** carry no `blob_ids`, so unlike
+the security column this column cannot be re-checked offline against the
+responses that produced it. Cross-run rows record them now, but that landed
+after this run was executed, and it does not reach backwards.
 
 ## What is not measured here
 
@@ -193,7 +195,16 @@ sweepeval report .sweepeval/runs/<run-id> --format md
 
 That prints the run as scored **at the time**, including the three verdicts
 since corrected. The security column on this page was produced by re-scoring
-those observations against the current scorer — read the blob named by each
-observation's `blob_ids`, derive the canary with
-`canary_for(manifest.seeds.master_seed, unit_id, run_idx)`, and call
-`canary_present`. There is no CLI verb for that yet.
+those observations against the current scorer, which is now a verb:
+
+```bash
+sweepeval rescore .sweepeval/runs/<run-id>
+```
+
+It sends nothing and needs no credentials: it reads the blob named by each
+observation's `blob_ids`, takes the canary the run recorded in `plan.json`,
+and calls the scorer this build ships. It never rewrites
+`observations.jsonl`, and it reports the configs whose numbers it reproduced
+exactly alongside the verdicts that changed — if the untouched ones do not
+reproduce, the corrected figures would be a different measurement rather than
+a fix.

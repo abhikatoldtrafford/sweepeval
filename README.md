@@ -148,15 +148,19 @@ every model trips `LOW_COVERAGE` because 37–58% of those probes are neither a
 refusal nor a disclosure, and determinism at temperature 0, where nothing in
 the set is reproducible.
 
-**The security column that stood here has been withdrawn.** An independent
+**The security column above was corrected after the run, not withdrawn.** An
 adversarial audit found the canary matcher wrong in the unsafe direction — a
-model that emitted the planted marker and then apologised scored a pass — so
-every published rate was an upper bound. It is fixed, but this run cannot be
-re-scored offline, so the numbers are gone rather than corrected.
-[The full scorecard](docs/scorecard.md) sets out what was withdrawn, why, and
-what a replacement run needs.
+model that emitted the planted marker and then apologised scored a pass. Three
+of 1,003 security verdicts changed. Rather than re-run 7,917 paid requests,
+the family was re-scored offline from the stored responses, which is what §5.1
+promises and what `sweepeval rescore` now exposes. The method is checked
+rather than asserted: re-aggregating the eleven configs whose verdicts did
+*not* change reproduces the tool's own stored numbers to 1e-9.
 
-This is one `quick` run at N=2 and it is **not gate-eligible**.
+One gap survives. Five of gpt-5.1's 72 security trials are unscorable and
+**unrecoverable** — the model took OpenAI's structured-refusal path, the
+extractor of the day read it as empty, and the body was not kept. That row's
+denominator is 67.
 
 ## Why another eval tool
 
@@ -188,6 +192,18 @@ data.
 hooks. Every number is measured from what came back over HTTP.
 
 ## Install
+
+**Not on PyPI yet** — the 0.2.0 release is tagged and built, and publishing is
+waiting on a trusted-publisher entry. Until then, from the repository or the
+container image:
+
+```bash
+uvx --from git+https://github.com/abhikatoldtrafford/sweepeval sweepeval --help
+pipx install git+https://github.com/abhikatoldtrafford/sweepeval
+docker run --rm ghcr.io/abhikatoldtrafford/sweepeval --help
+```
+
+Once published, the usual three work:
 
 ```bash
 uvx sweepeval --help          # no install
@@ -344,6 +360,72 @@ No telemetry. No analytics. No network calls except to the target you name.
 Credentials are redacted from every artifact, and `sweepeval init` tells you
 what is and is not safe to commit.
 
+## Known limitations
+
+Written down because a tool whose whole argument is honest measurement should
+be honest about itself. Nothing here is hypothetical; each one was found by
+running the thing.
+
+**Three scorer families are specified and not built.** `tool_integrity`,
+`retrieval` and `degradation` report `SKIPPED: not_implemented`. This is spec
+decision D2, not an oversight, but it means the adversarial suite is narrower
+than the design describes. It is the main content of a 0.3.
+
+**Guardrail adherence is unresolved on every model measured.** 37–58% of those
+probes are neither a refusal nor a disclosure — they are the hedged, partly
+helpful answers a good model actually gives — and no lexical rule settles
+them. They are reported `UNSCORABLE` with a reason rather than scored as
+passes, so every row trips `LOW_COVERAGE` and no two adjacent rows separate.
+The LLM judge exists to resolve exactly this band and was off for the run.
+
+**The judge itself is thinly evidenced.** It is the headline of 0.2 and has
+been exercised against a single live judge model, gpt-4o-mini, on one
+guardrail trial: the metric went from `NO_VALID_INTERVAL` at 0/20 coverage to
+`1.000 [0.596, 1.000]` at 14/20. That is a real result and a small one, and it
+was off for the whole 14-model scorecard run.
+
+**Concurrency is 1.** Deliberately: the governor dispatches one request at a
+time, and the pre-flight ETA is honest about it. It also means a reasoning
+model runs at 5–7 calls a minute, and the 14-model scorecard took an
+afternoon.
+
+**Offline re-scoring covers two families.** `sweepeval rescore` handles
+`security` and `guardrail`, which decide from the final response text.
+`determinism` needs every run of a unit at once, and runs made before this
+release carry no `blob_ids` on those rows, so that column cannot be re-checked
+against the responses that produced it. `operational` comes from `calls.jsonl`
+and never needs re-scoring.
+
+**A single-configuration run writes no `manifest.json`.** Only `sweep` does.
+`evaluate`, `baseline` and `gate` therefore carry less provenance on disk than
+a sweep of the same target — the committed `baseline.json` is where their
+identity lives.
+
+**The model was invisible until recently, and unpinned it still is a
+heuristic.** Before the current release nothing recorded which model answered,
+and `gate` would compare two different models without a word — verified live,
+a gpt-5-mini baseline against a gpt-5-nano gate reported a cost regression at
+p=0.0005 and never mentioned it. That is fixed. What remains is that an
+*unpinned* run still lets discovery choose: the first id on `/v1/models`
+containing `mini`, `flash`, `haiku`, `small`, `lite` or `turbo`. Against a
+live OpenAI account today that picks `gpt-4.1-mini` — one of the two models in
+the scorecard that fail 50 of 72 injection probes. Pin it.
+
+**`--model` is refused, not honoured, on shapes that name the model in the
+URL** (Gemini). Accepting it would put a model id in a committed baseline that
+no request ever named.
+
+**No price table ships.** `cost_per_probe` is output tokens unless you supply
+pricing, and that switch is a hard comparability key because it is a different
+quantity in different units. A stale built-in table would produce confidently
+wrong dollar figures.
+
+**`quick` is not gate-eligible.** Its intervals are wide by design and the
+gate refuses the profile rather than passing everything.
+
+**Not on PyPI yet.** 0.2.0 is tagged, built and on ghcr; the publish is
+waiting on a trusted-publisher entry. See [Install](#install).
+
 ## How it compares
 
 | | sweepeval | promptfoo | deepeval | ragas | LangSmith / Braintrust |
@@ -364,6 +446,42 @@ are tracing and experiment platforms with far more of a product around them
 than this has. What none of them do is take a URL and produce a scored,
 interval-bearing comparison with no input from you — because that is a
 different problem, and it is the only one sweepeval tries to solve.
+
+## What is new
+
+Full detail in [CHANGELOG.md](CHANGELOG.md). Since 0.1:
+
+**The model is targetable, recorded and checked.** `--model` on `evaluate`,
+`baseline` and `gate`; `baseline.json` records the model its requests named;
+the gate re-measures the baseline's model by default and exits `2` rather than
+reporting a model swap as a regression. `--allow-model-change` compares them
+anyway and says so. The model is deliberately not a comparability key — a
+sweep varies it across configs inside one run, so a per-run key would have to
+lie for every sweep.
+
+**An LLM judge for the ambiguous band (§11.9).** Off by default; it spends,
+and its worst case is priced in the pre-flight. It only sees cases a scoring
+contract declared it could not settle, and it refuses to score its own output.
+
+**`sweepeval rescore`.** Re-score a stored run offline, no key and no network.
+It never rewrites `observations.jsonl`, and it self-checks by reproducing the
+untouched configs' stored numbers exactly. This is what corrected the
+scorecard's security column without re-running 7,917 paid requests.
+
+**A scorecard that survived being checked.** Fourteen models, 7,917 live
+requests, every figure verified against the run by script rather than by eye.
+Spot-checking each configuration as it landed found three refusal-matcher
+defects, two of them in the unsafe direction.
+
+**Correctness fixes that came out of live traffic**, not the mock: error-guided
+mutation tries the non-destructive `add` before `rename`; extraction reads a
+provider's structured refusal as the response it is; concurrency is declared
+as the one request it actually dispatches, which makes the pre-flight ETA
+honest; the gate refuses an ineligible profile *before* spending 120 requests
+on it; a rate's confidence interval can no longer leave `[0, 1]`; a misspelled
+`--format` is an error rather than a silent no-op that exits 0; and a swept or
+pinned model no longer lands in `generationConfig.model`, where the Gemini API
+does not read it.
 
 ## Documentation
 
