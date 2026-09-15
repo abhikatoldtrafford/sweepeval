@@ -20,6 +20,7 @@ from sweepeval.cli.evaluate import (
     gate_command,
     init_command,
 )
+from sweepeval.cli.rejudge import rejudge_command
 from sweepeval.cli.report import report_command
 from sweepeval.cli.rescore import rescore_command
 from sweepeval.cli.sweep import run_command, sweep_command
@@ -58,6 +59,7 @@ app.command(name="init")(init_command)
 app.command(name="compare")(compare_command)
 app.command(name="report")(report_command)
 app.command(name="rescore")(rescore_command)
+app.command(name="rejudge")(rejudge_command)
 app.command(name="demo")(demo_command)
 app.add_typer(mock_cli.app, name="mock")
 

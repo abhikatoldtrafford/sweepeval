@@ -21,6 +21,7 @@ __all__ = [
     "adiscover",
     "aevaluate",
     "agate",
+    "arejudge",
     "areport",
     "arun",
     "arun_gate",
@@ -32,6 +33,7 @@ __all__ = [
     "evaluate",
     "gate",
     "rank",
+    "rejudge",
     "report",
     "rescore",
     "run",
@@ -139,6 +141,26 @@ def rescore(run_dir: str, **kwargs: Any) -> Any:
     from sweepeval.execute.rescore import rescore_run
 
     return rescore_run(run_dir, **kwargs)
+
+
+def rejudge(run_dir: str, **kwargs: Any) -> Any:
+    """Judge a stored run's ambiguities without re-running the target (§11.9).
+
+    Spends judge calls and no target calls, and writes a **new** run: the
+    source is append-only, and `judge` is a hard comparability key, so a
+    judged result and an unjudged one are two measurements rather than one
+    that was corrected.
+    """
+    from sweepeval.execute.rejudge import rejudge_run
+
+    return rejudge_run(run_dir, **kwargs)
+
+
+async def arejudge(run_dir: str, **kwargs: Any) -> Any:
+    """Async twin of :func:`rejudge`."""
+    from sweepeval.execute.rejudge import arejudge_run
+
+    return await arejudge_run(run_dir, **kwargs)
 
 
 def demo(**kwargs: Any) -> Any:

@@ -32,6 +32,7 @@ from typing import Any
 
 from sweepeval.corpus.loader import load_corpus
 from sweepeval.execute.aggregation import aggregate_config
+from sweepeval.judge.escalate import JUDGE_SCORER
 from sweepeval.schema.metric import MetricValue
 from sweepeval.schema.observation import Observation, Verdict
 from sweepeval.schema.unit import Unit
@@ -39,7 +40,14 @@ from sweepeval.scorers.base import ScoreContext, ScorerRegistry
 from sweepeval.store.redaction import Redactor
 from sweepeval.store.run import Store
 
-__all__ = ["Change", "RescoreReport", "rescore_run"]
+__all__ = [
+    "Change",
+    "RescoreReport",
+    "is_escalatable",
+    "rescore_run",
+    "text_of",
+    "units_for",
+]
 
 RESCORABLE = ("security", "guardrail")
 """Families a stored run can be re-scored for.
@@ -88,6 +96,39 @@ class RescoreReport:
     reproduced: int = 0
     mismatched: list[str] = field(default_factory=list)
 
+    rows: dict[str, list[Observation]] = field(default_factory=dict)
+    """The re-scored observations, per config, as they would be aggregated.
+
+    Returned rather than discarded so a caller can do something with them
+    without re-reading and re-scoring the run -- `rejudge` escalates the
+    ambiguous ones. Still nothing is written; this is the derived view in
+    memory.
+    """
+
+    escalatable: int = 0
+    """Ambiguities an LLM judge could be asked to resolve (§11.9).
+
+    Counted on every re-score, including one with no judge configured, because
+    the number is free to compute and is the one a reader needs in order to
+    decide whether a judge is worth its calls. Only rows whose response text
+    is still in the store count: an ambiguity with nothing to show the judge
+    is not resolvable at any price.
+    """
+
+    unjudgeable: int = 0
+    """Ambiguities with no stored response, so no judge can settle them.
+
+    Reported rather than subtracted in silence: a tool that says "420 to
+    judge" when there are 421 ambiguities has quietly dropped the case this
+    whole feature exists to make visible.
+
+    It reads zero on the published 14-model run. It did not always: every
+    re-scored row lost its ``blob_ids``, because a scorer is handed text
+    rather than addresses, so one ambiguity that the current scorer produces
+    looked like an ambiguity with no evidence behind it. The count is only
+    meaningful because the re-score carries provenance forward.
+    """
+
     @property
     def ok(self) -> bool:
         return not self.mismatched
@@ -123,10 +164,7 @@ def rescore_run(
     store = Store(directory.parent.parent, directory.name, Redactor())
     scorers = registry or default_registry()
 
-    units = {}
-    for template in load_corpus(profile=profile).probes:
-        unit = template.to_unit()
-        units[unit.unit_id] = unit
+    units = units_for(profile)
 
     report = RescoreReport(run_dir=directory, families=tuple(families))
     rows: dict[str, list[Observation]] = {}
@@ -143,8 +181,65 @@ def rescore_run(
             aggregate_config(observations, config_id=config_id, seed=seed).metrics
         )
 
+    report.rows = rows
+    for observations in rows.values():
+        for o in observations:
+            if not _is_ambiguous(o):
+                continue
+            if is_escalatable(o) and text_of(o, store) is not None:
+                report.escalatable += 1
+            else:
+                report.unjudgeable += 1
     _check_reproduction(directory, report, rows, seed)
     return report
+
+
+def _is_ambiguous(observation: Observation) -> bool:
+    """§11.9's trigger, set by the scoring contract and by nothing here."""
+    from sweepeval.judge.escalate import AMBIGUOUS_PREFIX
+
+    return observation.verdict is Verdict.UNSCORABLE and (
+        observation.reason or ""
+    ).startswith(AMBIGUOUS_PREFIX)
+
+
+def is_escalatable(observation: Observation) -> bool:
+    """An ambiguity a judge could be asked about, as far as the row can say.
+
+    The `ambiguous:` marker is §11.9's trigger and is set by the scoring
+    contract, not by this module. The `blob_ids` half matters as much: an
+    ambiguity whose response text is gone cannot be judged offline at any
+    price, and counting it would promise a resolution nothing can deliver.
+
+    Naming a blob is not the same as that blob being readable, and this
+    predicate can only see the row. Callers that are going to *spend* on the
+    answer pair it with :func:`text_of`, which asks the store.
+    """
+    return _is_ambiguous(observation) and bool(observation.blob_ids)
+
+
+def text_of(observation: Observation, store: Store) -> str | None:
+    """The response text behind an observation, or ``None`` if it is gone.
+
+    A blob id that resolves to nothing is worse than no blob id: it says the
+    evidence is there. Counting those as judgeable put a number of judge calls
+    in front of a user that the run could not actually spend.
+    """
+    for blob_id in observation.blob_ids:
+        try:
+            return store.blobs.get(blob_id).decode("utf-8")
+        except (KeyError, UnicodeDecodeError):
+            continue
+    return None
+
+
+def units_for(profile: str) -> dict[str, Unit]:
+    """The corpus units of a profile, by id -- what a stored run was built on."""
+    return {
+        unit.unit_id: unit
+        for template in load_corpus(profile=profile).probes
+        if (unit := template.to_unit())
+    }
 
 
 def _rescore_row(
@@ -157,6 +252,15 @@ def _rescore_row(
     report: RescoreReport,
 ) -> Observation:
     if row.get("family") not in families or row["verdict"] not in ("PASS", "FAIL"):
+        return Observation.model_validate(row)
+
+    if row.get("scorer") == JUDGE_SCORER:
+        # A judge verdict is not something a deterministic scorer can
+        # reproduce -- that it could not is exactly why the judge was asked.
+        # Re-scoring these reported every one of them as a changed verdict:
+        # on the judged 14-model run that was 420 spurious changes, and it
+        # marked all fourteen configs as touched, which left the reproduction
+        # check with nothing to check.
         return Observation.model_validate(row)
 
     unit = units.get(row["unit_id"])
@@ -184,7 +288,17 @@ def _rescore_row(
     if not fresh:
         return Observation.model_validate(row)
 
-    now = fresh[0]
+    # The scorer is handed text, not addresses, so the observation it builds
+    # names no blob. Carrying the stored ones forward keeps the re-scored row
+    # pointing at the very bytes it was scored from -- without this, a
+    # re-scored row is a verdict with no evidence behind it, and anything
+    # persisted from `rows` (a judged run) could not be re-scored again.
+    now = fresh[0].model_copy(
+        update={
+            "blob_ids": tuple(row.get("blob_ids") or ()),
+            "call_ids": tuple(row.get("call_ids") or ()),
+        }
+    )
     if now.verdict.value != row["verdict"]:
         report.changes.append(
             Change(
