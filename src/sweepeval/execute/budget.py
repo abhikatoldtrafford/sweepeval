@@ -302,8 +302,16 @@ def estimate_run(
 
 def _tokens_for(corpus: Corpus, runs: int, configs: int) -> int:
     """Disclosed chars/4 estimate over the corpus's own prompt text."""
+    # Rendered, not as written. A template's text still holds its
+    # placeholders: `{{filler}}` is eleven characters here and up to 24,000
+    # once instantiated, so measuring templates missed 81% of the real prompt
+    # bill the moment the degradation family landed -- a two-million-token
+    # under-count on a fourteen-model sweep, in the number I9 says the user
+    # consents to before anything is sent.
     prompt_chars = sum(
-        len(turn.text) for template in corpus.probes for turn in template.turns
+        len(turn.text)
+        for template in corpus.probes
+        for turn in template.to_unit().turns
     )
     # Prompt tokens grow with the conversation on replay, so a multi-turn unit
     # sends its earlier turns again on every later turn. Approximated by the

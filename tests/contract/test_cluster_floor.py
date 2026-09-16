@@ -220,3 +220,33 @@ def test_the_two_sampling_prompts_are_open_ended() -> None:
 def test_the_corpus_hash_is_profile_independent() -> None:
     """§10.3: two profiles of one corpus must agree it is the same corpus."""
     assert load_corpus("quick").hash == load_corpus("standard").hash
+
+
+def test_the_estimate_counts_generated_text_not_placeholders() -> None:
+    """I9: the token estimate is the number a user consents to before anything
+    is sent, so it has to measure what will actually be sent.
+
+    A template's text still holds its placeholders -- `{{filler}}` is eleven
+    characters as written and up to 24,000 once instantiated. Measuring
+    templates rather than units missed 81% of the prompt bill the moment the
+    degradation family landed: a two-million-token under-count on a
+    fourteen-model sweep.
+    """
+    from sweepeval.execute.budget import estimate_run
+
+    corpus = load_corpus("standard")
+    as_written = sum(
+        len(turn.text) for template in corpus.probes for turn in template.turns
+    )
+    as_sent = sum(
+        len(turn.text)
+        for template in corpus.probes
+        for turn in template.to_unit().turns
+    )
+    assert as_sent > as_written * 4, (as_written, as_sent)
+
+    estimate = estimate_run(corpus, configs=1, runs=1, profile="standard")
+    scoring = next(p for p in estimate.phases if p.phase.startswith("scoring"))
+    # The scoring phase must reflect the rendered bill, not the written one.
+    assert scoring.tokens > as_written // 4 * 2, scoring.tokens
+    assert scoring.tokens >= as_sent // 4, scoring.tokens
