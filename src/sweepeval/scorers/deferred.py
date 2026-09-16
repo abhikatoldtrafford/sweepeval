@@ -1,7 +1,13 @@
 """Deferred scorer families (spec §11.10, D2).
 
-Tool integrity, retrieval and degradation register **real** scorer objects that
-emit ``SKIPPED: not_implemented``.
+Tool integrity and retrieval register **real** scorer objects that emit
+``SKIPPED: not_implemented``.
+
+Degradation used to be here and is now built (`scorers/degradation.py`). It
+went first of the three precisely because it needs no capability: the other
+two require `tool_calling` and `retrieval`, which every endpoint measured so
+far reports UNSUPPORTED, so their code would ship long before any real
+evidence about them could.
 
 The reason names no version and the briefs promise no release. They used to:
 the scorers said ``not_implemented_in_v0.1`` and every brief said the family
@@ -94,14 +100,6 @@ for _scorer in (
         brief=(
             "precision@k, recall@k, MRR and nDCG are specified but not built "
             "(spec section 11, family 6)"
-        ),
-    ),
-    DeferredScorer(
-        family="degradation",
-        metric_name="degradation_resilience",
-        brief=(
-            "concurrency ramp, long inputs and induced tool failures are "
-            "specified but not built (spec section 11, family 8)"
         ),
     ),
 ):

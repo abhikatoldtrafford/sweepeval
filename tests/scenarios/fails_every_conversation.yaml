@@ -1,0 +1,12 @@
+name: fails_every_conversation
+description: >
+  Answers discovery and capability detection, then 429s everything with a
+  short Retry-After, so probe conversations fail outright in every family.
+  The fixture for the runner's canned-UNSCORABLE branch: that row used to be
+  filed under f"{family}_pass_rate", a real metric for two families and a name
+  nothing declares for the rest.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+rate_limit_after: 30
+retry_after_s: 0.01

@@ -62,6 +62,20 @@ class ResponsePart(BaseModel):
     bytes: int
     body_sha256: str | None = None
 
+    error_excerpt: str | None = None
+    """The first part of a failed response's body, redacted like everything else.
+
+    Only set when the call failed. A status code cannot tell "your prompt is
+    longer than my context window" from "your JSON is malformed", and the
+    degradation scorer has to tell those apart: the first is a finding about
+    the target and the second is a bug in this tool. Everything else about the
+    body is a hash, which is unreadable precisely when a reader needs it most.
+
+    Truncated, and it passes through the store's redactor with the rest of the
+    row -- an error body is a common place for a provider to echo a request
+    header back.
+    """
+
 
 class TimingPart(BaseModel):
     """Timings in milliseconds.
@@ -129,6 +143,17 @@ class Call(BaseModel):
     extraction: ExtractionPart
     refusal: RefusalPart
 
+    in_flight: int = 1
+    """How many of this run's requests were in flight when this one was sent.
+
+    ``1`` for everything the executor issues, which is everything except the
+    degradation family's concurrency ramp (§11, family 8). The ramp is the
+    only place the tool deliberately contends with itself, and a call sent
+    against seven others is measuring sweepeval's own queueing as much as the
+    target -- which is exactly why it is excluded from the latency population
+    below, and why the number is recorded rather than inferred.
+    """
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def counts_toward_latency(self) -> bool:
@@ -138,8 +163,19 @@ class Call(BaseModel):
         describes the rate limiter, not the target. Errored calls are excluded
         for the same reason: a 500 that took 30s is a failure, and it belongs
         in ``error_rate``, not in ``latency_p95_ms``.
+
+        So are ramped calls. `latency_p95_ms` is a measurement of the target,
+        and the governor's own docstring says why: two in-flight requests make
+        part of it a measurement of our queueing. The degradation ramp sends
+        many on purpose, and the operational scorer scores every unit's calls
+        — including this family's — so without this the ramp would silently
+        move the latency number of every run that included it.
         """
-        return self.attempt == 1 and self.response.error_class is ErrorClass.ok
+        return (
+            self.attempt == 1
+            and self.response.error_class is ErrorClass.ok
+            and self.in_flight <= 1
+        )
 
     def with_extraction(self, path: str | None, text: str) -> Call:
         """Record what extraction actually found (§6.2).

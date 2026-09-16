@@ -27,6 +27,7 @@ from sweepeval.http.streaming import decode_chunked_json, decode_sse, reassemble
 from sweepeval.schema.call import (
     Call,
     CallRole,
+    ErrorClass,
     ExtractionPart,
     RefusalPart,
     RequestPart,
@@ -77,6 +78,17 @@ class TransportClient:
         self._run_id = run_id
         self._shape = shape
 
+    @property
+    def governor(self) -> Governor:
+        """The rate decisions this client obeys.
+
+        Exposed because the degradation ramp has to widen the in-flight limit
+        for its own probes and nothing else, and it does that by asking the
+        governor rather than by dispatching around it -- every rate decision
+        stays in one place (§7).
+        """
+        return self._governor
+
     async def call(
         self,
         url: str,
@@ -90,6 +102,7 @@ class TransportClient:
         headers: dict[str, str] | None = None,
         stream: bool = False,
         params: dict[str, Any] | None = None,
+        in_flight: int = 1,
     ) -> list[CallResult]:
         """Send one logical call, retrying per policy.
 
@@ -119,6 +132,7 @@ class TransportClient:
                     run_idx=run_idx,
                     turn_idx=turn_idx,
                     role=role,
+                    in_flight=in_flight,
                 )
 
             results.append(result)
@@ -152,6 +166,7 @@ class TransportClient:
         stream: bool,
         attempt: int,
         queue_ms: float,
+        in_flight: int = 1,
         config_id: str,
         unit_id: str,
         run_idx: int,
@@ -226,6 +241,7 @@ class TransportClient:
             turn_idx=turn_idx,
             attempt=attempt,
             role=role,
+            in_flight=in_flight,
             request=request_part,
             response=ResponsePart(
                 status=status,
@@ -233,6 +249,7 @@ class TransportClient:
                 streamed=stream,
                 bytes=len(raw),
                 body_sha256=sha256_hex(raw) if raw else None,
+                error_excerpt=_excerpt(raw, error_class),
             ),
             timing=TimingPart(queue_ms=queue_ms, ttft_ms=ttft_ms, total_ms=total_ms),
             tokens=self._tokens(raw, text, events),
@@ -279,3 +296,22 @@ class TransportClient:
         return TokensPart(
             out=max(1, len(text) // 4) if text else None, source="ESTIMATED"
         )
+
+
+ERROR_EXCERPT_CHARS = 400
+"""How much of a failed body to keep on the row.
+
+Enough to carry a provider's message -- "maximum context length is 128000
+tokens" and the like -- and short enough that a run of 5xx does not turn
+calls.jsonl into a copy of the response bodies. The full body is in the blob
+store either way; this is the part a scorer can read without going there.
+"""
+
+
+def _excerpt(raw: bytes, error_class: ErrorClass) -> str | None:
+    """The head of a failed response body. ``None`` when the call succeeded."""
+    if error_class is ErrorClass.ok or not raw:
+        return None
+    return raw[: ERROR_EXCERPT_CHARS * 4].decode("utf-8", errors="replace")[
+        :ERROR_EXCERPT_CHARS
+    ]

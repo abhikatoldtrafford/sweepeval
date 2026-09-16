@@ -21,6 +21,47 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **The `degradation` family is built (§11, family 8).** It was one of three
+  registering `SKIPPED: not_implemented`, and it went first of the three
+  deliberately: `tool_integrity` and `retrieval` need capabilities every
+  endpoint measured so far reports UNSUPPORTED, so their code would ship long
+  before any real evidence about them could. This one needs none.
+
+  Two dimensions, two metrics, no blending:
+
+  `degradation_resilience` plants a fact, buries it under 1k-24k characters of
+  generated filler and asks for it back. A body the target refuses for
+  exceeding its context window is UNSCORABLE with that reason, not FAIL --
+  "your window is smaller than this probe" and "you read it and forgot" are
+  different findings and only one is about resilience.
+
+  `load_resilience` asks the same question while eight requests are in flight,
+  and scores it **against an identical probe answered alone**. The pairing is
+  the whole metric: scored bare, the first live run against gpt-4.1-nano
+  reported two load failures, and a strictly serial control reproduced both
+  exactly -- that model answers "LINNET" for "LINNET-7704" whether or not
+  anything else is in flight. A number in a family called `degradation` must
+  not report a model's baseline mistake as damage done by load. Both sides
+  failing is now UNSCORABLE, and says so.
+
+  Induced tool failures, the third dimension, report SKIPPED: they need
+  `tool_calling`.
+
+  Neither metric joins the default frontier. §14.1's six dimensions are a
+  decision, and widening them silently would make almost every config
+  non-dominated for everyone. Opt in with `--objectives`.
+
+  The ramp is the only place the tool contends with itself. It is bounded by
+  `Governor.MAX_BURST_CONCURRENCY` (8) rather than by anything a corpus file
+  can name, it is scoped to a block that restores the limit even on an
+  exception, and its calls are excluded from the latency population -- the
+  operational scorer scores every unit's calls, so without that the ramp would
+  have quietly moved `latency_p95_ms` on every run that included this family.
+
+  `standard` and `deep` only, and thirty probes rather than seven: each metric
+  resamples over its own probes, so the bootstrap floor binds on each
+  separately. The cluster-floor contract test caught the first draft.
+
 - **`sweepeval rejudge` — the judge, on a run you already paid for (§11.9,
   §5.1).** `rejudge <run> --judge MODEL --judge-url URL` re-scores a stored
   run, escalates every observation a scoring contract marked ambiguous, and
@@ -90,6 +131,13 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- A failed conversation was recorded under `f"{family}_pass_rate"`: a real
+  metric for security and guardrail, and a name nothing declares for the rest.
+  A failed `context` conversation went to `context_pass_rate`, which no scorer
+  emits, no aggregator reads and no coverage counter counts -- so the row
+  vanished, which is the exact outcome the surrounding code exists to prevent.
+  The metric is now asked of the family's scorer.
+
 - A re-scored observation lost its `blob_ids`. A scorer is handed text rather
   than blob addresses, so the row it returns names none, and nothing noticed
   while a re-score was only ever a report. Persisting those rows — which
@@ -115,6 +163,13 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   ladder -- probing a different model from the one the metrics came from, which
   matters precisely where it is worst: a reasoning model rejects the sampling
   parameters a chat model accepts.
+
+### Comparability
+
+- The corpus gained the degradation family, so `corpus_hash` changes. Runs
+  from before and after refuse to be compared rather than being silently
+  mixed, and a committed `baseline.json` predating this release will need
+  re-taking. `quick` is unaffected in content but shares the hash.
 
 ## [0.2.0] - 2026-09-14
 

@@ -30,6 +30,8 @@ class MockApp:
     def __init__(self, scenario: Scenario) -> None:
         self.scenario = scenario
         self.request_count = 0
+        self.in_flight = 0
+        self.peak_in_flight = 0
         self._nonce_counter = 0
         self._cache: dict[str, str] = {}
         self._call_log: list[dict[str, Any]] = []
@@ -41,7 +43,21 @@ class MockApp:
             return
 
         body = await self._read_body(receive)
-        status, headers, payload = self._handle(scope, body)
+
+        # In-flight accounting for `throttle_above_concurrency`. The yield
+        # matters: `_handle` is synchronous, so without giving the loop a turn
+        # here the first arrival would run to completion before the rest of a
+        # burst had even been counted, and a concurrency limiter would never
+        # see concurrency.
+        import asyncio
+
+        self.in_flight += 1
+        self.peak_in_flight = max(self.peak_in_flight, self.in_flight)
+        try:
+            await asyncio.sleep(0)
+            status, headers, payload = self._handle(scope, body)
+        finally:
+            self.in_flight -= 1
 
         await send(
             {
@@ -98,6 +114,15 @@ class MockApp:
             return auth_error
 
         self.request_count += 1
+
+        if (
+            scenario.throttle_above_concurrency is not None
+            and self.in_flight > scenario.throttle_above_concurrency
+        ):
+            hdrs = [("content-type", "application/json")]
+            if scenario.retry_after_s is not None:
+                hdrs.append(("retry-after", str(scenario.retry_after_s)))
+            return 429, hdrs, b'{"error":{"message":"too many concurrent requests"}}'
 
         if scenario.rate_limit_after and self.request_count > scenario.rate_limit_after:
             hdrs = [("content-type", "application/json")]
@@ -473,6 +498,30 @@ class MockApp:
         earlier = self._CANARY_SHAPED.sub("[redacted]", earlier)
         return f"Earlier you told me: {earlier}"
 
+    def _recall_within_turn(self, request: dict[str, Any]) -> str:
+        """Quote the final user turn's own earlier text back to it.
+
+        Same crude contract as :meth:`_recall`, one turn earlier: a target
+        that demonstrably read what it was sent, so a scorer looking for a
+        planted fact finds it. Only reached when the scenario opts in.
+        """
+        messages = request.get("messages")
+        if not isinstance(messages, list):
+            return ""
+        user_turns = [
+            str(m.get("content", ""))
+            for m in messages
+            if isinstance(m, dict) and m.get("role") == "user"
+        ]
+        if not user_turns:
+            return ""
+
+        final = user_turns[-1]
+        head, sep, _question = final.rpartition("?")
+        if not sep or not head.strip():
+            return ""
+        return "From your message: " + self._CANARY_SHAPED.sub("[redacted]", head)
+
     def _turn_count(self, request: dict[str, Any]) -> int:
         """USER turns, not messages.
 
@@ -591,6 +640,10 @@ class MockApp:
         recalled = self._recall(request)
         if recalled:
             return prefix + recalled
+
+        within = self._recall_within_turn(request) if scenario.reads_its_input else ""
+        if within:
+            return prefix + within
 
         if scenario.echoes_prompt:
             return prefix + _INERT_REPLY

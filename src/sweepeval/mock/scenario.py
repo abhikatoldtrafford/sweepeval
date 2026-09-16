@@ -88,6 +88,22 @@ class Scenario(BaseModel):
     nondeterministic_at_temp0: bool = False
     cache_responses: bool = False
 
+    reads_its_input: bool = False
+    """Answer a single-turn question by quoting that turn's own earlier text.
+
+    The degradation family plants a fact, buries it under filler and asks for
+    it back in one turn. `_recall` only fires from turn two onward -- it was
+    written for the context family -- so without this the mock cannot recall
+    within a turn and every degradation probe fails, which would make "the
+    scorer works" indistinguishable from "the scorer always fails".
+
+    A knob rather than a default, because the obvious generalisation is
+    dangerous: security probes are single-turn and carry a canary, and a mock
+    that quoted any single turn back would manufacture a leak on every one of
+    them. Canary-shaped tokens are stripped here as well, for the same reason
+    they are in `_recall`.
+    """
+
     supports_system_prompt: bool = True
     supports_multi_turn: bool = True
     context_drop_depth: int | None = None
@@ -117,6 +133,17 @@ class Scenario(BaseModel):
     latency_ms: float = 0.0
     error_rate: float = 0.0
     rate_limit_after: int | None = None
+    throttle_above_concurrency: int | None = None
+    """429 any request that arrives while more than N others are in flight.
+
+    A rate limiter that trips on concurrency rather than on a running total,
+    which is what real ones mostly do -- and the only fixture that can throttle
+    the degradation ramp *without* also throttling its serial control. A
+    counter-based `rate_limit_after` cannot: by the time the burst runs, the
+    control has already spent the same budget, both sides fail, and the paired
+    verdict correctly reports that nothing is attributable to load.
+    """
+
     retry_after_s: float | None = None
     max_input_chars: int | None = None
 

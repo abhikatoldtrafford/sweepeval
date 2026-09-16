@@ -26,11 +26,38 @@ single refusal.
 """
 
 
+ABSENT_BY_DESIGN = {("degradation", "quick")}
+"""(family, profile) pairs where the family is deliberately not measured.
+
+`degradation` is `standard` and `deep` only: `quick` is the default profile
+and the demo path, and twenty more probes there -- ten carrying up to 24k
+characters -- would multiply a first run's cost for a dimension a first look
+does not need.
+
+Pinned rather than inferred from "has no probes", because "this family has no
+probes in this profile" is exactly what an accidental corpus deletion looks
+like. A family that vanishes from a profile without being listed here still
+fails.
+"""
+
+
+def test_the_deliberate_absences_are_still_absences() -> None:
+    """The exemption list must not outlive the thing it exempts."""
+    for family, profile in ABSENT_BY_DESIGN:
+        corpus = load_corpus(profile)  # type: ignore[arg-type]
+        assert not corpus.by_family(family), (
+            f"{profile}/{family} now has probes, so it should clear the floor "
+            "like every other family rather than sitting on the exemption list"
+        )
+
+
 @pytest.mark.parametrize("profile", PROFILES)
 @pytest.mark.parametrize("family", sorted(CLUSTER_KEY_BY_FAMILY))
 def test_every_family_clears_the_cluster_floor_with_margin(
     profile: str, family: str
 ) -> None:
+    if (family, profile) in ABSENT_BY_DESIGN:
+        pytest.skip(f"{family} is not measured at {profile} by design")
     corpus = load_corpus(profile)  # type: ignore[arg-type]
     count = corpus.cluster_count(family)
     assert count >= CLUSTER_FLOOR + MARGIN, (
@@ -72,16 +99,25 @@ def test_the_quick_profile_shape() -> None:
 
 
 def test_the_standard_profile_call_count() -> None:
+    """Pinned so a corpus edit is a deliberate, reviewed act.
+
+    80 units / 188 calls until the degradation family landed; its thirty
+    single-turn probes take it to 110 / 218 -- ten long-input, ten dispatched
+    under load and ten serial controls the load metric is scored against. Ten
+    of them carry up to 24k characters of generated filler, which the call
+    count does not show; `test_profiles_doc_matches_the_estimator` covers the
+    token side.
+    """
     corpus = load_corpus("standard")
-    assert corpus.unit_count == 80
-    assert corpus.calls_per_run == 188
+    assert corpus.unit_count == 110
+    assert corpus.calls_per_run == 218
 
 
 def test_the_budget_estimate_sums_calls_not_units() -> None:
     """§12.3: `configs x units x runs` is wrong for every multi-turn unit."""
     corpus = load_corpus("standard")
     estimate = corpus.estimate(configs=12, runs=3)
-    assert estimate["total_calls"] == 188 * 3 * 12
+    assert estimate["total_calls"] == 218 * 3 * 12
     assert estimate["total_calls"] > corpus.unit_count * 3 * 12
 
 

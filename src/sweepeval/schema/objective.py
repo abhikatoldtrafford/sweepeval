@@ -211,6 +211,42 @@ for _objective in (
         weighting="trapezoid over depths; weights published in the report",
     ),
     Objective(
+        id="degradation_resilience",
+        display_label="Recall under long input",
+        direction="maximize",
+        family="degradation",
+        cluster_key="degradation_probe",
+        min_effect=0.02,
+        min_effect_kind="absolute",
+        default=False,
+        note="A planted fact recalled from under a growing haystack. A body "
+        "the target refuses for exceeding its context window is UNSCORABLE, "
+        "not a failure: that is its window, not a loss of resilience. Not a "
+        "default objective yet: the frontier is six dimensions by decision, "
+        "and widening it silently would make almost every config "
+        "non-dominated. Opt in with --objectives.",
+        weighting="all 10 haystack sizes weighted equally, needle at the head "
+        "on five and at the tail on five; size is not a weight (§14.1, I1)",
+    ),
+    Objective(
+        id="load_resilience",
+        display_label="Recall under concurrency",
+        direction="maximize",
+        family="degradation",
+        cluster_key="degradation_probe",
+        min_effect=0.02,
+        min_effect_kind="absolute",
+        default=False,
+        note="The same recall question asked while the tool contends with "
+        "itself. Not a default objective: the probes that produce it are the "
+        "only ones sweepeval sends concurrently, so a frontier that ranked on "
+        "it would rank partly on how hard the run pushed. Rate limiting that "
+        "survives the governor's backoff counts as a failure -- it is what a "
+        "client of that endpoint experiences under load.",
+        weighting="all 10 probes weighted equally; every one is dispatched in "
+        "the same burst, so none carries more of the contention (§14.1, I1)",
+    ),
+    Objective(
         id="latency_mean_ms",
         metric_key="latency_ms",
         display_label="Latency (mean)",

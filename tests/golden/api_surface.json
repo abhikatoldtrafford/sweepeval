@@ -23,13 +23,13 @@
     "sweep": "def(url: 'str', *, key: 'str | None' = None, **kwargs: 'Any') -> 'Any'"
   },
   "sweepeval.schema.call": {
-    "Call": "model(fields=attempt,config_id,extraction,refusal,request,response,role,run_id,run_idx,timing,tokens,ts,turn_idx,unit_id;methods=with_extraction)",
+    "Call": "model(fields=attempt,config_id,extraction,in_flight,refusal,request,response,role,run_id,run_idx,timing,tokens,ts,turn_idx,unit_id;methods=with_extraction)",
     "CallRole": "alias(typing.Literal['target', 'judge', 'discovery', 'capability'])",
     "ErrorClass": "enum(ok,retryable,terminal,refusal,malformed)",
     "ExtractionPart": "model(fields=ok,path,text_len,text_sha256;methods=)",
     "RefusalPart": "model(fields=detected,score;methods=)",
     "RequestPart": "model(fields=body_sha256,bytes,params_hash,shape;methods=)",
-    "ResponsePart": "model(fields=body_sha256,bytes,error_class,status,streamed;methods=)",
+    "ResponsePart": "model(fields=body_sha256,bytes,error_class,error_excerpt,status,streamed;methods=)",
     "TimingPart": "model(fields=queue_ms,total_ms,ttft_ms;methods=)",
     "TokensPart": "model(fields=in_,out,reasoning,source;methods=)"
   },
@@ -66,7 +66,7 @@
     "Role": "alias(typing.Literal['system', 'user', 'assistant'])",
     "ScoringContract": "model(fields=ambiguous_when,canary,expect,kind,marker;methods=)",
     "Turn": "model(fields=role,text;methods=)",
-    "Unit": "model(fields=attack_class,calls_per_run,canary_names,depth,family,on_refusal,params,policy_id,profiles,scoring,severity,template_id,turns,unit_id;methods=verify_id)"
+    "Unit": "model(fields=attack_class,calls_per_run,canary_names,degradation_kind,depth,family,group,on_refusal,params,policy_id,profiles,scoring,severity,template_id,turns,unit_id;methods=verify_id)"
   },
   "sweepeval.store.blob": {
     "BlobStore": "class(methods=exists,get,put_bytes,put_text;props=)",

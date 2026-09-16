@@ -27,6 +27,7 @@ CLUSTER_KEY_BY_FAMILY: dict[str, str] = {
     "guardrail": "guardrail_probe",
     "determinism": "determinism_base_prompt",
     "context": "conversation",
+    "degradation": "degradation_probe",
 }
 
 
@@ -92,6 +93,13 @@ class Corpus:
         templates = self.by_family(family)
         if family == "determinism":
             return sum(1 for t in templates if t.group is None)
+        if family == "degradation":
+            # Two metrics, each resampling over its own probes, so the floor
+            # binds on the smaller of the two rather than on their sum. Twenty
+            # probes that were seventeen long-input and three load would clear
+            # a family-level check while the load interval was meaningless.
+            kinds = [t.degradation_kind for t in templates]
+            return min(kinds.count("long_input"), kinds.count("load"))
         return len(templates)
 
     def depth_strata(self) -> dict[int, int]:

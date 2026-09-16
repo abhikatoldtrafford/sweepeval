@@ -1,0 +1,14 @@
+name: throttles_under_load
+description: >
+  429s any request that arrives while more than two others are in flight, with
+  a Retry-After the governor is obliged to honour. A concurrency limiter, not a
+  quota: it throttles the degradation ramp while leaving the identical serial
+  control untouched, which is the only way to produce a load failure that the
+  paired verdict can actually attribute to load.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+echoes_prompt: true
+reads_its_input: true
+throttle_above_concurrency: 2
+retry_after_s: 0.01

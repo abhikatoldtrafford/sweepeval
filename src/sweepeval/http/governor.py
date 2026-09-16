@@ -17,7 +17,9 @@ from the master seed so backoff is reproducible in tests.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import random
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 from sweepeval.schema.call import ErrorClass
@@ -27,6 +29,7 @@ __all__ = [
     "CIRCUIT_BREAKER_THRESHOLD",
     "DEFAULT_CONCURRENCY",
     "MAX_ATTEMPTS",
+    "MAX_BURST_CONCURRENCY",
     "MAX_DELAY_S",
     "BudgetExceeded",
     "Governor",
@@ -55,6 +58,17 @@ So the constant moved to the truth rather than the behaviour moving to the
 constant. Anything that reports concurrency must read it from here;
 ``tests/unit/test_concurrency_is_what_we_claim.py`` fails if what the tool
 declares and what it does come apart again.
+"""
+
+MAX_BURST_CONCURRENCY = 8
+"""The most the degradation ramp may ever put in flight at once.
+
+Eight, not a number a corpus file chooses. The ramp exists to answer "does
+this degrade under load", and the honest answer needs contention; it is not a
+licence to load-test somebody's production agent, and the corpus is data that
+gets reviewed as data. Eight is enough to contend a rate limiter and small
+enough that a run which trips one is describing the target rather than an
+attack.
 """
 
 MAX_ATTEMPTS = 4
@@ -114,6 +128,34 @@ class Governor:
         if self._semaphore is None:
             self._semaphore = asyncio.Semaphore(self.concurrency)
         return self._semaphore
+
+    @contextlib.asynccontextmanager
+    async def burst(self, width: int) -> AsyncIterator[int]:
+        """Raise the in-flight limit for one deliberate ramp (§11, family 8).
+
+        The degradation family measures what happens under load, which cannot
+        be measured at concurrency 1. Everything else in the tool runs serial
+        and must keep doing so, so this is scoped to a block rather than
+        settable: the limit goes back when the block exits, including on an
+        exception.
+
+        Bounded by :data:`MAX_BURST_CONCURRENCY` whatever the caller asks for.
+        The ramp is aimed at endpoints people depend on, and a corpus file --
+        data, reviewed as data -- must not be able to name a number that turns
+        this tool into a load generator. The cap is here rather than at the
+        call site for the same reason every other rate decision is here.
+
+        Yields the width actually used, which is what the calls record.
+        """
+        width = max(1, min(int(width), MAX_BURST_CONCURRENCY))
+        previous, previous_semaphore = self.concurrency, self._semaphore
+        self.concurrency = width
+        self._semaphore = asyncio.Semaphore(width)
+        try:
+            yield width
+        finally:
+            self.concurrency = previous
+            self._semaphore = previous_semaphore
 
     # --- retry policy ------------------------------------------------------
 

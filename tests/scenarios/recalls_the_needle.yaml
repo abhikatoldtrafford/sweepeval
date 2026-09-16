@@ -1,0 +1,11 @@
+name: recalls_the_needle
+description: >
+  Echoes the prompt, so a fact planted in the body comes back in the answer.
+  The degradation family's PASS case: without a scenario that can recall,
+  every assertion about that family would hold equally on a scorer that
+  returned FAIL unconditionally.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+echoes_prompt: true
+reads_its_input: true

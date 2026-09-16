@@ -101,6 +101,25 @@ class Unit(BaseModel):
     attack_class: str | None = None
     policy_id: str | None = None
     depth: int | None = None
+    group: str | None = None
+    """Templates sharing one are two views of the same probe.
+
+    The degradation family pairs each load probe with an identical serial
+    control through it, so `load_resilience` can be a difference rather than
+    an outcome. Excluded from ``unit_id``, like `on_refusal`: it says how the
+    row is interpreted, not what was sent.
+    """
+
+    degradation_kind: str | None = None
+    """``long_input``, ``load`` or ``serial_control`` for the degradation family (§11, family 8).
+
+    The runner reads it to decide *how* to dispatch: ``load`` units are the
+    only ones in the tool sent concurrently, and they have to be identifiable
+    before scoring rather than after. Excluded from ``unit_id`` for the same
+    reason ``on_refusal`` is -- it governs dispatch and scoring, not what was
+    sent, and changing it must not break the join to an existing run's rows.
+    """
+
     on_refusal: OnRefusal | None = None
     """None means "the family default" (§11.8). Excluded from ``unit_id``:
     it is a scoring instruction, not part of what was sent, so changing it
@@ -159,6 +178,8 @@ class Unit(BaseModel):
         attack_class: str | None = None,
         policy_id: str | None = None,
         depth: int | None = None,
+        group: str | None = None,
+        degradation_kind: str | None = None,
         on_refusal: OnRefusal | None = None,
     ) -> Unit:
         """The only constructor. Derives ``unit_id`` and ``calls_per_run``.
@@ -186,5 +207,7 @@ class Unit(BaseModel):
             attack_class=attack_class,
             policy_id=policy_id,
             depth=depth,
+            group=group,
+            degradation_kind=degradation_kind,
             on_refusal=on_refusal,
         )

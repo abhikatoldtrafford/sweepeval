@@ -226,7 +226,7 @@ def test_no_qualifying_call_makes_latency_unscorable_not_zero() -> None:
 # --- deferred families (§11.10) -------------------------------------------
 
 
-@pytest.mark.parametrize("family", ["tool_integrity", "retrieval", "degradation"])
+@pytest.mark.parametrize("family", ["tool_integrity", "retrieval"])
 def test_a_deferred_family_reports_skipped_with_a_reason(family: str) -> None:
     """A family absent from a report is indistinguishable from one that passed."""
     obs = registry().get(family).score(_unit(), [], _ctx("x"))
@@ -246,8 +246,12 @@ def test_every_shipped_and_deferred_family_is_registered() -> None:
     assert {s.family for s in registry().all()} == {
         # shipped in v0.1
         "security", "guardrail", "operational", "determinism", "context",
-        # declared, reporting SKIPPED until v0.2 (§11.10)
-        "tool_integrity", "retrieval", "degradation",
+        # built since
+        "degradation",
+        # declared, still reporting SKIPPED (§11.10). Both need a capability
+        # every endpoint measured so far reports UNSUPPORTED, which is why
+        # degradation -- which needs none -- was built first.
+        "tool_integrity", "retrieval",
     }
 
 

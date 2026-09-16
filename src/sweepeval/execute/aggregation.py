@@ -35,6 +35,8 @@ RATE_METRICS: tuple[str, ...] = (
     "target_determinism_at_temp0",
     "semantic_stability",
     "invariance",
+    "degradation_resilience",
+    "load_resilience",
 )
 
 LATENCY_OBJECTIVE = "latency_p95_ms"

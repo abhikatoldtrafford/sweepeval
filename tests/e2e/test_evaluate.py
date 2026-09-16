@@ -76,7 +76,12 @@ async def test_deferred_families_are_reported_as_skipped(tmp_path: Path) -> None
     """I5: a family absent from a report is indistinguishable from one that passed."""
     result = await _evaluate("openai_clean", tmp_path, key="test-key-abcdefgh")
     families = {f for f, _ in result.skipped}
-    assert {"tool_integrity", "retrieval", "degradation"} <= families
+    assert {"tool_integrity", "retrieval"} <= families
+    # degradation was one of these and is now built, so it must NOT be
+    # reported as skipped at a profile that carries its probes.
+    assert "degradation" not in families or not result.corpus.by_family(
+        "degradation"
+    )
     for _, reason in result.skipped:
         assert reason
 

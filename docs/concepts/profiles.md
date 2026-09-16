@@ -7,15 +7,23 @@ after them would be gating after the money was gone. That is invariant I9.
 | Profile | Units | Calls/run | Configs | Requests at 3 runs | Wall-clock, serial |
 |---|---|---|---|---|---|
 | `quick` | 40 | 60 | 6 | 1,165 | ~49 min |
-| `standard` | 80 | 188 | 12 | 6,853 | ~286 min |
-| `deep` | 80 | 188 | 12 | more | adds the context-ceiling search |
+| `standard` | 110 | 218 | 12 | 7,933 | ~331 min |
+| `deep` | 110 | 218 | 12 | more | adds the context-ceiling search |
 
 Requests go out **one at a time**. The column above used to be computed at a
 concurrency of 2 that the executor never dispatched, so it promised half the
 wait. It is still a floor rather than a forecast: it assumes 2.5s per request,
 and a reasoning model is several times that. A `standard` sweep against
 reasoning models measured 10.8s per request, which turns the 6,853-request row
-above into roughly **21 hours** rather than five.
+above into roughly **23 hours** rather than five.
+
+`standard` and `deep` gained thirty units when the degradation family landed:
+ten long-input probes, ten dispatched under load, and ten serial controls the
+load metric is scored against. Ten of them carry up to 24,000 characters of
+generated filler, so the family costs far more in *input tokens* than its
+thirty calls suggest -- roughly 98k characters, about 25k tokens, per run per
+config. The request column does not show that; the token estimate in the
+pre-flight does. `quick` is unchanged: the family is not measured there.
 
 The totals include discovery and capability detection, which is why they
 exceed `units x calls x runs x configs`.

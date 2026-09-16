@@ -5,6 +5,7 @@ from __future__ import annotations
 from sweepeval.scorers import (  # noqa: F401
     context,
     deferred,
+    degradation,
     determinism,
     guardrail,
     operational,

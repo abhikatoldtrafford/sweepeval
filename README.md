@@ -63,9 +63,6 @@ coverage (scored / attempted)
 SKIPPED
   retrieval        retrieval=UNSUPPORTED (citation probe)
   tool_integrity   tool_calling=UNSUPPORTED (tool probe)
-  degradation      not_implemented: concurrency ramp, long inputs and induced
-                   tool failures are specified but not built (spec section 11,
-                   family 8)
 
 frontier - 6 non-dominated config(s) in 1 tied cluster(s), at alpha 0.05 family-wise
 
@@ -366,10 +363,18 @@ Written down because a tool whose whole argument is honest measurement should
 be honest about itself. Nothing here is hypothetical; each one was found by
 running the thing.
 
-**Three scorer families are specified and not built.** `tool_integrity`,
-`retrieval` and `degradation` report `SKIPPED: not_implemented`. This is spec
-decision D2, not an oversight, but it means the adversarial suite is narrower
-than the design describes. It is the main content of a 0.3.
+**Two scorer families are specified and not built.** `tool_integrity` and
+`retrieval` report `SKIPPED: not_implemented`. Both need a capability every
+endpoint measured so far reports UNSUPPORTED, which is why `degradation` --
+which needs none -- was built first. This is spec decision D2, not an
+oversight, but it means the adversarial suite is still narrower than the
+design describes.
+
+**Degradation does not yet have much to say.** Against `gpt-4.1-nano` it found
+no loss at all: recall held at every haystack size to 24,000 characters, and
+every load pair held too. That is a real result and a thin one -- a model with
+a very large context window is not where this family earns its keep, and the
+context-limit branch has been exercised only against the mock.
 
 **Guardrail adherence is unresolved on every model measured.** 37–58% of those
 probes are neither a refusal nor a disclosure — they are the hedged, partly
@@ -473,6 +478,14 @@ contract declared it could not settle, and it refuses to score its own output.
 It never rewrites `observations.jsonl`, and it self-checks by reproducing the
 untouched configs' stored numbers exactly. This is what corrected the
 scorecard's security column without re-running 7,917 paid requests.
+
+**A `degradation` family.** Recall from under a growing haystack, and recall
+under contention scored against an identical probe answered alone. The pairing
+is the metric: unpaired, the first live run reported two load failures that a
+serial control reproduced exactly, which would have blamed a model's baseline
+mistake on load. The ramp is the only place the tool contends with itself; it
+is capped at eight in flight and its calls are kept out of the latency
+population.
 
 **`sweepeval rejudge`.** Put the judge on a stored run without paying for the
 run again — the judge decides from the response text, and the text is already

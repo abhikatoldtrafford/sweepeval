@@ -1,0 +1,13 @@
+name: short_context
+description: >
+  Refuses a body past 5,000 characters with OpenAI's own wording -- "maximum
+  context length is N characters", code context_length_exceeded. The
+  degradation family must read that as the target's window rather than as a
+  loss of resilience, so this is the scenario that separates "cannot read
+  this" from "read it and forgot".
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+echoes_prompt: true
+max_input_chars: 5000
+reads_its_input: true

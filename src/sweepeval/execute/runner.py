@@ -15,7 +15,7 @@ answer would unfreeze the probe set and violate I4.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -140,40 +140,59 @@ async def execute_config(
     # sitting in observations.jsonl the whole time, already paid for.
     restored, restored_cross_run = _restore(store, plan) if resume else ({}, [])
 
-    for unit in plan.units:
-        for run_idx in range(plan.runs):
-            if resume and state.is_complete(plan.config_id, unit.unit_id, run_idx):
-                previous = restored.get((unit.unit_id, run_idx))
-                if previous is not None:
-                    outcomes.append(previous)
-                continue
+    def persist(outcome: UnitOutcome) -> None:
+        store.calls.append_many(outcome.calls)
+        store.observations.append_many(outcome.observations)
+        if outcome.text:
+            store.blobs.put_text(outcome.text)
+        elif outcome.unextracted_body:
+            # A 200 the extractor could not read. Stored with
+            # `always=True`, like an error body: this is the one
+            # response a user actually needs to open, and skipping it
+            # made a real extraction gap undiagnosable after the fact.
+            store.blobs.put_bytes(outcome.unextracted_body, always=True)
 
-            outcome = await _run_unit(
-                client, plan, ladder, unit, run_idx, canaries,
-                headers=headers, params=params, text_path=text_path,
-                registry=registry,
-            )
+        # Marked complete only after everything is durably appended, so a
+        # crash between the two leaves orphan rows that aggregation skips
+        # rather than a checkpoint that claims work which was never stored.
+        state.mark_complete(plan.config_id, outcome.unit.unit_id, outcome.run_idx)
+        state.record_budget(
+            requests=len(outcome.calls),
+            tokens=sum(c.tokens.out or 0 for c in outcome.calls),
+        )
+        outcomes.append(outcome)
 
-            store.calls.append_many(outcome.calls)
-            store.observations.append_many(outcome.observations)
-            if outcome.text:
-                store.blobs.put_text(outcome.text)
-            elif outcome.unextracted_body:
-                # A 200 the extractor could not read. Stored with
-                # `always=True`, like an error body: this is the one
-                # response a user actually needs to open, and skipping it
-                # made a real extraction gap undiagnosable after the fact.
-                store.blobs.put_bytes(outcome.unextracted_body, always=True)
+    def pending(units: Sequence[Unit]) -> list[tuple[Unit, int]]:
+        todo: list[tuple[Unit, int]] = []
+        for unit in units:
+            for run_idx in range(plan.runs):
+                if resume and state.is_complete(plan.config_id, unit.unit_id, run_idx):
+                    previous = restored.get((unit.unit_id, run_idx))
+                    if previous is not None:
+                        outcomes.append(previous)
+                    continue
+                todo.append((unit, run_idx))
+        return todo
 
-            # Marked complete only after everything is durably appended, so a
-            # crash between the two leaves orphan rows that aggregation skips
-            # rather than a checkpoint that claims work which was never stored.
-            state.mark_complete(plan.config_id, unit.unit_id, run_idx)
-            state.record_budget(
-                requests=len(outcome.calls),
-                tokens=sum(c.tokens.out or 0 for c in outcome.calls),
-            )
-            outcomes.append(outcome)
+    # The degradation family's load probes are the only thing in the tool sent
+    # concurrently, and they are separated here rather than inside the loop so
+    # that everything else keeps the serial path it has always had (§7, D25).
+    serial = [u for u in plan.units if u.degradation_kind != "load"]
+    under_load = [u for u in plan.units if u.degradation_kind == "load"]
+
+    for unit, run_idx in pending(serial):
+        persist(await _run_unit(
+            client, plan, ladder, unit, run_idx, canaries,
+            headers=headers, params=params, text_path=text_path,
+            registry=registry,
+        ))
+
+    todo = pending(under_load)
+    if todo:
+        await _run_under_load(
+            client, plan, ladder, todo, canaries, headers=headers, params=params,
+            text_path=text_path, registry=registry, persist=persist,
+        )
 
     # Cross-run scorers need the response TEXT of every run at once. Restored
     # outcomes now carry theirs, recovered from the blob store, so the metrics
@@ -362,6 +381,55 @@ def _finalize_cross_run(
     return observations
 
 
+LOAD_CONCURRENCY = 8
+"""In-flight requests during the degradation ramp (§11, family 8).
+
+Capped again by ``Governor.MAX_BURST_CONCURRENCY``, which is the authority;
+this is the family's ask, not its permission.
+"""
+
+
+async def _run_under_load(
+    client: TransportClient,
+    plan: RunPlan,
+    ladder: LadderResult,
+    todo: Sequence[tuple[Unit, int]],
+    canaries: Mapping[tuple[str, int, str], str],
+    *,
+    headers: dict[str, str],
+    params: dict[str, Any],
+    text_path: str | None,
+    registry: ScorerRegistry,
+    persist: Callable[[UnitOutcome], None],
+) -> None:
+    """Dispatch the load probes together, then store them one at a time.
+
+    Contention is the condition under test, so these have to be in flight at
+    once -- which is the one thing the rest of the tool never does. The width
+    is asked of the governor rather than taken, so the cap, the budget, the
+    retry policy and the circuit breaker all still apply.
+
+    **Persisted after the gather, not inside it.** The store's logs are
+    append-only files and its checkpoints are read-modify-write; writing to
+    them from eight coroutines would interleave rows and lose completions. The
+    network is what needs to be concurrent, and it is the only part that is.
+    """
+    import asyncio
+
+    async with client.governor.burst(LOAD_CONCURRENCY) as width:
+        outcomes = await asyncio.gather(*(
+            _run_unit(
+                client, plan, ladder, unit, run_idx, canaries,
+                headers=headers, params=params, text_path=text_path,
+                registry=registry, in_flight=width,
+            )
+            for unit, run_idx in todo
+        ))
+
+    for outcome in outcomes:
+        persist(outcome)
+
+
 async def _run_unit(
     client: TransportClient,
     plan: RunPlan,
@@ -374,6 +442,7 @@ async def _run_unit(
     params: dict[str, Any],
     text_path: str | None,
     registry: ScorerRegistry,
+    in_flight: int = 1,
 ) -> UnitOutcome:
     unit_canaries = {
         name: canaries[(unit.unit_id, run_idx, name)] for name in unit.canary_names
@@ -389,6 +458,7 @@ async def _run_unit(
         calls, text, ok, last_body = await _play_conversation(
             client, plan, ladder, unit, run_idx, unit_canaries,
             headers=headers, params=params, text_path=text_path,
+            in_flight=in_flight,
         )
         if ok:
             break
@@ -420,6 +490,7 @@ async def _play_conversation(
     headers: dict[str, str],
     params: dict[str, Any],
     text_path: str | None,
+    in_flight: int = 1,
 ) -> tuple[list[Call], str, bool, bytes | None]:
     """Play a unit's scripted turns by stateless replay (§9.2).
 
@@ -451,6 +522,7 @@ async def _play_conversation(
             config_id=plan.config_id, unit_id=unit.unit_id,
             run_idx=run_idx, turn_idx=turn_idx,
             headers=headers, params=params,
+            in_flight=in_flight,
         )
         calls.extend(r.call for r in results)
 
@@ -561,11 +633,19 @@ def _score(
         _operational(unit, calls, context, registry)
     )
 
-    if failed:
+    if failed and not _scores_failures(registry, unit):
         # I5: a failed conversation is UNSCORABLE with a reason, never a zero.
+        #
+        # Unless the family says otherwise. For almost everything, a
+        # conversation that never completed says nothing about what was being
+        # measured. For `degradation` the failure *is* the measurement: being
+        # throttled under contention, or refused for sending too large a body,
+        # is precisely what that family asks about, and a canned UNSCORABLE
+        # here threw both away before its scorer could tell them apart.
         observations.append(
             context.observation(
-                scorer=unit.family, version=0, metric=f"{unit.family}_pass_rate",
+                scorer=unit.family, version=0,
+                metric=_metric_for(registry, unit),
                 family=unit.family, verdict=Verdict.UNSCORABLE,
                 reason=reason, unit=unit,
             )
@@ -584,7 +664,7 @@ def _score(
             context.observation(
                 scorer=unit.family,
                 version=0,
-                metric=f"{unit.family}_pass_rate",
+                metric=_metric_for(registry, unit),
                 family=unit.family,
                 verdict=Verdict.SKIPPED,
                 reason=(
@@ -621,3 +701,43 @@ def _operational(
     return list(scorer.score(unit, list(calls), context))
 
 
+def _scores_failures(registry: ScorerRegistry, unit: Unit) -> bool:
+    """Whether this family wants to score a conversation that never completed.
+
+    Opt-in, defaulting to no. A failed conversation genuinely says nothing
+    about retention or guardrail adherence, so those families must keep the
+    canned UNSCORABLE. `degradation` is the exception the flag exists for: a
+    throttle under contention and a body refused for its size are two of the
+    three things that family measures, and both arrive as failures.
+    """
+    try:
+        scorer = registry.get(unit.family)
+    except KeyError:
+        return False
+    return bool(getattr(scorer, "scores_failures", False))
+
+
+def _metric_for(registry: ScorerRegistry, unit: Unit) -> str:
+    """Which metric an unscorable unit-run should be recorded against.
+
+    Asked of the scorer rather than guessed. This was
+    ``f"{unit.family}_pass_rate"``, which is a real metric for security and
+    guardrail and a name nothing declares for the rest: a failed `context`
+    conversation was filed under `context_pass_rate`, which no scorer emits,
+    no aggregator reads and no coverage counter counts -- so it vanished,
+    which is the exact outcome the neighbouring comment exists to prevent.
+
+    A scorer may implement ``metric_for(unit)`` when one family covers several
+    metrics; otherwise the first metric it declares is the answer. The old
+    string survives only as the last resort, for a family with no scorer at
+    all -- the case that is already being reported.
+    """
+    try:
+        scorer = registry.get(unit.family)
+    except KeyError:
+        return f"{unit.family}_pass_rate"
+    chooser = getattr(scorer, "metric_for", None)
+    if callable(chooser):
+        return str(chooser(unit))
+    declared = scorer.metrics()
+    return declared[0].metric if declared else f"{unit.family}_pass_rate"

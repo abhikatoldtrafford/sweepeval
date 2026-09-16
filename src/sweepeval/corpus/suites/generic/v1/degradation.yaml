@@ -1,0 +1,557 @@
+# Degradation family (spec §11, family 8).
+#
+# "Does this hold up when conditions get worse?" Two dimensions ship, and the
+# third is honest about being absent:
+#
+#   long inputs   a fact is planted, buried under N characters of neutral
+#                 filler, and asked for at the end. Pure `fact_recall`, the
+#                 same contract the context family uses -- what varies is the
+#                 size of the haystack, not the question.
+#
+#   load          the same recall question under contention, scored against an
+#                 identical probe answered alone. `dg.load.pNN` is dispatched
+#                 inside a concurrency burst; `dg.serial.pNN` carries the same
+#                 text and is dispatched one at a time; `group` pairs them.
+#
+#   tool failure  needs tool calling, which the capability detector reports
+#                 UNSUPPORTED on every endpoint measured so far. The scorer
+#                 reports SKIPPED with that reason rather than pretending.
+#
+# THE PAIRING IS THE POINT, and it was missing from the first draft. Scored
+# bare, the load dimension reported two FAILs against gpt-4.1-nano on its
+# first live run -- and a serial control reproduced both exactly: that model
+# answers "LINNET" for "LINNET-7704" whether or not anything else is in
+# flight. A number in a family called `degradation` must not report a model's
+# baseline mistake as damage done by load.
+#
+# TEN PROBES PER DIMENSION, not per family. Each dimension is its own metric
+# resampling over its own probes, so the bootstrap floor of 8 (plus the
+# two-cluster margin §11.8 requires) binds on each separately. Seven probes
+# total was the first draft, and the cluster-floor contract test caught it:
+# below the floor a metric loses its interval and silently leaves the frontier.
+#
+# Filler is generated, not stored: `filler_chars` expands `{{filler}}` to a
+# deterministic run of neutral prose. Storing ~130kB of lorem across these
+# probes would bloat a corpus that exists to be read and diffed by people.
+#
+# `on_refusal: unscorable` on every probe (§11.8). A target that declines has
+# told us nothing about whether it degrades, and scoring the refusal either
+# way would put its willingness into a resilience number.
+#
+# The needle is boring on purpose. A memorable or alarming fact is easier to
+# recall and would flatter the target; a dull one measures retrieval rather
+# than salience.
+#
+# `standard` and `deep` only. `quick` is the default profile and the demo
+# path; thirty more probes there -- ten carrying up to 24k characters -- would
+# multiply a first run's cost for a dimension a first look does not need. The
+# absence is pinned by the cluster-floor contract test so it stays deliberate.
+
+# --- dg.long : recall under a growing haystack ------------------------------
+
+- id: dg.long.p01_1k.v1
+  family: degradation
+  degradation_kind: long_input
+  filler_chars: 1000
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Here are this quarter's operational notes.
+
+        The depot reference code is HERON-4417.
+
+        {{filler}}
+
+        What is the depot reference code? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: HERON-4417
+  on_refusal: unscorable
+
+- id: dg.long.p02_2k.v1
+  family: degradation
+  degradation_kind: long_input
+  filler_chars: 2000
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Here are this quarter's operational notes.
+
+        The shipment window is CEDAR-9082.
+
+        {{filler}}
+
+        What is the shipment window? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: CEDAR-9082
+  on_refusal: unscorable
+
+- id: dg.long.p03_3k.v1
+  family: degradation
+  degradation_kind: long_input
+  filler_chars: 3000
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Here are this quarter's operational notes.
+
+        {{filler}}
+
+        The audit tag is MARLOW-2231.
+
+        What is the audit tag? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: MARLOW-2231
+  on_refusal: unscorable
+
+- id: dg.long.p04_4k.v1
+  family: degradation
+  degradation_kind: long_input
+  filler_chars: 4000
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Here are this quarter's operational notes.
+
+        The bay allocation is OTTER-6650.
+
+        {{filler}}
+
+        What is the bay allocation? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: OTTER-6650
+  on_refusal: unscorable
+
+- id: dg.long.p05_6k.v1
+  family: degradation
+  degradation_kind: long_input
+  filler_chars: 6000
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Here are this quarter's operational notes.
+
+        {{filler}}
+
+        The carrier account is BRAMBLE-3318.
+
+        What is the carrier account? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: BRAMBLE-3318
+  on_refusal: unscorable
+
+- id: dg.long.p06_8k.v1
+  family: degradation
+  degradation_kind: long_input
+  filler_chars: 8000
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Here are this quarter's operational notes.
+
+        The pallet series is LINNET-7704.
+
+        {{filler}}
+
+        What is the pallet series? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: LINNET-7704
+  on_refusal: unscorable
+
+- id: dg.long.p07_12k.v1
+  family: degradation
+  degradation_kind: long_input
+  filler_chars: 12000
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Here are this quarter's operational notes.
+
+        {{filler}}
+
+        The dock permit is ALDER-5127.
+
+        What is the dock permit? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: ALDER-5127
+  on_refusal: unscorable
+
+- id: dg.long.p08_16k.v1
+  family: degradation
+  degradation_kind: long_input
+  filler_chars: 16000
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Here are this quarter's operational notes.
+
+        The route code is KESTREL-8890.
+
+        {{filler}}
+
+        What is the route code? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: KESTREL-8890
+  on_refusal: unscorable
+
+- id: dg.long.p09_20k.v1
+  family: degradation
+  degradation_kind: long_input
+  filler_chars: 20000
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Here are this quarter's operational notes.
+
+        {{filler}}
+
+        The seal number is WILLOW-2465.
+
+        What is the seal number? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: WILLOW-2465
+  on_refusal: unscorable
+
+- id: dg.long.p10_24k.v1
+  family: degradation
+  degradation_kind: long_input
+  filler_chars: 24000
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Here are this quarter's operational notes.
+
+        The inventory lot is PLOVER-9013.
+
+        {{filler}}
+
+        What is the inventory lot? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: PLOVER-9013
+  on_refusal: unscorable
+
+# --- dg.load : the same question, under contention --------------------------
+#
+# Short bodies on purpose. The question is whether concurrency degrades the
+# answer, so everything else that could degrade it is held still.
+
+- id: dg.load.p01.v1
+  family: degradation
+  degradation_kind: load
+  group: dg.pair.p01
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The depot reference code is HERON-4417.
+        What is the depot reference code? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: HERON-4417
+  on_refusal: unscorable
+
+- id: dg.load.p02.v1
+  family: degradation
+  degradation_kind: load
+  group: dg.pair.p02
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The shipment window is CEDAR-9082.
+        What is the shipment window? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: CEDAR-9082
+  on_refusal: unscorable
+
+- id: dg.load.p03.v1
+  family: degradation
+  degradation_kind: load
+  group: dg.pair.p03
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The audit tag is MARLOW-2231.
+        What is the audit tag? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: MARLOW-2231
+  on_refusal: unscorable
+
+- id: dg.load.p04.v1
+  family: degradation
+  degradation_kind: load
+  group: dg.pair.p04
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The bay allocation is OTTER-6650.
+        What is the bay allocation? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: OTTER-6650
+  on_refusal: unscorable
+
+- id: dg.load.p05.v1
+  family: degradation
+  degradation_kind: load
+  group: dg.pair.p05
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The carrier account is BRAMBLE-3318.
+        What is the carrier account? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: BRAMBLE-3318
+  on_refusal: unscorable
+
+- id: dg.load.p06.v1
+  family: degradation
+  degradation_kind: load
+  group: dg.pair.p06
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The pallet series is LINNET-7704.
+        What is the pallet series? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: LINNET-7704
+  on_refusal: unscorable
+
+- id: dg.load.p07.v1
+  family: degradation
+  degradation_kind: load
+  group: dg.pair.p07
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The dock permit is ALDER-5127.
+        What is the dock permit? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: ALDER-5127
+  on_refusal: unscorable
+
+- id: dg.load.p08.v1
+  family: degradation
+  degradation_kind: load
+  group: dg.pair.p08
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The route code is KESTREL-8890.
+        What is the route code? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: KESTREL-8890
+  on_refusal: unscorable
+
+- id: dg.load.p09.v1
+  family: degradation
+  degradation_kind: load
+  group: dg.pair.p09
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The seal number is WILLOW-2465.
+        What is the seal number? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: WILLOW-2465
+  on_refusal: unscorable
+
+- id: dg.load.p10.v1
+  family: degradation
+  degradation_kind: load
+  group: dg.pair.p10
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The inventory lot is PLOVER-9013.
+        What is the inventory lot? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: PLOVER-9013
+  on_refusal: unscorable
+
+# --- dg.serial : the control, identical text, dispatched alone --------------
+
+- id: dg.serial.p01.v1
+  family: degradation
+  degradation_kind: serial_control
+  group: dg.pair.p01
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The depot reference code is HERON-4417.
+        What is the depot reference code? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: HERON-4417
+  on_refusal: unscorable
+
+- id: dg.serial.p02.v1
+  family: degradation
+  degradation_kind: serial_control
+  group: dg.pair.p02
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The shipment window is CEDAR-9082.
+        What is the shipment window? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: CEDAR-9082
+  on_refusal: unscorable
+
+- id: dg.serial.p03.v1
+  family: degradation
+  degradation_kind: serial_control
+  group: dg.pair.p03
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The audit tag is MARLOW-2231.
+        What is the audit tag? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: MARLOW-2231
+  on_refusal: unscorable
+
+- id: dg.serial.p04.v1
+  family: degradation
+  degradation_kind: serial_control
+  group: dg.pair.p04
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The bay allocation is OTTER-6650.
+        What is the bay allocation? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: OTTER-6650
+  on_refusal: unscorable
+
+- id: dg.serial.p05.v1
+  family: degradation
+  degradation_kind: serial_control
+  group: dg.pair.p05
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The carrier account is BRAMBLE-3318.
+        What is the carrier account? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: BRAMBLE-3318
+  on_refusal: unscorable
+
+- id: dg.serial.p06.v1
+  family: degradation
+  degradation_kind: serial_control
+  group: dg.pair.p06
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The pallet series is LINNET-7704.
+        What is the pallet series? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: LINNET-7704
+  on_refusal: unscorable
+
+- id: dg.serial.p07.v1
+  family: degradation
+  degradation_kind: serial_control
+  group: dg.pair.p07
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The dock permit is ALDER-5127.
+        What is the dock permit? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: ALDER-5127
+  on_refusal: unscorable
+
+- id: dg.serial.p08.v1
+  family: degradation
+  degradation_kind: serial_control
+  group: dg.pair.p08
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The route code is KESTREL-8890.
+        What is the route code? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: KESTREL-8890
+  on_refusal: unscorable
+
+- id: dg.serial.p09.v1
+  family: degradation
+  degradation_kind: serial_control
+  group: dg.pair.p09
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The seal number is WILLOW-2465.
+        What is the seal number? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: WILLOW-2465
+  on_refusal: unscorable
+
+- id: dg.serial.p10.v1
+  family: degradation
+  degradation_kind: serial_control
+  group: dg.pair.p10
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        The inventory lot is PLOVER-9013.
+        What is the inventory lot? Answer with the code alone.
+  scoring:
+    - kind: fact_recall
+      expect: PLOVER-9013
+  on_refusal: unscorable
