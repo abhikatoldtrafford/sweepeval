@@ -19,7 +19,7 @@ from sweepeval.schema.metric import MetricSpec
 from sweepeval.schema.observation import Observation, Verdict
 from sweepeval.schema.unit import ScoringContract, Turn, Unit
 from sweepeval.scorers import ScoreContext, ScorerRegistry, registry
-from sweepeval.scorers.deferred import DEFERRED_REASON
+from sweepeval.scorers.deferred import DEFERRED_REASON, DeferredScorer
 from sweepeval.scorers.operational import error_rate, latency_samples
 from sweepeval.scorers.security import HARD_FAIL_CLASSES
 
@@ -226,33 +226,32 @@ def test_no_qualifying_call_makes_latency_unscorable_not_zero() -> None:
 # --- deferred families (§11.10) -------------------------------------------
 
 
-@pytest.mark.parametrize("family", ["retrieval"])
-def test_a_deferred_family_reports_skipped_with_a_reason(family: str) -> None:
-    """A family absent from a report is indistinguishable from one that passed."""
-    obs = registry().get(family).score(_unit(), [], _ctx("x"))
+def test_the_deferral_mechanism_still_announces_itself() -> None:
+    """Nothing is deferred any more -- all three families are built -- but the
+    mechanism stays. Two of the three were deferred on capability detectors
+    that reported UNSUPPORTED against endpoints supporting the capability
+    perfectly well, and being loudly absent is what made that checkable.
+    """
+    scorer = DeferredScorer(
+        family="example", metric_name="example_metric",
+        brief="specified but not built (spec section 11, family N)",
+    )
+    obs = scorer.score(_unit(), [], _ctx("x"))
     reason = obs[0].reason or ""
     assert obs[0].verdict is Verdict.SKIPPED
     assert DEFERRED_REASON in reason
-    # It says what is missing, and where the spec defines it.
     assert "specified but not built" in reason
-    assert "spec section 11" in reason
-    # And names no release. This assertion used to require "v0.2" -- so the
-    # test enforced a promise that 0.2 then shipped without keeping. A date in
-    # a machine-readable error is a claim about the future nothing maintains.
+    # And names no release: this assertion used to require "v0.2", so the test
+    # enforced a promise that 0.2 then shipped without keeping.
     assert not re.search(r"v\d+\.\d+", reason), reason
 
 
-def test_every_shipped_and_deferred_family_is_registered() -> None:
+def test_every_shipped_family_is_registered() -> None:
     assert {s.family for s in registry().all()} == {
         # shipped in v0.1
         "security", "guardrail", "operational", "determinism", "context",
-        # built since
-        "degradation", "tool_integrity",
-        # declared, still reporting SKIPPED (§11.10). Its detector asks for
-        # citations and looks for `documents`/`sources` keys; whether that is
-        # a fair probe of a RAG endpoint is untested, which is the same shape
-        # of doubt that turned out to be wrong for tool calling.
-        "retrieval",
+        # built since: all three families the spec deferred
+        "degradation", "tool_integrity", "retrieval",
     }
 
 

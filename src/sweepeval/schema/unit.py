@@ -101,6 +101,10 @@ class Unit(BaseModel):
     attack_class: str | None = None
     policy_id: str | None = None
     depth: int | None = None
+    expects_sources: bool | None = None
+    """Whether this probe should surface retrieved sources; ``False`` means
+    nothing could source it and citing anything is fabrication."""
+
     expects_tool: str | None = None
     """Which offered tool this probe should elicit; ``""`` means none should be.
 
@@ -187,6 +191,7 @@ class Unit(BaseModel):
         depth: int | None = None,
         group: str | None = None,
         expects_tool: str | None = None,
+        expects_sources: bool | None = None,
         degradation_kind: str | None = None,
         on_refusal: OnRefusal | None = None,
     ) -> Unit:
@@ -217,6 +222,7 @@ class Unit(BaseModel):
             depth=depth,
             group=group,
             expects_tool=expects_tool,
+            expects_sources=expects_sources,
             degradation_kind=degradation_kind,
             on_refusal=on_refusal,
         )

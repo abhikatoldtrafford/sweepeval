@@ -88,6 +88,28 @@ class Scenario(BaseModel):
     nondeterministic_at_temp0: bool = False
     cache_responses: bool = False
 
+    citation_support: str | None = None
+    """Which channel this target surfaces retrieved sources through (§11, f.6).
+
+    ``annotations``  ``message.annotations[].url_citation`` -- what a live
+                     search-backed model returns, and the channel the old
+                     detector missed entirely
+    ``anthropic``    ``citations`` inside a content block
+    ``gemini``       ``groundingMetadata.groundingChunks[].web``
+    ``documents``    a top-level documents array, the self-hosted RAG shape
+    ``inline``       no structured field: links written into the prose
+
+    ``None`` means the target surfaces nothing, which is a plain model.
+    """
+
+    citation_fault: str | None = None
+    """A citation-level defect: ``no_source``, ``bad_span``, or ``fabricate``.
+
+    ``fabricate`` is the important one -- it cites something for a question
+    nothing could source, which is the failure the unsourceable probes exist
+    to catch.
+    """
+
     tool_support: str | None = None
     """How this target answers a request that offers tools (§11, family 4).
 

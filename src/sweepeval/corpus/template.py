@@ -34,7 +34,7 @@ PROFILES: tuple[Profile, ...] = ("quick", "standard", "deep")
 
 Family = Literal[
     "security", "guardrail", "determinism", "context", "operational",
-    "degradation", "tool_integrity",
+    "degradation", "tool_integrity", "retrieval",
 ]
 
 DegradationKind = Literal["long_input", "load", "serial_control"]
@@ -118,6 +118,15 @@ class ProbeTemplate(BaseModel):
     the condition under test and it cannot be produced one request at a time.
     """
 
+    expects_sources: bool | None = None
+    """Whether this probe should surface retrieved sources (§11, family 6).
+
+    ``False`` is the interesting half: a question nothing could have a source
+    for. A target that cites something anyway has fabricated it, which is the
+    failure mode that matters most and is invisible in a corpus where every
+    probe expects citations.
+    """
+
     expects_tool: str | None = None
     """Which offered tool this probe should elicit (§11, family 4).
 
@@ -149,6 +158,10 @@ class ProbeTemplate(BaseModel):
             raise ValueError(f"{self.id}: guardrail templates declare a policy_id")
         if self.family == "context" and self.depth is None:
             raise ValueError(f"{self.id}: context templates declare a depth")
+        if self.family == "retrieval" and self.expects_sources is None:
+            raise ValueError(
+                f"{self.id}: retrieval templates declare expects_sources"
+            )
         if self.family == "tool_integrity" and self.expects_tool is None:
             raise ValueError(
                 f"{self.id}: tool_integrity templates declare expects_tool "
@@ -242,6 +255,7 @@ class ProbeTemplate(BaseModel):
             depth=self.depth,
             group=self.group,
             expects_tool=self.expects_tool,
+            expects_sources=self.expects_sources,
             degradation_kind=self.degradation_kind,
             on_refusal=self.on_refusal,
         )

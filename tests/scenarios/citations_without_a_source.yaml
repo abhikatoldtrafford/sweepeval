@@ -1,0 +1,7 @@
+name: citations_without_a_source
+description: Surfaces a citation object that identifies nothing.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+citation_support: annotations
+citation_fault: no_source

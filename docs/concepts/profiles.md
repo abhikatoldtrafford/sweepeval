@@ -7,8 +7,8 @@ after them would be gating after the money was gone. That is invariant I9.
 | Profile | Units | Calls/run | Configs | Requests at 3 runs | Wall-clock, serial |
 |---|---|---|---|---|---|
 | `quick` | 40 | 60 | 6 | 1,165 | ~49 min |
-| `standard` | 122 | 230 | 12 | 8,365 | ~349 min |
-| `deep` | 122 | 230 | 12 | more | adds the context-ceiling search |
+| `standard` | 134 | 242 | 12 | 8,797 | ~367 min |
+| `deep` | 134 | 242 | 12 | more | adds the context-ceiling search |
 
 Requests go out **one at a time**. The column above used to be computed at a
 concurrency of 2 that the executor never dispatched, so it promised half the
@@ -17,7 +17,8 @@ and a reasoning model is several times that. A `standard` sweep against
 reasoning models measured 10.8s per request, which turns the 6,853-request row
 above into roughly **23 hours** rather than five.
 
-`standard` and `deep` also carry twelve `tool_integrity` probes, each of which
+`standard` and `deep` also carry twelve `tool_integrity` probes and twelve
+`retrieval` probes, each of which
 sends the three offered tool schemas alongside the prompt -- a fixed input-token
 cost per probe that the request count does not show.
 

@@ -1,31 +1,21 @@
-"""Deferred scorer families (spec §11.10, D2).
+"""The deferred-family mechanism (spec §11.10, D2).
 
-Retrieval registers a **real** scorer object that emits
-``SKIPPED: not_implemented``.
+A family the spec declares and this build does not implement registers a
+**real** scorer object emitting ``SKIPPED: not_implemented``, so it appears in
+every report. A family absent from a report is indistinguishable from one that
+passed.
 
-Degradation and tool integrity used to be here and are now built. Degradation
-went first because it needs no capability at all. Tool integrity went second
-once the capability detector was fixed: it had been sending a bare prompt and
-looking for `tool_calls` in the reply, without ever offering a tool, so
-`tool_calling=UNSUPPORTED` was structurally the only answer a chat API could
-give -- and this family was deferred partly on the strength of that reading.
+Nothing uses it right now: tool integrity, retrieval and degradation were the
+three, and all three are built. Two of them were deferred partly on capability
+detectors that reported UNSUPPORTED against endpoints which supported the
+capability perfectly well -- the tool probe never offered a tool, and the
+citation probe looked for keys a real retrieval endpoint does not use. Being
+loudly absent is what made those readings checkable at all.
 
-Retrieval is still here, and its detector has the same shape of problem
-waiting: it asks for citations and looks for `documents`/`sources` keys in the
-response. Whether that is a fair probe of a RAG endpoint is untested.
-
-The reason names no version and the briefs promise no release. They used to:
-the scorers said ``not_implemented_in_v0.1`` and every brief said the family
-would "land in v0.2". Then 0.2 shipped without them, so the tool announced a
-broken promise on every run — in a machine-readable string a user could
-reasonably have planned around. A release date in an error message is a claim
-about the future that nothing keeps true.
-
-Registering them rather than omitting them does two things. It proves the
-plugin interface against the hardest cases — schema-persisting, N-run,
-concurrency-ramping scorers — before an external contributor meets it. And it
-keeps the output honest: a family absent from a report is indistinguishable
-from a family that passed.
+The reason string names no version and the briefs promise no release. They
+used to say ``not_implemented_in_v0.1`` and "lands in v0.2"; 0.2 then shipped
+without them, so the tool announced a broken promise on every run, in a
+machine-readable string a user could reasonably have planned around.
 """
 
 from __future__ import annotations
@@ -38,7 +28,7 @@ from sweepeval.schema.call import Call
 from sweepeval.schema.metric import MetricSpec
 from sweepeval.schema.observation import Observation, Verdict
 from sweepeval.schema.unit import Unit
-from sweepeval.scorers.base import ScoreContext, register
+from sweepeval.scorers.base import ScoreContext
 
 __all__ = ["DEFERRED_REASON", "DeferredScorer"]
 
@@ -88,17 +78,11 @@ class DeferredScorer:
         ]
 
 
-for _scorer in (
-    DeferredScorer(
-        family="retrieval",
-        metric_name="retrieval_ndcg",
-        requires=frozenset({Capability.RETRIEVAL}),
-        brief=(
-            "precision@k, recall@k, MRR and nDCG are specified but not built "
-            "(spec section 11, family 6)"
-        ),
-    ),
-):
-    register(_scorer)
-
-del _scorer
+# Nothing is registered here any more. All three families the spec deferred --
+# tool integrity, retrieval and degradation -- are built.
+#
+# `DeferredScorer` stays, and not out of sentiment. It is the mechanism a
+# family uses to be *visibly* absent instead of silently missing, and the next
+# one to be specified ahead of being built will need it. Two of the three were
+# deferred on capability readings that turned out to be wrong, which is an
+# argument for keeping the announcement cheap rather than for deleting it.

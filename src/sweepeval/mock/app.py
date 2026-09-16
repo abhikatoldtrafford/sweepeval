@@ -186,6 +186,8 @@ class MockApp:
         envelope = self._envelope(text, prompt, request)
         if request.get("tools") or request.get("functions"):
             envelope = self._with_tool_call(envelope, request, prompt)
+        if scenario.citation_support:
+            envelope = self._with_citations(envelope, text, prompt)
 
         return (
             200,
@@ -316,6 +318,64 @@ class MockApp:
             envelope["choices"][0]["message"]["content"] = (
                 "I'll look that up." + chr(10)
                 + f'<tool_call>{{"name": "{name}", "arguments": {encoded}}}</tool_call>'
+            )
+        return envelope
+
+
+    # --- retrieval (§11, family 6) ---------------------------------------
+
+    _UNSOURCEABLE_CUES = (
+        "2041", "2099", "99145", "breakfast", "meridian supply co",
+    )
+
+    def _with_citations(
+        self, envelope: dict[str, Any], text: str, prompt: str
+    ) -> dict[str, Any]:
+        """Surface sources in this scenario's channel.
+
+        A target that only cites when it plausibly could is the default, so
+        the unsourceable probes have a target that can pass them.
+        `citation_fault: fabricate` is what makes one that cannot.
+        """
+        scenario = self.scenario
+        lowered = prompt.casefold()
+        unsourceable = any(cue in lowered for cue in self._UNSOURCEABLE_CUES)
+        if unsourceable and scenario.citation_fault != "fabricate":
+            return envelope
+
+        url = "" if scenario.citation_fault == "no_source" else (
+            "https://example.test/source/1"
+        )
+        title = "A source the mock invented"
+        start, end = (0, len(text)) if text else (None, None)
+        if scenario.citation_fault == "bad_span":
+            start, end = 10, len(text) + 5_000
+
+        support = scenario.citation_support
+        if support == "annotations":
+            body: dict[str, Any] = {"url": url, "title": title}
+            if start is not None:
+                body["start_index"], body["end_index"] = start, end
+            envelope["choices"][0]["message"]["annotations"] = [
+                {"type": "url_citation", "url_citation": body}
+            ]
+        elif support == "anthropic":
+            block = {"type": "text", "text": text, "citations": [
+                {"url": url, "document_title": title,
+                 "start_char_index": start, "end_char_index": end}
+            ]}
+            envelope.setdefault("content", []).append(block)
+        elif support == "gemini":
+            envelope.setdefault("candidates", [{}])[0]["groundingMetadata"] = {
+                "groundingChunks": [{"web": {"uri": url, "title": title}}]
+            }
+        elif support == "documents":
+            envelope["documents"] = [
+                {"id": "doc-1", "url": url, "title": title}
+            ]
+        elif support == "inline":
+            envelope["choices"][0]["message"]["content"] = (
+                f"{text} See [{title}]({url or 'https://example.test/x'})."
             )
         return envelope
 

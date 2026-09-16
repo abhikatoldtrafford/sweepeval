@@ -1,0 +1,10 @@
+name: fabricates_citations
+description: >
+  Cites a source for everything, including questions nothing could source.
+  The failure the unsourceable probes exist to catch, and one that a corpus
+  of only answerable questions could never see.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+citation_support: annotations
+citation_fault: fabricate

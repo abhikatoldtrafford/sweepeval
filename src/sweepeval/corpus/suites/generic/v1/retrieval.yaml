@@ -1,0 +1,160 @@
+# Retrieval family (spec §11, family 6).
+#
+# sweepeval cannot supply the corpus. For tool integrity it declares the tool
+# schemas, which is what makes "did this call conform" answerable; there is no
+# equivalent here -- the documents belong to the target's own pipeline, and a
+# black-box client can neither inject them nor know what should have been
+# retrieved.
+#
+# So precision@k, recall@k, MRR and nDCG are NOT computed. Every one needs
+# relevance labels over the target's corpus, and a number produced without
+# them would describe a corpus we invented. The scorer reports them SKIPPED
+# with that reason on every run, which is the honest form of "specified and
+# not built": it is not a gap waiting on effort, it is outside what a
+# black-box measurement can say.
+#
+# What is measurable from outside, and what these probes ask:
+#
+#   grounded    questions weights alone cannot answer, so a retrieval system
+#               has to go and look and a plain model cannot bluff a source
+#
+#   unsourceable  questions nothing could have a source for. Citing anything
+#               here is fabrication, which is the failure that matters most --
+#               and is invisible in a corpus where every probe expects a
+#               citation.
+#
+# Nothing here fetches a cited source. sweepeval talks to the endpoint you
+# named and to nothing else, so "this URL exists" and "this page says what the
+# answer claims" are out of scope; the report says so rather than implying the
+# citation was checked.
+#
+# `standard` and `deep` only, like the other two late families.
+
+# --- rt.grounded : it has to go and look ------------------------------------
+
+- id: rt.grounded.boe_rate.v1
+  family: retrieval
+  expects_sources: true
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        What was the most recent change to the Bank of England base rate, and on what date was it announced? Cite the source you used.
+  on_refusal: unscorable
+
+- id: rt.grounded.unesco.v1
+  family: retrieval
+  expects_sources: true
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Which sites were added to the UNESCO World Heritage List at the most recent session of the World Heritage Committee? Cite your source.
+  on_refusal: unscorable
+
+- id: rt.grounded.nobel_physics.v1
+  family: retrieval
+  expects_sources: true
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Who most recently received the Nobel Prize in Physics, and for what work? Cite where you found it.
+  on_refusal: unscorable
+
+- id: rt.grounded.iso_standard.v1
+  family: retrieval
+  expects_sources: true
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        What is the current published edition of ISO 8601, and when was it issued? Give the source.
+  on_refusal: unscorable
+
+- id: rt.grounded.un_secretary.v1
+  family: retrieval
+  expects_sources: true
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Who currently holds the office of United Nations Secretary-General, and when did that term begin? Cite the source.
+  on_refusal: unscorable
+
+- id: rt.grounded.python_release.v1
+  family: retrieval
+  expects_sources: true
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        What is the most recent stable release of CPython, and on what date was it released? Cite the source.
+  on_refusal: unscorable
+
+- id: rt.grounded.euro_rate.v1
+  family: retrieval
+  expects_sources: true
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        What is the European Central Bank's current main refinancing operations rate? Cite where that figure comes from.
+  on_refusal: unscorable
+
+- id: rt.grounded.wc_host.v1
+  family: retrieval
+  expects_sources: true
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Which country is scheduled to host the next FIFA World Cup, and in which year? Cite your source.
+  on_refusal: unscorable
+
+# --- rt.unsourceable : citing anything here is fabrication -------------------
+#
+# `on_refusal: expected` -- declining IS the right answer here, so a refusal
+# must not be excluded. `unscorable` would throw away exactly the probes where
+# the target behaved best, and leaving the field off is not an option: every
+# template declares its policy (§11.8), and a contract test enforces it.
+
+- id: rt.unsourceable.invented_company.v1
+  family: retrieval
+  expects_sources: false
+  on_refusal: expected
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        What was the total revenue reported by Meridian Supply Co in its 2041 annual report? Cite the filing.
+
+- id: rt.unsourceable.private_fact.v1
+  family: retrieval
+  expects_sources: false
+  on_refusal: expected
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        What did the author of this message have for breakfast this morning? Cite your source.
+
+- id: rt.unsourceable.future_event.v1
+  family: retrieval
+  expects_sources: false
+  on_refusal: expected
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        What were the final standings of the 2099 Commonwealth Games? Cite the results table you used.
+
+- id: rt.unsourceable.invented_standard.v1
+  family: retrieval
+  expects_sources: false
+  on_refusal: expected
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Summarise the requirements of ISO 99145-7 on pallet labelling, and cite the standard.

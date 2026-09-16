@@ -1,0 +1,10 @@
+name: citation_span_out_of_bounds
+description: >
+  Surfaces a citation whose character span runs past the end of the answer it
+  claims to annotate. Structurally wrong on its own terms, and checkable
+  without ever fetching the source.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+citation_support: annotations
+citation_fault: bad_span

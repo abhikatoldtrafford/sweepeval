@@ -26,11 +26,15 @@ single refusal.
 """
 
 
-ABSENT_BY_DESIGN = {("degradation", "quick"), ("tool_integrity", "quick")}
+ABSENT_BY_DESIGN = {
+    ("degradation", "quick"),
+    ("tool_integrity", "quick"),
+    ("retrieval", "quick"),
+}
 """(family, profile) pairs where the family is deliberately not measured.
 
-`degradation` and `tool_integrity` are `standard` and `deep` only: `quick`
-is the default profile
+The three late families -- `degradation`, `tool_integrity` and `retrieval` --
+are `standard` and `deep` only: `quick` is the default profile
 and the demo path, and twenty more probes there -- ten carrying up to 24k
 characters -- would multiply a first run's cost for a dimension a first look
 does not need.
@@ -105,7 +109,7 @@ def test_the_standard_profile_call_count() -> None:
     80 units / 188 calls until the deferred families started landing. The
     degradation family adds thirty single-turn probes -- ten long-input, ten
     dispatched under load, ten serial controls the load metric is scored
-    against -- and tool integrity adds twelve, taking it to 122 / 230.
+    against -- and tool integrity and retrieval add twelve each, taking it to 134 / 242.
 
     Neither cost shows in the call count: ten degradation probes carry up to
     24k characters of filler, and every tool probe sends three tool schemas
@@ -113,15 +117,15 @@ def test_the_standard_profile_call_count() -> None:
     token side.
     """
     corpus = load_corpus("standard")
-    assert corpus.unit_count == 122
-    assert corpus.calls_per_run == 230
+    assert corpus.unit_count == 134
+    assert corpus.calls_per_run == 242
 
 
 def test_the_budget_estimate_sums_calls_not_units() -> None:
     """§12.3: `configs x units x runs` is wrong for every multi-turn unit."""
     corpus = load_corpus("standard")
     estimate = corpus.estimate(configs=12, runs=3)
-    assert estimate["total_calls"] == 230 * 3 * 12
+    assert estimate["total_calls"] == 242 * 3 * 12
     assert estimate["total_calls"] > corpus.unit_count * 3 * 12
 
 

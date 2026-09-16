@@ -1,0 +1,9 @@
+name: cites_via_gemini
+description: >
+  Surfaces retrieved sources through the gemini channel. One of five, because
+  "has retrieval" is not one wire format and a reader that covered only the
+  common one would report every other shape as having no retrieval at all.
+shape: gemini
+paths: ["/v1beta/models/mock:generateContent"]
+auth: none
+citation_support: gemini

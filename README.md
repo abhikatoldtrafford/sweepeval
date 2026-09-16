@@ -363,12 +363,23 @@ Written down because a tool whose whole argument is honest measurement should
 be honest about itself. Nothing here is hypothetical; each one was found by
 running the thing.
 
-**One scorer family is specified and not built.** `retrieval` reports
-`SKIPPED: not_implemented`. Its detector asks for citations and looks for
-`documents`/`sources` keys in the response, and whether that is a fair probe
-of a RAG endpoint is untested -- which is the same shape of doubt that turned
-out to be wrong for tool calling, where the detector never offered a tool and
-so could only ever answer UNSUPPORTED.
+**Classic IR metrics are not computed and cannot be.** precision@k, recall@k,
+MRR and nDCG need relevance labels over the target's own corpus, and a
+black-box client cannot supply the corpus or know what should have been
+retrieved. They are reported `SKIPPED` with that reason on every run rather
+than approximated. This is not a gap waiting on effort.
+
+**No citation is ever fetched.** sweepeval talks to the endpoint you name and
+to nothing else, so "this URL exists" and "this page supports the claim" are
+out of scope. What is checked is that a citation identifies something and that
+its span lands inside the answer it annotates.
+
+**Two capability detectors were wrong, and one may still be.** The tool probe
+never offered a tool; the citation probe asked for sources with no answer to
+source and looked for keys a real retrieval endpoint does not use. Both
+reported UNSUPPORTED against endpoints that supported the capability, and both
+deferred a scorer family on that reading. The remaining detectors have not had
+the same scrutiny.
 
 **Degradation does not yet have much to say.** Against `gpt-4.1-nano` it found
 no loss at all: recall held at every haystack size to 24,000 characters, and
@@ -478,6 +489,13 @@ contract declared it could not settle, and it refuses to score its own output.
 It never rewrites `observations.jsonl`, and it self-checks by reproducing the
 untouched configs' stored numbers exactly. This is what corrected the
 scorecard's security column without re-running 7,917 paid requests.
+
+**A `retrieval` family.** Whether sources are surfaced when a question needs
+them, whether they are structurally sound, and whether the same question
+surfaces the same sources twice. A third of the probes ask about things
+nothing could source -- fabricating a citation there is the failure that
+matters. Live against a search-backed model, it cited real catalogue pages for
+an ISO standard that does not exist.
 
 **A `tool_integrity` family.** sweepeval offers its own toolkit and scores
 what comes back against the schema it sent: right tool, arguments that

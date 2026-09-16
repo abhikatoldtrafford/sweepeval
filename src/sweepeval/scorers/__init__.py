@@ -9,6 +9,7 @@ from sweepeval.scorers import (  # noqa: F401
     determinism,
     guardrail,
     operational,
+    retrieval,
     security,
     tool_integrity,
 )

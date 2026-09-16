@@ -21,6 +21,47 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **The `retrieval` family is built (§11, family 6) — the last deferred one —
+  and its detector was wrong in the same way the tool one was.** The citation
+  probe asked "What sources support your answer? Cite them." with no prior
+  answer to support, then searched the response for
+  `documents`/`sources`/`citations`/`retrieved`/`chunks`. Measured against
+  `gpt-5-search-api`, a live search-backed model returning real citations: not
+  one of those keys appears anywhere in its response. Its sources arrive as
+  `message.annotations[].url_citation`, so a working retrieval endpoint was
+  reported UNSUPPORTED, indistinguishable from a plain model. The probe now
+  asks something weights alone cannot answer, and five channels are read.
+
+  **precision@k, recall@k, MRR and nDCG are not computed, and never will be
+  from here.** They need relevance labels over the target's own corpus;
+  sweepeval cannot supply the corpus, enumerate it, or know what should have
+  been retrieved. They are reported SKIPPED with that reason on every run --
+  a different statement from "not built yet", and one the tests pin.
+
+  **Nothing fetches a cited source.** Resolving a citation would mean issuing
+  requests to third parties on a user's behalf, from a tool that promises it
+  makes no network calls except to the target you name. So "this URL exists"
+  and "this page supports the claim" are out of scope and the report does not
+  imply otherwise. A contract test parses the module's imports to keep it that
+  way.
+
+  What is measurable: `citation_integrity` (sources surfaced when the question
+  needs them, identifying something, with spans that land inside the answer --
+  and nothing cited for a question nothing could source) and
+  `citation_stability` (the same question surfacing the same sources twice,
+  compared as a set, because ordering is ranking and ranking needs labels).
+
+  Four of the twelve probes ask about a company that does not exist, a
+  standard never published, an event that has not happened and a fact nobody
+  could know. Live against `gpt-5-search-api`: every grounded probe passed
+  with well-formed citations, it declined the invented company and the private
+  fact -- and it cited real ISO catalogue pages for **ISO 99145-7, which does
+  not exist**, on both runs. Citation stability failed on every grounded
+  probe: the same question surfaces different sources run to run.
+
+  Neither metric is a default objective, for the same reason as the other two
+  late families.
+
 - **The `tool_integrity` family is built (§11, family 4), and the capability
   detector that deferred it was wrong.** The detector sent a bare prompt --
   "if you have a tool available, call it" -- and looked for `tool_calls` in the
@@ -212,7 +253,8 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Comparability
 
-- The corpus gained the degradation and tool-integrity families, so `corpus_hash` changes. Runs
+- The corpus gained the degradation, tool-integrity and retrieval families, so
+  `corpus_hash` changes. Runs
   from before and after refuse to be compared rather than being silently
   mixed, and a committed `baseline.json` predating this release will need
   re-taking. `quick` is unaffected in content but shares the hash.

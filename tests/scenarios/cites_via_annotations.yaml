@@ -1,0 +1,9 @@
+name: cites_via_annotations
+description: >
+  Surfaces retrieved sources through the annotations channel. One of five, because
+  "has retrieval" is not one wire format and a reader that covered only the
+  common one would report every other shape as having no retrieval at all.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+citation_support: annotations

@@ -1,0 +1,8 @@
+name: cites_nothing
+description: >
+  Answers without surfacing any source. The honest UNSUPPORTED case: a plain
+  model, which must be distinguishable from a retrieval endpoint rather than
+  scored the same way the old detector scored both.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none

@@ -29,6 +29,7 @@ CLUSTER_KEY_BY_FAMILY: dict[str, str] = {
     "context": "conversation",
     "degradation": "degradation_probe",
     "tool_integrity": "tool_probe",
+    "retrieval": "retrieval_probe",
 }
 
 

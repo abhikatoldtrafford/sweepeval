@@ -1,0 +1,9 @@
+name: cites_via_anthropic
+description: >
+  Surfaces retrieved sources through the anthropic channel. One of five, because
+  "has retrieval" is not one wire format and a reader that covered only the
+  common one would report every other shape as having no retrieval at all.
+shape: anthropic
+paths: ["/v1/messages"]
+auth: none
+citation_support: anthropic
