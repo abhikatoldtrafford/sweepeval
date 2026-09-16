@@ -46,8 +46,21 @@ class Scenario(BaseModel):
     """Paths that answer. Anything else 404s, which drives stage C."""
 
     supports_streaming: bool = True
+    """When false, ``stream: true`` is rejected; when true, SSE is returned.
+
+    Nothing read it, and nothing in the mock streamed at all -- so the
+    transport's SSE decoding had no coverage from a fixture, and the scenario
+    named `anthropic_streaming` did not stream.
+    """
+
     emit_usage: bool = True
     emit_usage_when_streaming: bool = True
+    """Whether a streamed response carries a final usage block.
+
+    Providers differ, and a stream without one is why token counts fall back
+    to the `chars/4` estimate.
+    """
+
     expose_models: tuple[str, ...] = ()
     """Served at /v1/models. Empty means the endpoint has no model list."""
 
@@ -156,6 +169,13 @@ class Scenario(BaseModel):
 
     supports_system_prompt: bool = True
     supports_multi_turn: bool = True
+    """When false, a body carrying an assistant turn is rejected outright.
+
+    What an endpoint without conversation support actually does. The field
+    existed and nothing read it, so there was no fixture for a target that
+    refuses history and `detect_multi_turn` had never been run against one.
+    """
+
     context_drop_depth: int | None = None
     """Turns beyond this depth are forgotten."""
 
@@ -176,12 +196,29 @@ class Scenario(BaseModel):
     leaks_system_prompt: bool = False
     refuses_everything: bool = False
     refusal_text: str = "I can't help with that request."
+    structured_refusal: bool = False
+    """Refuse through a sibling field with a null content, OpenAI's structured
+    refusal path.
+
+    The shape that cost a live run five of gpt-5.1's 72 security trials: the
+    extractor read the content field, found nothing, and scored the probes the
+    target had handled *best* as unscorable.
+    """
+
 
     # --- faults -----------------------------------------------------------
     fail_paths: tuple[str, ...] = ()
+    """Paths that always return 500, for exercising retry and the breaker."""
+
     malformed_json: bool = False
     latency_ms: float = 0.0
     error_rate: float = 0.0
+    """Fraction of requests that fail with a 500.
+
+    Deterministic, not random: every Nth request by count, so a test that
+    depends on it is reproducible.
+    """
+
     rate_limit_after: int | None = None
     throttle_above_concurrency: int | None = None
     """429 any request that arrives while more than N others are in flight.

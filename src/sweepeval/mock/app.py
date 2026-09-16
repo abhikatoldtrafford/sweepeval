@@ -130,6 +130,24 @@ class MockApp:
                 hdrs.append(("retry-after", str(scenario.retry_after_s)))
             return 429, hdrs, b'{"error":{"message":"rate limited"}}'
 
+        if path in scenario.fail_paths:
+            return (
+                500,
+                [("content-type", "application/json")],
+                b'{"error":{"message":"this path always fails"}}',
+            )
+
+        if scenario.error_rate > 0:
+            # Deterministic, not random: every Nth request by count, so a test
+            # that depends on this is reproducible.
+            period = max(1, round(1 / scenario.error_rate))
+            if self.request_count % period == 0:
+                return (
+                    500,
+                    [("content-type", "application/json")],
+                    b'{"error":{"message":"injected failure"}}',
+                )
+
         try:
             request = json.loads(body) if body else {}
         except json.JSONDecodeError:
@@ -138,6 +156,23 @@ class MockApp:
                 [("content-type", "application/json")],
                 json.dumps(
                     {"error": {"message": "invalid JSON body", "param": None}}
+                ).encode(),
+            )
+
+        if not scenario.supports_multi_turn and self._has_assistant_turn(request):
+            return (
+                400,
+                [("content-type", "application/json")],
+                json.dumps(
+                    {
+                        "error": {
+                            "message": (
+                                "this endpoint accepts a single user message; "
+                                "conversation history is not supported"
+                            ),
+                            "param": "messages",
+                        }
+                    }
                 ).encode(),
             )
 
@@ -183,7 +218,21 @@ class MockApp:
         if scenario.malformed_json:
             return 200, [("content-type", "application/json")], b'{"choices": [{"mess'
 
+        if request.get("stream"):
+            if not scenario.supports_streaming:
+                return (
+                    400,
+                    [("content-type", "application/json")],
+                    json.dumps(
+                        {"error": {"message": "stream is not supported",
+                                   "param": "stream"}}
+                    ).encode(),
+                )
+            return self._stream(text)
+
         envelope = self._envelope(text, prompt, request)
+        if scenario.structured_refusal and self._is_refusal(text):
+            envelope = self._as_structured_refusal(envelope, text)
         if request.get("tools") or request.get("functions"):
             envelope = self._with_tool_call(envelope, request, prompt)
         if scenario.citation_support:
@@ -195,6 +244,72 @@ class MockApp:
             json.dumps(envelope).encode(),
         )
 
+
+
+
+    def _is_refusal(self, text: str) -> bool:
+        return text.strip() == self.scenario.refusal_text.strip()
+
+    @staticmethod
+    def _as_structured_refusal(
+        envelope: dict[str, Any], text: str
+    ) -> dict[str, Any]:
+        """Move a refusal out of `content` and into a sibling field.
+
+        OpenAI's structured refusal path: `content` null, `refusal` populated.
+        Discovery never sees it -- inert probes do not get refused -- so the
+        extractor looks in the wrong place at exactly the moment the target
+        behaved best. It cost a live run five of gpt-5.1's 72 security trials.
+        """
+        choices = envelope.get("choices")
+        if isinstance(choices, list) and choices:
+            message = choices[0].get("message")
+            if isinstance(message, dict):
+                message["content"] = None
+                message["refusal"] = text
+        return envelope
+
+    @staticmethod
+    def _has_assistant_turn(request: dict[str, Any]) -> bool:
+        messages = request.get("messages")
+        if not isinstance(messages, list):
+            return False
+        return any(
+            isinstance(m, dict) and m.get("role") == "assistant" for m in messages
+        )
+
+    def _stream(self, text: str) -> tuple[int, list[tuple[str, str]], bytes]:
+        """An SSE stream in OpenAI's delta shape.
+
+        The mock had no streaming at all, so the transport's SSE decoding had
+        no fixture behind it and the scenario called `anthropic_streaming` did
+        not stream. One chunk per word, which is enough to make reassembly
+        non-trivial without making the fixture slow.
+        """
+        lines: list[str] = []
+        for word in text.split(" "):
+            chunk = {
+                "choices": [{"index": 0, "delta": {"content": word + " "}}]
+            }
+            lines.append(f"data: {json.dumps(chunk)}")
+        if self.scenario.emit_usage_when_streaming:
+            lines.append(
+                "data: "
+                + json.dumps(
+                    {
+                        "choices": [{"index": 0, "delta": {},
+                                     "finish_reason": "stop"}],
+                        "usage": {
+                            "prompt_tokens": 10,
+                            "completion_tokens": max(1, len(text.split())),
+                        },
+                    }
+                )
+            )
+        lines.append("data: [DONE]")
+        separator = chr(10) * 2
+        payload = (separator.join(lines) + separator).encode()
+        return 200, [("content-type", "text/event-stream")], payload
 
     # --- tool calling (§11, family 4) ------------------------------------
 

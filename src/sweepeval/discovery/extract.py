@@ -26,10 +26,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 __all__ = [
+    "SIBLING_REFUSAL_FIELDS",
     "STOPLIST",
     "ExtractionCandidate",
     "ExtractionResult",
     "extract_at",
+    "extract_text",
     "infer_delta_path",
     "infer_from_nonce",
     "infer_from_walk",
@@ -130,6 +132,48 @@ def extract_at(payload: Any, path: str) -> str | None:
     if not strings:
         return None
     return "".join(strings)
+
+
+SIBLING_REFUSAL_FIELDS: tuple[str, ...] = ("refusal", "refusal_text")
+"""Fields a provider may use *instead of* the content field, for a refusal.
+
+OpenAI returns ``content: null`` with ``refusal`` populated when the model
+takes its structured refusal path. Discovery finds the content field, because
+that is where text lives in every response it probed with -- inert prompts do
+not get refused -- so a refusal extracts to nothing.
+
+The cost lands in the worst place: a refusal is the *correct* answer to an
+injection probe, so the trials lost are the ones where the target behaved
+best. Five of gpt-5.1's 72 security trials went UNSCORABLE in a live run for
+exactly this.
+"""
+
+
+def extract_text(payload: Any, path: str | None) -> str:
+    """Text at ``path``, falling back to a refusal beside it.
+
+    Lives here rather than in the runner because it had exactly one caller and
+    needed two. The runner learned to read a structured refusal after a live
+    run lost five trials to one; the capability detector did not, so
+    `detect_refusal_baseline` -- whose entire job is recognising how a target
+    declines -- was blind to the most structured way of declining there is.
+    The sibling is only consulted when the content field is empty, so a target
+    that answers normally is unaffected.
+    """
+    if payload is None or not path:
+        return ""
+    text = extract_at(payload, path) or ""
+    if text:
+        return text
+
+    parent, _, _ = path.rpartition(".")
+    if not parent:
+        return ""
+    for name in SIBLING_REFUSAL_FIELDS:
+        found = extract_at(payload, f"{parent}.{name}")
+        if found:
+            return found
+    return ""
 
 
 def _tokenise(path: str) -> list[str | int]:

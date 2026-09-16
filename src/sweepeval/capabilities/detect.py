@@ -23,7 +23,7 @@ import httpx
 from sweepeval.capabilities.normalise import normalise, token_jaccard
 from sweepeval.discovery.auth import apply_auth
 from sweepeval.discovery.budget import Attempt, DiscoveryBudget
-from sweepeval.discovery.extract import extract_at
+from sweepeval.discovery.extract import extract_text
 from sweepeval.discovery.ladder import LadderResult, _post, body_for_turns
 
 __all__ = [
@@ -167,9 +167,15 @@ async def _ask(
 
 
 def _text_of(payload: Any, path: str | None) -> str:
-    if payload is None or path is None:
-        return ""
-    return extract_at(payload, path) or ""
+    """The response text, or a structured refusal standing in for it.
+
+    Shared with the runner rather than reimplemented. This used to be a bare
+    `extract_at`, so a target taking OpenAI's structured refusal path -- null
+    `content`, populated `refusal` -- read as empty here, and
+    `detect_refusal_baseline`, whose entire job is recognising how a target
+    declines, could not see the most structured way of declining there is.
+    """
+    return extract_text(payload, path)
 
 
 def _turns_body(ladder: LadderResult, turns: list[tuple[str, str]]) -> dict[str, Any]:
@@ -223,6 +229,14 @@ async def detect_system_prompt(
 
     s1, p1, _ = await _ask(client, ladder, key, budget, with_system, label="system+")
     s2, p2, _ = await _ask(client, ladder, key, budget, without, label="system-")
+    # A second control, to measure the target's own variability. Without it,
+    # "the output changed" cannot be told from "this target never says the
+    # same thing twice", and a target that silently DROPS the system role
+    # reports SUPPORTED on nothing but its own noise -- which is precisely the
+    # case this detector exists to catch. Verified against the mock: a
+    # scenario with supports_system_prompt=False and nondeterminism reported
+    # SUPPORTED with marker_honoured=False.
+    s3, p3, _ = await _ask(client, ladder, key, budget, without, label="system=")
 
     if s1 == 0 or s2 == 0:
         return CapabilityResult(
@@ -240,23 +254,44 @@ async def detect_system_prompt(
 
     text_with = _text_of(p1, text_path)
     text_without = _text_of(p2, text_path)
+    control = _text_of(p3, text_path) if s3 and s3 < 400 else ""
+
     honoured = _SYSTEM_MARKER.casefold() in normalise(text_with)
     changed = token_jaccard(text_with, text_without) < 0.9
+    # How much this target varies when nothing about the request changed.
+    steady = bool(control) and token_jaccard(text_without, control) >= 0.9
 
-    support = Support.SUPPORTED if (honoured or changed) else Support.UNSUPPORTED
+    if honoured:
+        support, reason = Support.SUPPORTED, "accepted and honoured"
+    elif changed and steady:
+        support, reason = (
+            Support.SUPPORTED,
+            "accepted; output changed and the target is otherwise steady",
+        )
+    elif changed:
+        # The difference is real and so is the noise. Saying SUPPORTED here
+        # hands the sweep a system-prompt axis whose variants may be identical.
+        support, reason = (
+            Support.INCONCLUSIVE,
+            "output changed, but two identical requests also differ, so the "
+            "change cannot be attributed to the system role",
+        )
+    else:
+        support, reason = (
+            Support.UNSUPPORTED,
+            "accepted but output unchanged — the role is being dropped",
+        )
+
     return CapabilityResult(
         Capability.SYSTEM_PROMPT,
         support,
         "behavioural probe",
-        "high" if honoured else "medium",
+        "high" if honoured else "medium" if steady else "low",
         {
             "marker_honoured": honoured,
             "output_changed": changed,
-            "reason": (
-                "accepted and honoured" if honoured
-                else "accepted and output changed" if changed
-                else "accepted but output unchanged — the role is being dropped"
-            ),
+            "target_is_steady": steady,
+            "reason": reason,
         },
     )
 
