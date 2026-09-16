@@ -88,6 +88,34 @@ class Scenario(BaseModel):
     nondeterministic_at_temp0: bool = False
     cache_responses: bool = False
 
+    tool_support: str | None = None
+    """How this target answers a request that offers tools (§11, family 4).
+
+    "Supports tool calling" is not one wire format, and a family that scores
+    tool calls has to be tested against every shape it claims to read:
+
+      ``native``      the current OpenAI ``tool_calls`` array, arguments as a
+                      JSON *string*
+      ``legacy``      the deprecated single ``function_call`` object, still
+                      emitted by older deployments and several proxies
+      ``anthropic``   a ``tool_use`` content block, arguments already an object
+      ``imitated``    no structured field at all: a ``<tool_call>`` blob
+                      written into the message text, which is what a model
+                      without native support does when asked to call one
+
+    ``None`` means the target ignores the offer and answers in prose, which is
+    the case the detector must read as UNSUPPORTED rather than as a failure.
+    """
+
+    tool_argument_fault: str | None = None
+    """An argument-level defect to inject: ``malformed_json``, ``missing_required``,
+    ``wrong_type``, ``unknown_tool``, or ``over_call``.
+
+    Separate from `tool_support` because they are orthogonal: every encoding
+    can carry a broken call, and a scorer that only ever saw well-formed calls
+    from one encoding would pass on all four while validating none of them.
+    """
+
     reads_its_input: bool = False
     """Answer a single-turn question by quoting that turn's own earlier text.
 

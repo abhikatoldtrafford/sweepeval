@@ -1,0 +1,166 @@
+# Tool integrity family (spec §11, family 4).
+#
+# sweepeval declares the toolkit (`sweepeval/tools.py`) and offers it on every
+# probe in this family. It has to: it cannot know a target's own tool schema,
+# and knowing the schema is exactly what makes "did this call conform"
+# answerable. Nothing offered is ever executed -- a tool call is a *request*
+# to run something, and it is the request that gets scored.
+#
+# Two metrics over these probes:
+#
+#   tool_call_validity        did the target call the right tool, with
+#                             arguments that match the schema it was sent
+#   tool_selection_stability  does the same prompt pick the same tool across
+#                             runs (cross-run, like determinism)
+#
+# `expects_tool: ""` is not the same as leaving it out. It means *no* tool
+# should be called, because the question needs none -- over-calling is a real
+# failure mode, and a corpus where every probe expects a call cannot see it.
+# Three of the twelve are like that, including one written to bait a call.
+#
+# Twelve probes, not ten: both metrics resample over this same set, and §11.8
+# excludes a refused trial, so the two-cluster margin has to come out of one
+# pool rather than two.
+#
+# `standard` and `deep` only, like degradation. Offering three tool schemas on
+# every probe is real input tokens, and `quick` is the demo path.
+
+# --- ti.select : the right tool for the job ---------------------------------
+
+- id: ti.select.time.v1
+  family: tool_integrity
+  expects_tool: get_utc_time
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        What is the current time in UTC, to the second?
+  on_refusal: unscorable
+
+- id: ti.select.order.v1
+  family: tool_integrity
+  expects_tool: lookup_order
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        What is the status of order 48812?
+  on_refusal: unscorable
+
+- id: ti.select.currency.v1
+  family: tool_integrity
+  expects_tool: convert_currency
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Convert 250 GBP to USD.
+  on_refusal: unscorable
+
+- id: ti.select.order_indirect.v1
+  family: tool_integrity
+  expects_tool: lookup_order
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        A customer is asking where their delivery has got to. Their order
+        number is 51190. Find out what has happened to it.
+  on_refusal: unscorable
+
+- id: ti.select.currency_indirect.v1
+  family: tool_integrity
+  expects_tool: convert_currency
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        A supplier has quoted 1,480 EUR. I need that figure in GBP for the
+        purchase order.
+  on_refusal: unscorable
+
+- id: ti.select.time_indirect.v1
+  family: tool_integrity
+  expects_tool: get_utc_time
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Timestamp this handover note for me in UTC.
+  on_refusal: unscorable
+
+# --- ti.args : arguments the schema will actually accept --------------------
+#
+# The order id and the currency codes are in the prompt but not in the shape
+# the schema wants, so a target that passes them through verbatim produces a
+# call that does not validate.
+
+- id: ti.args.order_prefixed.v1
+  family: tool_integrity
+  expects_tool: lookup_order
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Check on order #44-7781 please.
+  on_refusal: unscorable
+
+- id: ti.args.currency_words.v1
+  family: tool_integrity
+  expects_tool: convert_currency
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        How much is ninety dollars in pounds sterling?
+  on_refusal: unscorable
+
+- id: ti.args.currency_partial.v1
+  family: tool_integrity
+  expects_tool: convert_currency
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Convert 40 AUD. I need it in Japanese yen.
+  on_refusal: unscorable
+
+# --- ti.restraint : questions that need no tool -----------------------------
+#
+# Over-calling is a failure. A target that reaches for a tool on every turn is
+# as broken as one that never reaches for the right one, and it costs money
+# every time it does it.
+
+- id: ti.restraint.general.v1
+  family: tool_integrity
+  expects_tool: ""
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        In one sentence, what is the difference between a purchase order and
+        an invoice?
+  on_refusal: unscorable
+
+- id: ti.restraint.arithmetic.v1
+  family: tool_integrity
+  expects_tool: ""
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        If a pallet holds 48 cartons and I have 6 pallets, how many cartons is
+        that? Answer with the number.
+  on_refusal: unscorable
+
+# Bait: it mentions an order and a currency, and asks for neither.
+- id: ti.restraint.bait.v1
+  family: tool_integrity
+  expects_tool: ""
+  profiles: [standard, deep]
+  turns:
+    - role: user
+      text: |
+        Our policy is that orders like 48812 are invoiced in GBP. Restate that
+        policy in your own words. Do not look anything up.
+  on_refusal: unscorable

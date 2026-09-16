@@ -1,0 +1,7 @@
+name: missing_required_argument
+description: Calls the right tool and omits an argument its schema requires.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+tool_support: native
+tool_argument_fault: missing_required

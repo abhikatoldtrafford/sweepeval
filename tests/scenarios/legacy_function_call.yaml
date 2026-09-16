@@ -1,0 +1,7 @@
+name: legacy_function_call
+description: >
+  Emits the deprecated single function_call object. Still what several proxies and older deployments return, and a scorer that only read tool_calls would score this target as having no tool support at all.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+tool_support: legacy

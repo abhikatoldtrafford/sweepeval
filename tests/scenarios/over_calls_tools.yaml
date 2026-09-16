@@ -1,0 +1,10 @@
+name: over_calls_tools
+description: >
+  Reaches for a tool even on questions that need none. A real failure mode
+  that costs money on every turn, and invisible to a corpus where every probe
+  expects a call.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+tool_support: native
+tool_argument_fault: over_call

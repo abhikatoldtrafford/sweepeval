@@ -21,6 +21,45 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **The `tool_integrity` family is built (§11, family 4), and the capability
+  detector that deferred it was wrong.** The detector sent a bare prompt --
+  "if you have a tool available, call it" -- and looked for `tool_calls` in the
+  reply, without ever offering a tool. A chat API only emits that field when
+  the request carries a `tools` array, so `UNSUPPORTED` was the only answer it
+  could give. Verified against api.openai.com: identical prompt, no tools
+  offered -> no `tool_calls`; one tool offered -> `tool_calls` naming the right
+  function. Every run this tool has done reported `tool_calling=UNSUPPORTED`
+  against endpoints that support it, and this family was deferred partly on
+  that reading.
+
+  sweepeval now declares the toolkit itself and offers it -- it cannot know a
+  target's own tool schema, and knowing the schema is exactly what makes "did
+  this call conform" answerable. **Nothing offered is ever executed**; a tool
+  call is a request to run something, and it is the request that is scored.
+
+  Two metrics. `tool_call_validity` asks whether the right tool was called with
+  arguments the schema will accept: an unknown tool name is a hallucination, a
+  missing required argument is an incomplete call, a wrong JSON type is drift.
+  Three of the twelve probes expect *no* call, because a target that reaches
+  for a tool on every turn is as broken as one that never reaches for the right
+  one, and it bills for the privilege. `tool_selection_stability` asks whether
+  the same prompt picks the same tool across runs -- kept apart because they
+  fail independently.
+
+  Four reply encodings are read, because "supports tool calling" is not one
+  wire format: the current `tool_calls` array, the deprecated `function_call`
+  object, an Anthropic `tool_use` block, and a call written into the message
+  text. The fourth is UNSCORABLE with the encoding named -- crediting prose as
+  a tool call reports a capability the target does not have, and scoring it as
+  silence loses the finding. A shape that cannot carry a tool declaration at
+  all is NOT_PROBED rather than UNSUPPORTED.
+
+  Live against gpt-4.1-nano: 22 of 24 valid, selection stable on all twelve
+  probes -- and a pure arithmetic question ("48 cartons, 6 pallets") makes it
+  call a tool, a different one on different runs.
+
+  Neither metric is a default objective, for the same reason as degradation's.
+
 - **The `degradation` family is built (§11, family 8).** It was one of three
   registering `SKIPPED: not_implemented`, and it went first of the three
   deliberately: `tool_integrity` and `retrieval` need capabilities every
@@ -131,6 +170,13 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Cross-run scoring excluded any run with no extracted text, which is every
+  successful run of a tool-calling probe: a reply carrying only tool calls has
+  `content: null`. `tool_selection_stability` came back "fewer than two
+  scorable runs" on every probe that had worked. A family can now opt into
+  comparing runs that produced no text; the default is unchanged, because for
+  determinism and context an empty response really is nothing to compare.
+
 - A failed conversation was recorded under `f"{family}_pass_rate"`: a real
   metric for security and guardrail, and a name nothing declares for the rest.
   A failed `context` conversation went to `context_pass_rate`, which no scorer
@@ -166,7 +212,7 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Comparability
 
-- The corpus gained the degradation family, so `corpus_hash` changes. Runs
+- The corpus gained the degradation and tool-integrity families, so `corpus_hash` changes. Runs
   from before and after refuse to be compared rather than being silently
   mixed, and a committed `baseline.json` predating this release will need
   re-taking. `quick` is unaffected in content but shares the hash.

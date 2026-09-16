@@ -97,6 +97,14 @@ class UnitOutcome:
     failed: bool = False
     reason: str = ""
 
+    payload: Any = None
+    """The final response, parsed, for scorers that need its structure.
+
+    Held alongside `text` rather than instead of it: tool calls are not text,
+    and a cross-run comparison of which tool was chosen cannot be made from
+    the extracted message at all.
+    """
+
     unextracted_body: bytes | None = None
     """The final response's raw bytes, kept only when extraction produced
     nothing from a call that otherwise succeeded.
@@ -329,6 +337,7 @@ def _finalize_cross_run(
     the evidence and hands it over in one go.
     """
     by_unit: dict[str, dict[int, str]] = {}
+    payloads: dict[str, dict[int, Any]] = {}
     unscorable: dict[str, set[int]] = {}
     units: dict[str, Unit] = {}
 
@@ -337,12 +346,23 @@ def _finalize_cross_run(
             continue
         units[outcome.unit.unit_id] = outcome.unit
         by_unit.setdefault(outcome.unit.unit_id, {})[outcome.run_idx] = outcome.text
+        payloads.setdefault(outcome.unit.unit_id, {})[outcome.run_idx] = outcome.payload
         # §11.8: a refusal on a determinism unit excludes the trial. Without
         # this the metric is a statement about how consistently the target
         # declines -- three identical refusals score 1.0, so the objective is
         # maximised by a target that answers nothing.
         refused = excludes_the_trial(outcome.unit) and looks_like_refusal(outcome.text)
-        if outcome.failed or not outcome.text or refused:
+        # Empty text excludes a run for every family that compares what was
+        # *said* -- and would exclude every successful run of a family that
+        # compares what was *called*. A reply carrying only tool calls has
+        # `content: null`, so requiring text marked the tool-calling probes
+        # unscorable exactly when they had worked, and
+        # `tool_selection_stability` came back "fewer than two scorable runs"
+        # on every probe that called a tool.
+        empty = not outcome.text and not (
+            _scores_without_text(registry, outcome.unit) and outcome.payload is not None
+        )
+        if outcome.failed or empty or refused:
             unscorable.setdefault(outcome.unit.unit_id, set()).add(outcome.run_idx)
 
     evidence = [
@@ -356,6 +376,9 @@ def _finalize_cross_run(
             blob_ids=tuple(
                 sha256_hex(runs[i].encode("utf-8")) if runs.get(i) else ""
                 for i in range(plan.runs)
+            ),
+            payloads=tuple(
+                payloads.get(unit_id, {}).get(i) for i in range(plan.runs)
             ),
         )
         for unit_id, runs in sorted(by_unit.items())
@@ -470,11 +493,12 @@ async def _run_unit(
 
     observations = _score(
         unit, calls, text, unit_canaries, plan, run_idx, registry,
-        failed=failed, reason=reason,
+        failed=failed, reason=reason, body=last_body,
     )
     return UnitOutcome(
         unit=unit, run_idx=run_idx, calls=calls, observations=observations,
         text=text, restarts=restarts, failed=failed, reason=reason,
+        payload=_parsed(last_body),
         unextracted_body=None if text or failed else last_body,
     )
 
@@ -517,6 +541,15 @@ async def _play_conversation(
             continue
 
         body = body_for_turns(ladder, list(history), **plan.params)
+        if unit.family == "tool_integrity":
+            # The family cannot be measured without offering something to
+            # call: a chat API emits `tool_calls` only when the request
+            # carries a `tools` array. sweepeval declares the toolkit itself,
+            # because it cannot know the target's own -- and because knowing
+            # the schema is what makes "did this call conform" answerable.
+            from sweepeval.tools import offer_for_shape
+
+            body = {**body, **offer_for_shape(ladder.shape.name)}
         results = await client.call(
             ladder.path, body,
             config_id=plan.config_id, unit_id=unit.unit_id,
@@ -606,6 +639,7 @@ def _score(
     *,
     failed: bool,
     reason: str,
+    body: bytes | None = None,
 ) -> list[Observation]:
     from sweepeval.schema.hashing import sha256_hex
     from sweepeval.schema.observation import Verdict
@@ -619,6 +653,9 @@ def _score(
         # observation and the bytes it scored can be rejoined later.
         text_blob_id=sha256_hex(text.encode("utf-8")) if text else None,
         canaries=dict(unit_canaries),
+        # Parsed once here rather than in each scorer: a tool call is not text
+        # and `text` is empty exactly when a target emitted only a call.
+        payload=_parsed(body),
         refusal_detected=looks_like_refusal(text),
         layer=plan.layer,
         ts=datetime.now(timezone.utc).isoformat(),
@@ -701,6 +738,21 @@ def _operational(
     return list(scorer.score(unit, list(calls), context))
 
 
+def _scores_without_text(registry: ScorerRegistry, unit: Unit) -> bool:
+    """Whether this family can compare runs that produced no extracted text.
+
+    Opt-in, defaulting to no, for the same reason `scores_failures` is: for
+    determinism and context an empty response really is nothing to compare,
+    and treating it as comparable would score a target that answered nothing
+    as perfectly consistent.
+    """
+    try:
+        scorer = registry.get(unit.family)
+    except KeyError:
+        return False
+    return bool(getattr(scorer, "scores_without_text", False))
+
+
 def _scores_failures(registry: ScorerRegistry, unit: Unit) -> bool:
     """Whether this family wants to score a conversation that never completed.
 
@@ -741,3 +793,15 @@ def _metric_for(registry: ScorerRegistry, unit: Unit) -> str:
         return str(chooser(unit))
     declared = scorer.metrics()
     return declared[0].metric if declared else f"{unit.family}_pass_rate"
+
+
+def _parsed(body: bytes | None) -> Any:
+    """The final response as JSON, or ``None`` when it is not JSON at all."""
+    if not body:
+        return None
+    import json
+
+    try:
+        return json.loads(body)
+    except (ValueError, TypeError):
+        return None

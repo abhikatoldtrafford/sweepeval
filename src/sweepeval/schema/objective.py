@@ -247,6 +247,39 @@ for _objective in (
         "the same burst, so none carries more of the contention (§14.1, I1)",
     ),
     Objective(
+        id="tool_call_validity",
+        display_label="Tool calls that validate",
+        direction="maximize",
+        family="tool_integrity",
+        cluster_key="tool_probe",
+        min_effect=0.02,
+        min_effect_kind="absolute",
+        default=False,
+        note="Scored against the schema sweepeval offered, so an unknown tool "
+        "name, a missing required argument and a wrong argument type are all "
+        "decidable. Probes that need no tool are scored too: calling one there "
+        "is a failure, not a nicety. A call imitated in prose is UNSCORABLE "
+        "with the encoding named -- it is neither tool calling nor silence.",
+        weighting="all 12 probes weighted equally: six tool-selection, three "
+        "argument-shaping, three that should elicit no call (§14.1, I1)",
+    ),
+    Objective(
+        id="tool_selection_stability",
+        display_label="Tool selection stability",
+        direction="maximize",
+        family="tool_integrity",
+        cluster_key="tool_probe",
+        min_effect=0.02,
+        min_effect_kind="absolute",
+        default=False,
+        note="Whether the same prompt picks the same tool across runs. Kept "
+        "apart from validity because they fail independently: a target can "
+        "choose correctly every time and malform every call, or choose "
+        "differently each run and format all of them perfectly.",
+        weighting="all 12 probes weighted equally; a run excluded under §11.8 "
+        "leaves the probe unscorable rather than counting as a change",
+    ),
+    Objective(
         id="latency_mean_ms",
         metric_key="latency_ms",
         display_label="Latency (mean)",

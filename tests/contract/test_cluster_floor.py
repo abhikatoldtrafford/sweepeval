@@ -26,10 +26,11 @@ single refusal.
 """
 
 
-ABSENT_BY_DESIGN = {("degradation", "quick")}
+ABSENT_BY_DESIGN = {("degradation", "quick"), ("tool_integrity", "quick")}
 """(family, profile) pairs where the family is deliberately not measured.
 
-`degradation` is `standard` and `deep` only: `quick` is the default profile
+`degradation` and `tool_integrity` are `standard` and `deep` only: `quick`
+is the default profile
 and the demo path, and twenty more probes there -- ten carrying up to 24k
 characters -- would multiply a first run's cost for a dimension a first look
 does not need.
@@ -101,23 +102,26 @@ def test_the_quick_profile_shape() -> None:
 def test_the_standard_profile_call_count() -> None:
     """Pinned so a corpus edit is a deliberate, reviewed act.
 
-    80 units / 188 calls until the degradation family landed; its thirty
-    single-turn probes take it to 110 / 218 -- ten long-input, ten dispatched
-    under load and ten serial controls the load metric is scored against. Ten
-    of them carry up to 24k characters of generated filler, which the call
-    count does not show; `test_profiles_doc_matches_the_estimator` covers the
+    80 units / 188 calls until the deferred families started landing. The
+    degradation family adds thirty single-turn probes -- ten long-input, ten
+    dispatched under load, ten serial controls the load metric is scored
+    against -- and tool integrity adds twelve, taking it to 122 / 230.
+
+    Neither cost shows in the call count: ten degradation probes carry up to
+    24k characters of filler, and every tool probe sends three tool schemas
+    alongside the prompt. `test_profiles_doc_matches_the_estimator` covers the
     token side.
     """
     corpus = load_corpus("standard")
-    assert corpus.unit_count == 110
-    assert corpus.calls_per_run == 218
+    assert corpus.unit_count == 122
+    assert corpus.calls_per_run == 230
 
 
 def test_the_budget_estimate_sums_calls_not_units() -> None:
     """§12.3: `configs x units x runs` is wrong for every multi-turn unit."""
     corpus = load_corpus("standard")
     estimate = corpus.estimate(configs=12, runs=3)
-    assert estimate["total_calls"] == 218 * 3 * 12
+    assert estimate["total_calls"] == 230 * 3 * 12
     assert estimate["total_calls"] > corpus.unit_count * 3 * 12
 
 

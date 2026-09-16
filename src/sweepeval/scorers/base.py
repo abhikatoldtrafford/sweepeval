@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from importlib.metadata import entry_points
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from sweepeval.capabilities.detect import Capability, CapabilityReport
 from sweepeval.schema.call import Call
@@ -59,6 +59,17 @@ class ScoreContext:
     nothing says which observation came from which. That turns every scorer
     fix into another paid run against the target, which is the opposite of
     what an append-only artifact store is for.
+    """
+
+    payload: Any = None
+    """The final response, parsed, when a scorer needs its structure.
+
+    Everything else here scores *text*, which is all the extraction path
+    returns. Tool calls are not text: they live in `tool_calls`,
+    `function_call` or a `tool_use` block, and a target that emits only a call
+    returns a null `content` -- so `text` is empty exactly when there is most
+    to score. Carried rather than re-read from the blob store so the scorer
+    sees the same bytes the run did.
     """
 
     layer: str = "generic"
@@ -116,6 +127,17 @@ class RunEvidence:
 
     unscorable: tuple[int, ...] = ()
     """Run indices excluded under §11.8 — refused, or the conversation failed."""
+
+    payloads: tuple[Any, ...] = ()
+    """Parsed responses, in the same order as ``texts``.
+
+    Text is enough for every cross-run scorer that compares what was *said*.
+    It is not enough for tool calling: a target that emits only a call returns
+    a null `content`, so `texts` is empty exactly where the choice being
+    compared lives. Empty on a resumed run -- the bytes are in the blob store
+    but nothing re-parses them yet -- which the scorer reports rather than
+    reading as "chose nothing".
+    """
 
     blob_ids: tuple[str, ...] = ()
     """Blob addresses of ``texts``, in the same order.

@@ -1,0 +1,9 @@
+name: ignores_tool_offer
+description: >
+  Is offered tools and answers in prose anyway, with no structured field and
+  nothing that looks like a call. The honest UNSUPPORTED case: the detector
+  must read it as unsupported having actually given the target the chance,
+  which is the thing it never used to do.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none

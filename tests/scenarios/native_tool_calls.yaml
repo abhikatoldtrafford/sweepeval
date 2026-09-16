@@ -1,0 +1,7 @@
+name: native_tool_calls
+description: >
+  Emits the current OpenAI tool_calls array, arguments as a JSON string. The encoding almost everything speaks today.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+tool_support: native

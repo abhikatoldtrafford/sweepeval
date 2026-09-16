@@ -28,6 +28,7 @@ CLUSTER_KEY_BY_FAMILY: dict[str, str] = {
     "determinism": "determinism_base_prompt",
     "context": "conversation",
     "degradation": "degradation_probe",
+    "tool_integrity": "tool_probe",
 }
 
 

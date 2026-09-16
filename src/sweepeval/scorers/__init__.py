@@ -10,6 +10,7 @@ from sweepeval.scorers import (  # noqa: F401
     guardrail,
     operational,
     security,
+    tool_integrity,
 )
 from sweepeval.scorers.base import (
     SCORER_ENTRY_POINT_GROUP,

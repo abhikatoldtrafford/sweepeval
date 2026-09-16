@@ -305,9 +305,43 @@ async def detect_tool_calling(
     key: str | None,
     budget: DiscoveryBudget,
 ) -> CapabilityResult:
-    """Send a probe that clearly requires a tool; look for structure."""
-    body = _prompt_body(ladder, _TOOL_PROBE)
-    status, payload, _ = await _ask(client, ladder, key, budget, body, label="tool")
+    """Offer a tool, ask for something that needs it, see what comes back.
+
+    **Offering is the whole probe.** This used to send a bare prompt saying "if
+    you have a tool available, call it" and look for `tool_calls` in the reply
+    -- but a chat API only ever emits that field when the request carries a
+    `tools` array, so the answer was structurally always UNSUPPORTED. Verified
+    against api.openai.com on 2026-09-16: identical prompt, no tools offered ->
+    no `tool_calls`; one tool offered -> `tool_calls` with the right function
+    name. Every run this tool has ever done reported `tool_calling=UNSUPPORTED`
+    against endpoints that support it perfectly well, and the `tool_integrity`
+    family was deferred partly on the strength of that reading.
+
+    Three outcomes, and the third is the one the old code could not express:
+
+    * a structured call in the reply            -> SUPPORTED
+    * a reply with none                         -> UNSUPPORTED, having actually
+                                                   been given the chance
+    * a shape with no way to carry a tool offer -> NOT_PROBED. A raw-text
+      endpoint has not failed a tool probe; it cannot be given one, and saying
+      UNSUPPORTED would be a claim about the target rather than about us.
+    """
+    from sweepeval.tools import extract_tool_calls, offer_for_shape
+
+    offer = offer_for_shape(ladder.shape.name)
+    if not offer:
+        return CapabilityResult(
+            Capability.TOOL_CALLING, Support.NOT_PROBED, "tool probe", "high",
+            {
+                "reason": (
+                    f"shape {ladder.shape.name} has no way to carry a tool "
+                    "declaration, so nothing was offered and nothing was measured"
+                )
+            },
+        )
+
+    body = {**_prompt_body(ladder, _TOOL_PROBE), **offer}
+    status, payload, text = await _ask(client, ladder, key, budget, body, label="tool")
 
     if status == 0 or status >= 400:
         return CapabilityResult(
@@ -315,14 +349,28 @@ async def detect_tool_calling(
             {"status": status},
         )
 
-    found = _find_keys(payload, {"tool_calls", "tool_use", "function_call", "tool_result"})
+    calls = extract_tool_calls(payload, text or "")
+    structured = [c for c in calls if c.encoding != "text.embedded"]
     return CapabilityResult(
         Capability.TOOL_CALLING,
-        Support.SUPPORTED if found else Support.UNSUPPORTED,
+        Support.SUPPORTED if structured else Support.UNSUPPORTED,
         "tool probe",
-        "high" if found else "medium",
-        {"structures_found": sorted(found)},
+        "high" if structured else "medium",
+        {
+            "tools_offered": sorted(t.name for t in _offered_names()),
+            "calls": [f"{c.encoding}:{c.name}" for c in calls],
+            # Recorded separately: a target that writes a plausible tool call
+            # into its prose has not done structured tool calling, and the
+            # difference is a finding rather than a detail.
+            "imitated_in_text": bool(calls) and not structured,
+        },
     )
+
+
+def _offered_names() -> tuple[Any, ...]:
+    from sweepeval.tools import TOOLKIT
+
+    return TOOLKIT
 
 
 async def detect_retrieval(

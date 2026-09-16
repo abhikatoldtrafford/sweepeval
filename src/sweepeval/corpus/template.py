@@ -33,7 +33,8 @@ Profile = Literal["quick", "standard", "deep"]
 PROFILES: tuple[Profile, ...] = ("quick", "standard", "deep")
 
 Family = Literal[
-    "security", "guardrail", "determinism", "context", "operational", "degradation"
+    "security", "guardrail", "determinism", "context", "operational",
+    "degradation", "tool_integrity",
 ]
 
 DegradationKind = Literal["long_input", "load", "serial_control"]
@@ -117,6 +118,15 @@ class ProbeTemplate(BaseModel):
     the condition under test and it cannot be produced one request at a time.
     """
 
+    expects_tool: str | None = None
+    """Which offered tool this probe should elicit (§11, family 4).
+
+    ``""`` -- the empty string -- means the opposite and is not the same as
+    absent: *no* tool should be called, because the question needs none. Those
+    probes are how the family measures over-calling, which is a real failure
+    mode and invisible if every probe expects a call.
+    """
+
     filler_chars: int | None = None
     """Expand ``{{filler}}`` to this many characters of neutral prose.
 
@@ -139,6 +149,20 @@ class ProbeTemplate(BaseModel):
             raise ValueError(f"{self.id}: guardrail templates declare a policy_id")
         if self.family == "context" and self.depth is None:
             raise ValueError(f"{self.id}: context templates declare a depth")
+        if self.family == "tool_integrity" and self.expects_tool is None:
+            raise ValueError(
+                f"{self.id}: tool_integrity templates declare expects_tool "
+                "(a tool name, or '' for 'no tool should be called')"
+            )
+        if self.expects_tool:
+            from sweepeval.tools import BY_NAME
+
+            if self.expects_tool not in BY_NAME:
+                raise ValueError(
+                    f"{self.id}: expects_tool {self.expects_tool!r} is not in the "
+                    f"offered toolkit ({', '.join(sorted(BY_NAME))}); a probe "
+                    "cannot expect a tool the target is never given"
+                )
         if self.family == "degradation" and self.degradation_kind is None:
             raise ValueError(
                 f"{self.id}: degradation templates declare a degradation_kind"
@@ -217,6 +241,7 @@ class ProbeTemplate(BaseModel):
             policy_id=self.policy_id,
             depth=self.depth,
             group=self.group,
+            expects_tool=self.expects_tool,
             degradation_kind=self.degradation_kind,
             on_refusal=self.on_refusal,
         )

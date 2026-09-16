@@ -1,0 +1,7 @@
+name: hallucinates_a_tool
+description: Calls a tool that was never offered.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+tool_support: native
+tool_argument_fault: unknown_tool

@@ -1,0 +1,7 @@
+name: anthropic_tools
+description: >
+  Emits a tool_use content block with the arguments already an object rather than a JSON string. The shape is anthropic, so the whole envelope differs too.
+shape: anthropic
+paths: ["/v1/messages"]
+auth: none
+tool_support: anthropic

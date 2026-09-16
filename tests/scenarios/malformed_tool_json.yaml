@@ -1,0 +1,7 @@
+name: malformed_tool_json
+description: Native tool_calls whose arguments string is not valid JSON.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+tool_support: native
+tool_argument_fault: malformed_json

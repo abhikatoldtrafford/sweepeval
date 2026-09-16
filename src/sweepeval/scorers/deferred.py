@@ -1,13 +1,18 @@
 """Deferred scorer families (spec §11.10, D2).
 
-Tool integrity and retrieval register **real** scorer objects that emit
+Retrieval registers a **real** scorer object that emits
 ``SKIPPED: not_implemented``.
 
-Degradation used to be here and is now built (`scorers/degradation.py`). It
-went first of the three precisely because it needs no capability: the other
-two require `tool_calling` and `retrieval`, which every endpoint measured so
-far reports UNSUPPORTED, so their code would ship long before any real
-evidence about them could.
+Degradation and tool integrity used to be here and are now built. Degradation
+went first because it needs no capability at all. Tool integrity went second
+once the capability detector was fixed: it had been sending a bare prompt and
+looking for `tool_calls` in the reply, without ever offering a tool, so
+`tool_calling=UNSUPPORTED` was structurally the only answer a chat API could
+give -- and this family was deferred partly on the strength of that reading.
+
+Retrieval is still here, and its detector has the same shape of problem
+waiting: it asks for citations and looks for `documents`/`sources` keys in the
+response. Whether that is a fair probe of a RAG endpoint is untested.
 
 The reason names no version and the briefs promise no release. They used to:
 the scorers said ``not_implemented_in_v0.1`` and every brief said the family
@@ -84,15 +89,6 @@ class DeferredScorer:
 
 
 for _scorer in (
-    DeferredScorer(
-        family="tool_integrity",
-        metric_name="tool_schema_stability",
-        requires=frozenset({Capability.TOOL_CALLING}),
-        brief=(
-            "schema drift, malformed-call rate and tool-selection stability are "
-            "specified but not built (spec section 11, family 4)"
-        ),
-    ),
     DeferredScorer(
         family="retrieval",
         metric_name="retrieval_ndcg",

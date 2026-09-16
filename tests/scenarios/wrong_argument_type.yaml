@@ -1,0 +1,7 @@
+name: wrong_argument_type
+description: Calls the right tool with an argument of the wrong JSON type.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+tool_support: native
+tool_argument_fault: wrong_type

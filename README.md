@@ -363,12 +363,12 @@ Written down because a tool whose whole argument is honest measurement should
 be honest about itself. Nothing here is hypothetical; each one was found by
 running the thing.
 
-**Two scorer families are specified and not built.** `tool_integrity` and
-`retrieval` report `SKIPPED: not_implemented`. Both need a capability every
-endpoint measured so far reports UNSUPPORTED, which is why `degradation` --
-which needs none -- was built first. This is spec decision D2, not an
-oversight, but it means the adversarial suite is still narrower than the
-design describes.
+**One scorer family is specified and not built.** `retrieval` reports
+`SKIPPED: not_implemented`. Its detector asks for citations and looks for
+`documents`/`sources` keys in the response, and whether that is a fair probe
+of a RAG endpoint is untested -- which is the same shape of doubt that turned
+out to be wrong for tool calling, where the detector never offered a tool and
+so could only ever answer UNSUPPORTED.
 
 **Degradation does not yet have much to say.** Against `gpt-4.1-nano` it found
 no loss at all: recall held at every haystack size to 24,000 characters, and
@@ -478,6 +478,12 @@ contract declared it could not settle, and it refuses to score its own output.
 It never rewrites `observations.jsonl`, and it self-checks by reproducing the
 untouched configs' stored numbers exactly. This is what corrected the
 scorecard's security column without re-running 7,917 paid requests.
+
+**A `tool_integrity` family.** sweepeval offers its own toolkit and scores
+what comes back against the schema it sent: right tool, arguments that
+validate, and whether the same prompt picks the same tool twice. Four reply
+encodings are read, and a call merely *described* in prose is refused rather
+than credited. Nothing offered is ever executed.
 
 **A `degradation` family.** Recall from under a growing haystack, and recall
 under contention scored against an identical probe answered alone. The pairing

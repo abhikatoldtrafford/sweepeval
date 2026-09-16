@@ -15,7 +15,7 @@ import hashlib
 import json
 import re
 import time
-from typing import Any
+from typing import Any, ClassVar
 
 from sweepeval.mock.scenario import Scenario
 
@@ -183,11 +183,141 @@ class MockApp:
         if scenario.malformed_json:
             return 200, [("content-type", "application/json")], b'{"choices": [{"mess'
 
+        envelope = self._envelope(text, prompt, request)
+        if request.get("tools") or request.get("functions"):
+            envelope = self._with_tool_call(envelope, request, prompt)
+
         return (
             200,
             [("content-type", "application/json")],
-            json.dumps(self._envelope(text, prompt, request)).encode(),
+            json.dumps(envelope).encode(),
         )
+
+
+    # --- tool calling (§11, family 4) ------------------------------------
+
+    _TOOL_CUES: tuple[tuple[str, tuple[str, ...]], ...] = (
+        ("lookup_order", ("order", "delivery", "shipment status")),
+        ("convert_currency", ("convert", "gbp", "usd", "eur", "yen", "dollars",
+                              "pounds", "aud", "sterling")),
+        ("get_utc_time", ("utc", "current time", "timestamp")),
+    )
+
+    def _pick_tool(self, prompt: str) -> str | None:
+        """Which offered tool this prompt is asking for.
+
+        Cue-driven and deliberately crude, like every other decision in the
+        mock: the point is a target that selects *plausibly*, so a scorer that
+        checks selection has something to check. A prompt matching no cue gets
+        no call, which is what the restraint probes need.
+        """
+        lowered = prompt.casefold()
+
+        # An explicit instruction not to look anything up is honoured. A
+        # target that ignores it is over-calling, which is what
+        # `tool_argument_fault: over_call` is for -- the default should be a
+        # target that behaves, or the restraint probes could never pass.
+        if any(
+            cue in lowered
+            for cue in ("do not look", "don't look", "in your own words")
+        ):
+            return None
+
+        for name, cues in self._TOOL_CUES:
+            if not any(cue in lowered for cue in cues):
+                continue
+            # "the status of order 48812" is a lookup; "a purchase order" is a
+            # definition. Requiring a digit alongside the cue is crude and is
+            # the difference between a mock that can show restraint and one
+            # that calls a tool whenever a noun appears.
+            if name == "lookup_order" and not any(ch.isdigit() for ch in lowered):
+                continue
+            return name
+        return None
+
+    _ARGUMENTS: ClassVar[dict[str, dict[str, Any]]] = {
+        "get_utc_time": {},
+        "lookup_order": {"order_id": "48812"},
+        "convert_currency": {
+            "amount": 250, "from_currency": "GBP", "to_currency": "USD"
+        },
+    }
+
+    def _tool_arguments(self, name: str) -> tuple[str, Any]:
+        """``(name, arguments)`` after applying this scenario's injected fault."""
+        arguments: Any = dict(self._ARGUMENTS.get(name, {}))
+        fault = self.scenario.tool_argument_fault
+
+        if fault == "unknown_tool":
+            return "get_weather", {"city": "London"}
+        if fault == "missing_required":
+            arguments.pop(next(iter(arguments), ""), None)
+        elif fault == "wrong_type":
+            if "amount" in arguments:
+                arguments["amount"] = "two hundred and fifty"
+            elif "order_id" in arguments:
+                arguments["order_id"] = 48812
+            else:
+                arguments["unexpected"] = True
+        return name, arguments
+
+    def _with_tool_call(
+        self, envelope: dict[str, Any], request: dict[str, Any], prompt: str
+    ) -> dict[str, Any]:
+        """Answer a tools-bearing request in this scenario's encoding.
+
+        `tool_support: None` returns the envelope untouched -- a target that
+        was offered tools and answered in prose. That is a real and common
+        case, and the detector has to read it as UNSUPPORTED having actually
+        given the target the chance.
+        """
+        support = self.scenario.tool_support
+        if support is None:
+            return envelope
+
+        name = self._pick_tool(prompt)
+        if name is None:
+            if self.scenario.tool_argument_fault != "over_call":
+                return envelope
+            # Over-calling: reach for a tool nothing asked for.
+            name = "get_utc_time"
+
+        name, arguments = self._tool_arguments(name)
+        encoded = (
+            "{not json"
+            if self.scenario.tool_argument_fault == "malformed_json"
+            else json.dumps(arguments)
+        )
+
+        if support == "native":
+            message = envelope["choices"][0]["message"]
+            message["content"] = None
+            message["tool_calls"] = [
+                {
+                    "id": f"call_{name}",
+                    "type": "function",
+                    "function": {"name": name, "arguments": encoded},
+                }
+            ]
+            envelope["choices"][0]["finish_reason"] = "tool_calls"
+        elif support == "legacy":
+            message = envelope["choices"][0]["message"]
+            message["content"] = None
+            message["function_call"] = {"name": name, "arguments": encoded}
+            envelope["choices"][0]["finish_reason"] = "function_call"
+        elif support == "anthropic":
+            block = {"type": "tool_use", "id": f"toolu_{name}", "name": name}
+            block["input"] = encoded if (
+                self.scenario.tool_argument_fault == "malformed_json"
+            ) else arguments
+            envelope.setdefault("content", []).append(block)
+        elif support == "imitated":
+            # No structured field anywhere: the call is prose.
+            envelope["choices"][0]["message"]["content"] = (
+                "I'll look that up." + chr(10)
+                + f'<tool_call>{{"name": "{name}", "arguments": {encoded}}}</tool_call>'
+            )
+        return envelope
 
     def _handle_get(self, path: str) -> tuple[int, list[tuple[str, str]], bytes]:
         scenario = self.scenario

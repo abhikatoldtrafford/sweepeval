@@ -101,6 +101,13 @@ class Unit(BaseModel):
     attack_class: str | None = None
     policy_id: str | None = None
     depth: int | None = None
+    expects_tool: str | None = None
+    """Which offered tool this probe should elicit; ``""`` means none should be.
+
+    Excluded from ``unit_id`` like the rest of the scoring instructions: it
+    says how the reply is judged, not what was sent.
+    """
+
     group: str | None = None
     """Templates sharing one are two views of the same probe.
 
@@ -179,6 +186,7 @@ class Unit(BaseModel):
         policy_id: str | None = None,
         depth: int | None = None,
         group: str | None = None,
+        expects_tool: str | None = None,
         degradation_kind: str | None = None,
         on_refusal: OnRefusal | None = None,
     ) -> Unit:
@@ -208,6 +216,7 @@ class Unit(BaseModel):
             policy_id=policy_id,
             depth=depth,
             group=group,
+            expects_tool=expects_tool,
             degradation_kind=degradation_kind,
             on_refusal=on_refusal,
         )

@@ -1,0 +1,7 @@
+name: imitates_tools
+description: >
+  Writes a plausible tool call into its message text and emits no structured field. This is what a model without native tool support does when asked to call one, and it is the case the family must refuse to credit as tool calling.
+shape: openai
+paths: ["/v1/chat/completions"]
+auth: none
+tool_support: imitated
