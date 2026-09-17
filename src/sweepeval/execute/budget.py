@@ -235,6 +235,7 @@ def estimate_run(
     concurrency: int = DEFAULT_CONCURRENCY,
     hard_fail_units: int = 0,
     judge_units: int = 0,
+    capability_phases: int = 1,
     pricing_source: str = "none",
 ) -> Estimate:
     """Every phase, before the first request of any kind (I9)."""
@@ -250,12 +251,7 @@ def estimate_run(
             "capabilities",
             _CAPABILITY_POSTS,
             _CAPABILITY_POSTS * _PROBE_TOKENS + ceiling_search,
-            "hard cap"
-            + (
-                "; includes the context-ceiling search"
-                if ceiling_search
-                else "; context-ceiling search runs only under --profile deep"
-            ),
+            _capability_note(ceiling_search),
         ),
         PhaseEstimate(
             f"scoring ({profile})", scoring_requests, scoring_tokens,
@@ -263,6 +259,25 @@ def estimate_run(
             f"x {runs} runs x {configs} config(s)",
         ),
     ]
+
+    if capability_phases > 1:
+        # A separate phase, deliberately NOT part of `unavoidable_requests`.
+        # The floor is what must be spent before anything can be scored at
+        # all: one discovery, one capability pass. Re-probing for each further
+        # model scales with the sweep the way scoring does, and folding it
+        # into the floor made a cap that used to buy a partial sweep decline
+        # outright -- an over-estimate that blocks a run is not the safe
+        # direction.
+        extra = capability_phases - 1
+        phases.append(
+            PhaseEstimate(
+                "capabilities (per extra model)",
+                _CAPABILITY_POSTS * extra,
+                _CAPABILITY_POSTS * extra * _PROBE_TOKENS,
+                f"{extra} further model(s) under test; capabilities are a "
+                "property of the model, so each is probed separately",
+            )
+        )
 
     if hard_fail_units:
         phases.append(
@@ -298,6 +313,24 @@ def estimate_run(
         pricing_source=pricing_source,
         gate_eligible=profile != "quick",
     )
+
+
+def _capability_note(ceiling_search: int) -> str:
+    """Why the first capability phase costs what it does.
+
+    One pass is unavoidable. Further models cost a pass each -- capabilities
+    are a property of the model, and a sweep whose axis is the model was
+    detecting them once and applying the answer to every config -- but that
+    scales with the sweep, so it is priced as its own phase rather than folded
+    into the floor.
+    """
+    note = "hard cap"
+    note += (
+        "; includes the context-ceiling search"
+        if ceiling_search
+        else "; context-ceiling search runs only under --profile deep"
+    )
+    return note
 
 
 def _tokens_for(corpus: Corpus, runs: int, configs: int) -> int:

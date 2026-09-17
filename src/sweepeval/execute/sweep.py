@@ -279,6 +279,11 @@ async def asweep_target(
         # probes can return AMBIGUOUS at all. Left out, a judged run's
         # estimate silently excluded thousands of requests.
         judge_units=len(corpus.ambiguity_capable) if judge else 0,
+        # One capability phase per model the sweep may test. The estimate is
+        # an upper bound built before the plan exists, so the cap is the
+        # bound: capabilities are a property of the model, and a sweep whose
+        # axis is the model has to probe each one.
+        capability_phases=planned_cap,
     )
     if confirm is not None and not confirm(estimate):
         return SweepResult(
@@ -540,10 +545,19 @@ async def asweep_target(
                 break
 
             say(f"config {index + 1}/{len(plan.configs)}: {config.label()}")
+            config_caps = await _capabilities_for(
+                http, discovery.ladder, key, text_path, profile, config,
+                capabilities,
+            )
+            config_units = (
+                units
+                if config_caps is capabilities
+                else _units_for(corpus, config_caps)
+            )
             row = await _run_one(
                 transport,
                 config,
-                units=units,
+                units=config_units,
                 runs=runs,
                 master_seed=master_seed,
                 ladder=discovery.ladder,
@@ -555,6 +569,7 @@ async def asweep_target(
                 pricing=pricing,
                 judge=judge,
             )
+            row.capabilities = config_caps
             spent += row.requests
             tokens_in += row.tokens_in
             tokens_out += row.tokens_out
@@ -624,6 +639,53 @@ def _share_determinism(result: SweepResult, sharing: Mapping[str, str]) -> None:
             owner.aggregate.clusters.get(metric, {})
         )
         result.determinism_scope[config_id] = owner_id
+
+
+async def _capabilities_for(
+    http: Any,
+    ladder: Any,
+    key: str | None,
+    text_path: str | None,
+    profile: str,
+    config: Any,
+    fallback: CapabilityReport,
+) -> CapabilityReport:
+    """Capabilities of the model THIS config runs against.
+
+    Detected once per run until a four-model sweep showed what that costs. The
+    report was built against whichever model discovery happened to pick and
+    then applied to every config -- so `gpt-5-search-api`, the one model in the
+    run with retrieval, was told it had none and its family was skipped for
+    every config; and it was told it had tool calling, which it rejects, so 36
+    probes went out and came back 404.
+
+    Capabilities are a property of the model. A sweep whose axis is the model
+    has to ask per model, which costs one capability phase each -- against a
+    per-config scoring bill of several hundred, and it is in the estimate.
+
+    A config that pins no model reuses the run-level report: nothing about the
+    target changed, so re-probing would spend for an answer already known.
+    """
+    model = config.params.get("model")
+    if not model:
+        return fallback
+
+    previous = dict(getattr(ladder, "pinned", {}) or {})
+    ladder.pinned = {**previous, "model": model}
+    try:
+        return await detect_all(
+            http, ladder, key, text_path,
+            budget=CapabilityBudget(), profile=profile,
+        )
+    finally:
+        ladder.pinned = previous
+
+
+def _units_for(corpus: Any, capabilities: CapabilityReport) -> tuple[Any, ...]:
+    """The probes worth executing against a target with these capabilities."""
+    skipped = {s.family for s, _ in scorer_registry().skipped(capabilities)}
+    return tuple(t.to_unit() for t in corpus.probes if t.family not in skipped)
+
 
 
 async def _run_one(

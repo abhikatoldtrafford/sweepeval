@@ -1,0 +1,51 @@
+# First evidence at scale for the three families built after 0.2.
+#
+# NOT a re-run of the fourteen-model scorecard. That comparison is published,
+# and the corpus has since gained three families, so `corpus_hash` differs and
+# a new run cannot extend it either way -- it is a separate measurement
+# whatever we spend on it.
+#
+# So the model list is chosen for COVERAGE, not for comparison. Four models,
+# each here for a reason:
+#
+#   gpt-5-search-api  the only retrieval-backed model on the account, and
+#                     therefore the only source of `retrieval` evidence. It
+#                     rejects a `tools` array outright (verified: HTTP 404),
+#                     so `tool_integrity` will be capability-skipped for it --
+#                     which is correct, and the reason no single model can
+#                     give evidence for both families.
+#   gpt-4.1-nano      cheap and fast, supports tools, and already known to be
+#                     the weakest in the published set on prompt injection
+#                     (0.306 [0.139, 0.507]) -- a useful floor.
+#   gpt-4o-mini       a non-reasoning mid-tier, the other end of that floor.
+#   gpt-5.4-mini      a current-generation small model. Chosen over gpt-5-mini
+#                     deliberately: gpt-5-mini measured 14.9s per request in
+#                     the published run, which would have cost this sweep
+#                     three hours for reasoning-tier cost signal the scorecard
+#                     already carries.
+#
+# What this run CANNOT show, so that nobody reads its absence as a result:
+# degradation's context-limit branch. The largest long-input probe is 24,000
+# characters, roughly 6k tokens, comfortably inside every window here. That
+# branch stays mock-only until the tool is pointed at something smaller.
+#
+# Model is the only axis, as with the scorecard: every other dimension held
+# fixed so the models are what differs. Several of these reject a
+# `temperature` parameter outright, so a temperature axis would 400 on every
+# probe for part of the set.
+#
+# No pricing block, so the cost objective reports output tokens per probe
+# rather than money.
+
+target:
+  url: https://api.openai.com/v1/chat/completions
+
+axes:
+  model:
+    - gpt-5-search-api
+    - gpt-4.1-nano
+    - gpt-4o-mini
+    - gpt-5.4-mini
+
+profile: standard
+runs: 3
