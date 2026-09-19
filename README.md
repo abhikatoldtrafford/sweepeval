@@ -543,7 +543,10 @@ does not read it.
   can score
 - [Gating in CI](docs/guides/ci-gate.md) · [Safety](docs/guides/safety.md) ·
   [Plugin cookbook](docs/guides/plugins.md)
-- [The OpenAI scorecard](docs/scorecard.md) — ten models, and what is not measurable yet
+- [The OpenAI scorecard](docs/scorecard.md) — fourteen models, and what is
+  not measurable yet
+- [Retrieval, tool integrity and degradation](docs/scorecard-families.md) —
+  first evidence for the three families built after 0.2
 - [A committed example run](examples/README.md) you can re-report offline
 - [Design specification](docs/superpowers/specs/2026-09-12-sweepeval-design.md)
   · [Implementation plan](docs/superpowers/plans/2026-09-12-sweepeval-v0.1-plan.md)

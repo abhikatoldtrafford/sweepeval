@@ -33,6 +33,7 @@ nav:
   - Home: index.md
   - Quickstart: quickstart.md
   - OpenAI scorecard: scorecard.md
+  - Retrieval, tools, degradation: scorecard-families.md
   - Concepts:
       - Why no composite score: concepts/no-composite-score.md
       - Comparability: concepts/comparability.md
