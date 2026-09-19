@@ -119,11 +119,34 @@ class ConfigResult:
     could not. Carried so the report can say how many of this row's
     numbers a model decided rather than a contract."""
 
+    capabilities: CapabilityReport = field(default_factory=CapabilityReport)
+    """Capabilities of the model THIS row ran against.
+
+    Declared, rather than set as an ad-hoc attribute by the sweep loop, which
+    is how it started: undeclared, it was invisible to the serializer and the
+    row's own capability verdicts never reached the artifact.
+    """
+
     requests: int = 0
 
     @property
     def config_id(self) -> str:
         return self.config.config_id
+
+    @property
+    def skipped(self) -> tuple[tuple[str, str], ...]:
+        """Families this row could not score, and why (I5, per model).
+
+        Capabilities are a property of the model, so the answer differs per
+        row the moment the sweep's axis is the model: `gpt-5-search-api` skips
+        `tool_integrity`, and the three models beside it skip `retrieval`.
+        A single run-level list cannot state that, and stating it anyway
+        contradicts the run's own observations.
+        """
+        return tuple(
+            (scorer.family, reason)
+            for scorer, reason in scorer_registry().skipped(self.capabilities)
+        )
 
     @property
     def observations(self) -> list[Observation]:
@@ -942,11 +965,26 @@ def _comparability(
 
 
 def _collect_skips(result: SweepResult) -> None:
-    """I5: every scorer that could not run names the detector that stopped it."""
+    """I5: every scorer that could not run names the detector that stopped it.
+
+    Run-level means *every* row: a family appears here only when no config
+    scored it. Built from the run-level capability report alone, this list
+    said "retrieval SKIPPED -- UNSUPPORTED" for a run whose observations
+    contained retrieval rows, because the report belonged to whichever model
+    discovery picked rather than to the model that has retrieval. An artifact
+    that contradicts its own observations is worse than a missing one: the
+    per-row lists are on the config payloads, and this is their intersection.
+    """
     from sweepeval.scorers.deferred import DEFERRED_REASON, DeferredScorer
 
-    for scorer, reason in scorer_registry().skipped(result.capabilities):
-        result.skipped.append((scorer.family, reason))
+    if result.configs:
+        per_row = [dict(row.skipped) for row in result.configs]
+        shared = set(per_row[0]).intersection(*per_row[1:])
+        for family in sorted(shared):
+            result.skipped.append((family, per_row[0][family]))
+    else:
+        for scorer, reason in scorer_registry().skipped(result.capabilities):
+            result.skipped.append((scorer.family, reason))
     for scorer in scorer_registry().all():
         if isinstance(scorer, DeferredScorer) and not any(
             f == scorer.family for f, _ in result.skipped

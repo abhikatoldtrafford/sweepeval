@@ -107,6 +107,11 @@ class StoredConfig:
     hard_fails: _HardFails = field(default_factory=_HardFails)
     coverage: dict[str, tuple[int, int]] = field(default_factory=dict)
     requests: int = 0
+    capabilities: dict[str, Any] = field(default_factory=dict)
+    """This row's capability verdicts, as written. A dict rather than a
+    `CapabilityReport`: `report` must not import the capability layer, and the
+    layering contract fails the build if it does."""
+    skipped: tuple[tuple[str, str], ...] = ()
 
     @property
     def config_id(self) -> str:
@@ -297,6 +302,14 @@ class _EvaluatedConfig:
         return None
 
     @property
+    def capabilities(self) -> Any:
+        return getattr(self.result, "capabilities", None)
+
+    @property
+    def skipped(self) -> tuple[tuple[str, str], ...]:
+        return tuple(getattr(self.result, "skipped", ()) or ())
+
+    @property
     def hard_fails(self) -> Any:
         # Carried on the result, not recomputed here: reclassifying would make
         # `report` import `execute`, and the request layer rides in behind it.
@@ -361,6 +374,20 @@ def aggregates_payload(sweep: Any) -> dict[str, Any]:
     }
 
 
+def _capability_payload(capabilities: Any) -> dict[str, Any]:
+    """The row's verdicts, whether it came from a live sweep or off disk.
+
+    A live row carries a `CapabilityReport`; a row restored from
+    `aggregates.json` carries the dict that report was written as. Re-writing
+    a stored run has to round-trip rather than crash on the missing method.
+    """
+    if capabilities is None:
+        return {}
+    if hasattr(capabilities, "to_manifest"):
+        return dict(capabilities.to_manifest())
+    return dict(capabilities)
+
+
 def _config_payload(row: Any) -> dict[str, Any]:
     return {
         "config_id": row.config_id,
@@ -382,6 +409,12 @@ def _config_payload(row: Any) -> dict[str, Any]:
         },
         "cache": {"suspected": row.cache.suspected, "reason": row.cache.reason},
         "cost": row.cost.describe() if row.cost is not None else None,
+        # Per row, because capabilities are a property of the model and the
+        # sweep's axis is the model. Absent, the artifact could only carry one
+        # run-level answer, so a scorecard could not show which family was
+        # gated off for which model -- the whole point of the run.
+        "capabilities": _capability_payload(getattr(row, "capabilities", None)),
+        "skipped": [[f, r] for f, r in getattr(row, "skipped", ())],
         # Structured, not a rendered string. Stored as prose, the offline
         # JUnit reader could only count them -- so `sweepeval report --format
         # junit` showed a green CI tab on a run that had hard-failed, while
@@ -534,6 +567,8 @@ def load_run(run_dir: Path | str) -> StoredRun:
                     reason=str(row.get("cache", {}).get("reason", "")),
                 ),
                 cost=_Cost(row["cost"]) if row.get("cost") else None,
+                capabilities=dict(row.get("capabilities", {})),
+                skipped=tuple(tuple(s) for s in row.get("skipped", ())),
                 hard_fails=_HardFails(
                     confirmed=tuple(
                         _RestoredHardFail(
