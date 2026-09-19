@@ -17,7 +17,7 @@ silently mixed. Those are marked **Comparability**.
 
 The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.3.0] - 2026-09-19
 
 ### Added
 
@@ -299,9 +299,16 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Comparability
 
 - The corpus gained the degradation, tool-integrity and retrieval families, so
-  `corpus_hash` changes. Runs from before and after refuse to be compared rather than being silently
-  mixed, and a committed `baseline.json` predating this release will need
-  re-taking. `quick` is unaffected in content but shares the hash.
+  `corpus_hash` changes. Runs from before and after refuse to be compared
+  rather than being silently mixed, and a committed `baseline.json` predating
+  this release will need re-taking. `quick` is unaffected in content but
+  shares the hash.
+
+- `suite_version` is deliberately **not** bumped alongside it. It is a hard key
+  too, so bumping would add no refusal `corpus_hash` does not already cause --
+  and it would make every reproduction of this release's published evidence
+  refuse to compare against the run that produced it, for no difference in the
+  suite. `corpus_hash` names exactly what changed.
 
 ## [0.2.0] - 2026-09-14
 
