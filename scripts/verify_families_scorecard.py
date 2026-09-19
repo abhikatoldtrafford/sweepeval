@@ -25,10 +25,12 @@ TOL = 5e-4  # the document quotes three decimals
 
 def load():
     agg = json.loads((RUN / "aggregates.json").read_text(encoding="utf-8"))["payload"]
-    obs = [json.loads(l) for l in
-           (RUN / "observations.jsonl").read_text(encoding="utf-8").splitlines() if l]
-    calls = [json.loads(l) for l in
-             (RUN / "calls.jsonl").read_text(encoding="utf-8").splitlines() if l]
+    obs = [json.loads(line) for line in
+           (RUN / "observations.jsonl").read_text(encoding="utf-8").splitlines()
+           if line]
+    calls = [json.loads(line) for line in
+             (RUN / "calls.jsonl").read_text(encoding="utf-8").splitlines()
+             if line]
     man = json.loads((RUN / "manifest.json").read_text(encoding="utf-8"))
     return agg, obs, calls, man
 
@@ -122,8 +124,8 @@ for m in interval.finditer(text):
     quoted[(m.group("pt"), m.group("lo"), m.group("hi"))] += 1
 
 available = set()
-for model, cfg in by_model.items():
-    for name, value in (cfg.get("metrics") or {}).items():
+for cfg in by_model.values():
+    for value in (cfg.get("metrics") or {}).values():
         if value.get("lo") is None:
             continue
         available.add((f"{value['point']:.3f}",
