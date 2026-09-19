@@ -34,6 +34,12 @@
 # `temperature` parameter outright, so a temperature axis would 400 on every
 # probe for part of the set.
 #
+# `max_configs: 4` is what MAKES that true, and this comment is why it is
+# here. A declared axis does not displace the discovered ones -- the planner
+# crosses them -- so without the cap this file plans twelve configurations by
+# crossing four system-prompt variants against the four models, and estimates
+# 9,457 requests and 394 minutes rather than 3,169 and 132.
+#
 # No pricing block, so the cost objective reports output tokens per probe
 # rather than money.
 
@@ -49,3 +55,4 @@ axes:
 
 profile: standard
 runs: 3
+max_configs: 4

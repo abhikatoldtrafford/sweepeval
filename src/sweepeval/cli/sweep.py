@@ -197,6 +197,12 @@ def sweep_command(
         url = url or declared.url
         profile = declared.profile or profile
         runs = declared.runs or runs
+        # An explicit flag wins over the file. `profile` and `runs` resolve the
+        # other way above, not by design: their flags carry real defaults, so
+        # "not given" and "given the default" are the same value and the file
+        # is the only one of the two that can be detected. This flag defaults
+        # to None, so the distinction survives and the override can be honoured.
+        max_configs = max_configs if max_configs is not None else declared.max_configs
         objectives = objectives or (
             ",".join(declared.objectives) if declared.objectives else None
         )

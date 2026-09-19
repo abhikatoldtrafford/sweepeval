@@ -209,7 +209,41 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `report.json` carries `model`. A gate log read three weeks later could not
   say which models the verdict was about.
 
+- **`max_configs` in `sweepeval.yaml`.** `profile` and `runs` were
+  file-settable and the config cap was not, though it moves the bill further
+  than either. A declared axis does not displace the discovered ones -- the
+  planner crosses them -- so a file declaring four models still planned twelve
+  configurations, and a comment reading "model is the only axis" did not make
+  it one. An explicit `--max-configs` still wins over the file.
+
 ### Fixed
+
+- **Capabilities were detected once per sweep and applied to every config.**
+  Capabilities are a property of the model, and a sweep's whole point is
+  varying the model, so the report was built against whichever model discovery
+  happened to pick and then asserted of all the others. In a four-model run
+  that cost both directions at once: `gpt-5-search-api`, the one model present
+  with retrieval, was told it had none and the family was skipped for every
+  config -- zero retrieval rows from a run whose purpose was retrieval
+  evidence -- while it was simultaneously told it had tool calling, which it
+  rejects, so 36 probes went out and came back 404 and its 48 tool rows read
+  UNSCORABLE rather than honestly skipped. Each config now probes its own
+  model and gates its own unit set; a config pinning no model reuses the
+  run-level report rather than paying twice. The extra phase is a separate
+  line in the pre-flight, outside the unavoidable floor -- folded into it, a
+  cap that used to buy a partial sweep began declining the run outright.
+
+- **The artifact still recorded one capability report for the whole run**,
+  one commit after the runtime learned to detect them per model. No capability
+  block and no skip list was serialized per config, and run-level `skipped`
+  was derived from the run-level report -- so a sweep was on course to write
+  `retrieval SKIPPED -- UNSUPPORTED` beside observations containing retrieval
+  rows. An artifact that contradicts its own observations is worse than one
+  that omits the claim, and which family was gated off for which model could
+  not be read back at all. Each config payload now carries its own verdicts
+  and its own skip list, and run-level `skipped` is their intersection: a
+  family appears there only when no config scored it. I5 is not weakened --
+  a family no config could score is still reported, with the reason.
 
 - Cross-run scoring excluded any run with no extracted text, which is every
   successful run of a tool-calling probe: a reply carrying only tool calls has
@@ -254,8 +288,7 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Comparability
 
 - The corpus gained the degradation, tool-integrity and retrieval families, so
-  `corpus_hash` changes. Runs
-  from before and after refuse to be compared rather than being silently
+  `corpus_hash` changes. Runs from before and after refuse to be compared rather than being silently
   mixed, and a committed `baseline.json` predating this release will need
   re-taking. `quick` is unaffected in content but shares the hash.
 

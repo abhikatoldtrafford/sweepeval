@@ -15,7 +15,8 @@ Three kinds of override, in increasing order of how much they change:
     flag in your own service — none are visible from outside. A declared axis
     is swept whether or not the sampling-effect test would have called it
     effective, because you asserted it matters.
-``pricing``, ``constraints``, ``objectives``, ``profile``, ``runs``
+``pricing``, ``constraints``, ``objectives``, ``profile``, ``runs``,
+``max_configs``
     Run parameters. ``pricing`` is the only way to get a dollar figure, since
     no price table ships (§12.4).
 
@@ -54,6 +55,17 @@ class DeclaredConfig:
     objectives: tuple[str, ...] = ()
     profile: str | None = None
     runs: int | None = None
+    max_configs: int | None = None
+    """The config cap, in the file rather than only on the command line.
+
+    `profile` and `runs` were file-settable and this was not, though it moves
+    the bill further than either: a file declaring one axis of four models
+    still planned twelve configurations, because the planner crosses the axes
+    discovery proved variable against the one the file declared, up to the
+    profile cap. Writing "model is the only axis" in a comment does not make
+    it so, and the flag that does is easy to omit -- which cost a 3x
+    over-estimate and a cancelled run before this existed.
+    """
     warnings: list[str] = field(default_factory=list)
 
     def describe(self) -> list[str]:
@@ -120,6 +132,15 @@ def load_declared(path: Path | str) -> DeclaredConfig:
     runs = payload.get("runs")
     if isinstance(runs, int) and runs > 0:
         declared.runs = runs
+
+    max_configs = payload.get("max_configs")
+    if isinstance(max_configs, int) and max_configs > 0:
+        declared.max_configs = max_configs
+    elif max_configs is not None:
+        declared.warnings.append(
+            f"max_configs must be a positive integer, got {max_configs!r}; "
+            f"using the profile default"
+        )
 
     return declared
 
