@@ -218,6 +218,17 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **A transport failure recorded that it happened and not what it was.**
+  `error_excerpt` is the head of a failed response *body*, and a transport
+  failure has no body -- so the excerpt was `None` and `classify_exception`
+  reduced the exception to one of a handful of classes. A run then said
+  `retryable` and nothing more: a pool timeout, a dropped connection and a DNS
+  failure are indistinguishable in the artifact, in a tool whose promise is
+  diagnosing a target offline from the stored run. The exception type and
+  message are now recorded. Found by the four-model families run, which logged
+  nine -- the first transport errors this project has seen -- and could say
+  nothing about them afterwards.
+
 - **Capabilities were detected once per sweep and applied to every config.**
   Capabilities are a property of the model, and a sweep's whole point is
   varying the model, so the report was built against whichever model discovery

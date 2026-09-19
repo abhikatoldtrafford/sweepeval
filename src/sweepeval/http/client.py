@@ -194,6 +194,7 @@ class TransportClient:
         raw = b""
         retry_after_header: str | None = None
 
+        transport_error: str | None = None
         try:
             if stream:
                 async with self._client.stream(
@@ -231,6 +232,13 @@ class TransportClient:
             status = 0
             text = ""
             error_class = classify_exception(exc)
+            # The exception is the only account of a transport failure there
+            # will ever be: there is no body to excerpt and no status to read.
+            # Classified and then discarded, a run recorded "retryable" and
+            # nothing else, so nobody could tell a pool timeout from a dropped
+            # connection from a DNS failure after the fact -- in a tool whose
+            # whole promise is diagnosing a target from the stored run.
+            transport_error = f"{type(exc).__name__}: {exc}".strip()
 
         call = Call(
             ts=datetime.now(timezone.utc).isoformat(),
@@ -249,7 +257,11 @@ class TransportClient:
                 streamed=stream,
                 bytes=len(raw),
                 body_sha256=sha256_hex(raw) if raw else None,
-                error_excerpt=_excerpt(raw, error_class),
+                error_excerpt=(
+                    _excerpt(raw, error_class)
+                    if transport_error is None
+                    else transport_error[:ERROR_EXCERPT_CHARS]
+                ),
             ),
             timing=TimingPart(queue_ms=queue_ms, ttft_ms=ttft_ms, total_ms=total_ms),
             tokens=self._tokens(raw, text, events),
